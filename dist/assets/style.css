@@ -254,6 +254,10 @@ button{font-family:inherit;cursor:pointer}
 .qr-img{display:block;width:100%;height:auto;margin-bottom:10px}
 .qr-code{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink);letter-spacing:.06em}
 .qr-note{font-size:9.5px;color:var(--clay);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+/* ---------- Identify screen ---------- */
+.identify-intro{font-size:12.5px;color:#444;line-height:1.65;margin-bottom:18px}
+.greeting{font-family:var(--display);font-style:italic;font-size:15px;color:var(--clay);margin-bottom:6px}
+
 .cover-screen{position:relative;min-height:calc(100dvh - 60px);background-size:cover;background-position:center;background-color:var(--ink);display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer}
 .cover-screen.no-photo{background-image:radial-gradient(circle at 50% 35%, #241d12, var(--ink) 75%)}
 .cover-caption{padding:0 24px;text-align:center;font-family:var(--display);font-style:italic;font-size:17px;color:#F4EFE6;line-height:1.4}
