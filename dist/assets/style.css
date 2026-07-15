@@ -244,7 +244,12 @@ button{font-family:inherit;cursor:pointer}
 .muted-link{font-size:12px;color:var(--muted);text-align:center;display:block;margin-top:8px}
 
 /* ---------- World window ---------- */
-/* ---------- Cover screen (tap the photo to enter the app) ---------- */
+/* ---------- Booked confirmation ---------- */
+.booked-screen{text-align:center;padding-top:40px}
+.booked-icon{width:52px;height:52px;border-radius:999px;background:var(--good-bg);color:var(--good);font-size:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.booked-title{font-family:var(--display);font-size:21px;font-weight:600;margin-bottom:12px}
+.booked-text{font-size:12.5px;color:#444;line-height:1.7;max-width:34ch;margin:0 auto 14px}
+.booked-note{font-size:10px;color:var(--muted);margin-bottom:24px}
 .cover-screen{position:relative;min-height:calc(100dvh - 60px);background-size:cover;background-position:center;background-color:var(--ink);display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer}
 .cover-screen.no-photo{background-image:radial-gradient(circle at 50% 35%, #241d12, var(--ink) 75%)}
 .cover-caption{padding:0 24px;text-align:center;font-family:var(--display);font-style:italic;font-size:17px;color:#F4EFE6;line-height:1.4}
