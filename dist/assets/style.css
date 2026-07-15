@@ -250,6 +250,10 @@ button{font-family:inherit;cursor:pointer}
 .booked-title{font-family:var(--display);font-size:21px;font-weight:600;margin-bottom:12px}
 .booked-text{font-size:12.5px;color:#444;line-height:1.7;max-width:34ch;margin:0 auto 14px}
 .booked-note{font-size:10px;color:var(--muted);margin-bottom:24px}
+.qr-card{background:#fff;border:1px solid var(--line);padding:20px;margin:0 auto 20px;max-width:220px;text-align:center}
+.qr-img{display:block;width:100%;height:auto;margin-bottom:10px}
+.qr-code{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink);letter-spacing:.06em}
+.qr-note{font-size:9.5px;color:var(--clay);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
 .cover-screen{position:relative;min-height:calc(100dvh - 60px);background-size:cover;background-position:center;background-color:var(--ink);display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer}
 .cover-screen.no-photo{background-image:radial-gradient(circle at 50% 35%, #241d12, var(--ink) 75%)}
 .cover-caption{padding:0 24px;text-align:center;font-family:var(--display);font-style:italic;font-size:17px;color:#F4EFE6;line-height:1.4}
