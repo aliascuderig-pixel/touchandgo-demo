@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0F0F0F" />
+<title>Touch&amp;Go — Spedisci i tuoi acquisti dall'Italia</title>
+<meta name="description" content="Fotografa l'acquisto, l'AI identifica il codice doganale in 3 secondi. Touch&Go organizza ritiro e spedizione verso 180+ Paesi, con esenzione IVA export automatica." />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0F0F0F; --paper:#FAF8F4; --cream:#F4EFE6;
+  --gold:#C9A96E; --gold-soft:#E8D5B0; --gold-deep:#8B6914; --clay:#7A5C0A;
+  --muted:#6B655A; --line:#EAE4D8;
+  --good:#2E7D32; --good-bg:#EAF3EA;
+  --display:'Cormorant Garamond',serif; --body:'Montserrat',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--body);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+img{max-width:100%}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);font-weight:600;margin-bottom:14px}
+
+/* Nav */
+nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px solid #262219}
+.nav-inner{max-width:1080px;margin:0 auto;padding:16px 24px;display:flex;justify-content:space-between;align-items:center}
+.brand{font-family:var(--display);font-size:22px;color:var(--cream);letter-spacing:.02em}
+.brand em{font-style:italic;color:var(--gold)}
+.nav-links{display:flex;gap:28px;font-size:13px;color:#B8B0A0}
+.nav-links a{text-decoration:none;transition:color .15s}
+.nav-links a:hover{color:var(--gold-soft)}
+.nav-cta{background:var(--gold);color:var(--ink);padding:10px 20px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em}
+.nav-menu-toggle{display:none;background:none;border:none;color:var(--cream);font-size:22px}
+
+/* Hero */
+.hero{background:var(--ink);color:var(--cream);padding:90px 0 70px;text-align:center}
+.hero h1{font-family:var(--display);font-weight:500;font-size:52px;line-height:1.15;margin:0 0 22px;max-width:760px;margin-left:auto;margin-right:auto}
+.hero h1 em{font-style:italic;color:var(--gold)}
+.hero p{font-size:16px;color:#C9C2B4;max-width:560px;margin:0 auto 34px;line-height:1.7}
+.hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--gold);color:var(--ink);padding:15px 30px;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.03em;display:inline-block}
+.btn-outline{background:transparent;color:var(--cream);border:1px solid #3A362C;padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
+.hero-stats{display:flex;justify-content:center;gap:56px;margin-top:64px;flex-wrap:wrap}
+.hero-stat b{display:block;font-family:var(--display);font-size:32px;color:var(--gold);font-weight:500}
+.hero-stat span{font-size:11px;color:#9A9284;text-transform:uppercase;letter-spacing:.08em}
+
+/* Sections */
+section{padding:80px 0}
+.section-head{text-align:center;max-width:600px;margin:0 auto 50px}
+.section-head h2{font-family:var(--display);font-size:34px;font-weight:500;margin:0 0 14px}
+.section-head p{color:var(--muted);font-size:15px;line-height:1.7}
+
+/* Steps (how it works) */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+.step-card{background:var(--paper);padding:32px 26px}
+.step-num{font-family:var(--display);font-size:15px;color:var(--gold-deep);font-style:italic;margin-bottom:14px}
+.step-card h3{font-size:15px;font-weight:700;margin:0 0 8px}
+.step-card p{font-size:13px;color:var(--muted);line-height:1.6;margin:0}
+
+/* Feature grid */
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+.feature-card{background:#fff;padding:30px 26px}
+.feature-icon{font-size:26px;margin-bottom:14px}
+.feature-card h3{font-family:var(--display);font-size:19px;font-weight:600;margin:0 0 8px}
+.feature-card p{font-size:13px;color:var(--muted);line-height:1.7;margin:0}
+
+/* Dark band */
+.dark-band{background:var(--ink);color:var(--cream)}
+.dark-band .section-head h2{color:var(--cream)}
+.dark-band .section-head p{color:#A9A192}
+.dark-band .eyebrow{text-align:center}
+
+/* Trust row */
+.trust-strip{display:flex;justify-content:center;gap:60px;flex-wrap:wrap}
+.trust-item{text-align:center;max-width:200px}
+.trust-item .ic{font-size:26px;margin-bottom:10px}
+.trust-item h4{font-size:13px;font-weight:700;margin:0 0 6px}
+.trust-item p{font-size:12px;color:#A9A192;margin:0;line-height:1.6}
+
+/* Pricing / partner */
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.plan-card{background:#fff;border:1px solid var(--line);padding:24px 20px}
+.plan-card h4{font-family:var(--display);font-size:18px;margin:0 0 6px;font-weight:600}
+.plan-card .price{font-size:22px;font-weight:800;color:var(--gold-deep);margin-bottom:10px}
+.plan-card p{font-size:12px;color:var(--muted);margin:0;line-height:1.6}
+.commission-note{text-align:center;margin-top:30px;font-size:13px;color:var(--muted)}
+.commission-note b{color:var(--ink)}
+
+/* IVA banner */
+.iva-banner{background:var(--good-bg);border:1px solid #C9DEC9;padding:26px 30px;display:flex;align-items:center;gap:20px;max-width:760px;margin:0 auto}
+.iva-banner .ic{font-size:30px}
+.iva-banner h3{margin:0 0 4px;font-size:16px;color:var(--good)}
+.iva-banner p{margin:0;font-size:13px;color:#3C6B3F;line-height:1.6}
+
+/* CTA band */
+.cta-band{background:var(--ink);color:var(--cream);text-align:center;padding:90px 0}
+.cta-band h2{font-family:var(--display);font-size:36px;font-weight:500;margin:0 0 16px}
+.cta-band p{color:#B8B0A0;font-size:15px;margin:0 0 32px}
+
+/* Footer */
+footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
+.footer-grid{display:flex;justify-content:space-between;flex-wrap:wrap;gap:30px;margin-bottom:36px}
+.footer-col h5{color:var(--cream);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 14px}
+.footer-col a{display:block;color:#8A8577;text-decoration:none;margin-bottom:8px}
+.footer-col a:hover{color:var(--gold-soft)}
+.footer-bottom{border-top:1px solid #201D16;padding-top:24px;text-align:center;color:#635F53}
+
+@media (max-width:860px){
+  .steps,.feature-grid{grid-template-columns:1fr 1fr}
+  .hero h1{font-size:36px}
+  .hero-stats{gap:34px}
+  .nav-links{display:none}
+}
+@media (max-width:520px){
+  .steps,.feature-grid{grid-template-columns:1fr}
+  .hero{padding:60px 0 50px}
+  section{padding:56px 0}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="brand">Touch<em>&amp;</em>Go</div>
+    <div class="nav-links">
+      <a href="#come-funziona">Come funziona</a>
+      <a href="#turisti">Per i turisti</a>
+      <a href="#partner">Per i negozi</a>
+      <a href="#rivenditori">Reseller</a>
+      <a href="#chi-siamo">Chi siamo</a>
+    </div>
+    <a class="nav-cta" href="#" id="app-link-top">Apri l'app →</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow" style="text-align:center">Made in Italy · Spedizioni doganali · 180+ Paesi</div>
+    <h1>Hai comprato qualcosa di <em>troppo bello</em> per stare in valigia?</h1>
+    <p>Fotografa l'oggetto. In pochi secondi la nostra AI identifica il codice doganale, stima peso e dimensioni, e organizza il ritiro. Arriva a casa mentre sei ancora in vacanza.</p>
+    <div class="hero-ctas">
+      <a class="btn-primary" href="#" id="app-link-hero">Prova l'app →</a>
+      <a class="btn-outline" href="#partner">Sono un negozio</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><b>57,4M</b><span>Turisti/anno in Italia</span></div>
+      <div class="hero-stat"><b>0%</b><span>IVA su acquisti export</span></div>
+      <div class="hero-stat"><b>180+</b><span>Paesi di destinazione</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="come-funziona">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Come funziona</div>
+      <h2>Dall'acquisto alla porta di casa</h2>
+      <p>Un percorso pensato per essere immediato: si fotografa, si conferma, e il resto lo organizziamo noi.</p>
+    </div>
+    <div class="steps">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <h3>Fotografa l'oggetto</h3>
+        <p>Nel negozio, subito dopo l'acquisto. L'AI stima peso, dimensioni e categoria doganale in 3 secondi.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <h3>Confermi ritiro e destinazione</h3>
+        <p>Il punto di ritiro è rilevato automaticamente; la destinazione arriva dal tuo profilo, modificabile in ogni momento.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <h3>Lasci l'oggetto con un QR</h3>
+        <p>Il QR resta in sospeso: puoi continuare a fare acquisti in altri negozi durante il soggiorno.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <h3>Concludi e consolidiamo</h3>
+        <p>Fine vacanza: un solo ordine di ritiro per tutti gli acquisti verso la stessa destinazione, invece di tante spedizioni separate.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Il problema</div>
+      <h2>L'acquisto che non avviene</h2>
+      <p>Il turista vuole comprare. La valigia è già piena — e con lei, un pezzo di fatturato che l'Italia perde ogni anno.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🧳</div>
+        <h3>Nessuna spedizione diretta</h3>
+        <p>La maggior parte dei negozi non offre un modo semplice per spedire un acquisto all'estero, direttamente dal punto vendita.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3>Tax-free macchinoso</h3>
+        <p>L'esenzione IVA tradizionale richiede burocrazia cartacea e rimborso solo in aeroporto, spesso in coda contro il tempo del volo.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💶</div>
+        <h3>Corrieri poco trasparenti</h3>
+        <p>Le soluzioni tipo corriere espresso tradizionale richiedono contratti aziendali e hanno prezzi poco chiari per chi spedisce una volta sola.</p>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:36px;font-size:14px;color:var(--muted)">Una parte rilevante degli acquisti internazionali in Italia semplicemente non avviene per problemi di trasporto — proprio su ceramica, vino, moda artigianale, design: i prodotti più autentici, quelli che esistono solo qui.</p>
+  </div>
+</section>
+
+<section class="dark-band" id="turisti">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Per chi viaggia</div>
+      <h2>Tutto quello che serve, niente di superfluo</h2>
+      <p>Un'app pensata per un pubblico esigente: chiara, veloce, senza spiegazioni inutili.</p>
+    </div>
+    <div class="trust-strip">
+      <div class="trust-item">
+        <div class="ic">📷</div>
+        <h4>Classificazione AI reale</h4>
+        <p>Non un mockup: ogni foto viene analizzata davvero, con codice HS, peso e dimensioni stimati.</p>
+      </div>
+      <div class="trust-item">
+        <div class="ic">📍</div>
+        <h4>Ritiro geolocalizzato</h4>
+        <p>Il punto di ritiro è rilevato via GPS (con riserva automatica via rete), sempre modificabile a mano.</p>
+      </div>
+      <div class="trust-item">
+        <div class="ic">🗂️</div>
+        <h4>Più indirizzi, più acquisti</h4>
+        <p>Salva più destinazioni e scegli, acquisto per acquisto, dove farlo arrivare.</p>
+      </div>
+      <div class="trust-item">
+        <div class="ic">📊</div>
+        <h4>Spesa sempre visibile</h4>
+        <p>Una dashboard separa il valore degli acquisti dal costo dei servizi Touch&amp;Go, senza sorprese.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="iva-banner">
+      <div class="ic">✓</div>
+      <div>
+        <h3>Esenzione IVA export automatica</h3>
+        <p>Art. 8 DPR 633/72 — nessun rimborso da chiedere in aeroporto. Documentazione doganale MRN/DAE generata automaticamente per ogni spedizione.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="partner">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Per negozi, hotel e tour operator</div>
+      <h2>Offri Touch&amp;Go ai tuoi clienti</h2>
+      <p>Un servizio in più da proporre in cassa, con un guadagno su ogni spedizione generata dal tuo codice.</p>
+    </div>
+    <div class="plan-grid">
+      <div class="plan-card"><h4>Boutique</h4><div class="price">€49<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Negozi di moda, artigianato, oggettistica.</p></div>
+      <div class="plan-card"><h4>Enoteche &amp; Cantine</h4><div class="price">€59<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Vino e prodotti alimentari, gestione fragilità inclusa.</p></div>
+      <div class="plan-card"><h4>Sport &amp; Attrezzatura</h4><div class="price">€69<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Articoli ingombranti, pensati per bagaglio complicato.</p></div>
+      <div class="plan-card"><h4>Hotel</h4><div class="price">€99<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Ritiro diretto in struttura per gli ospiti.</p></div>
+      <div class="plan-card"><h4>Tour Operator</h4><div class="price">€199<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Gestione multi-tappa per gruppi organizzati.</p></div>
+    </div>
+    <p class="commission-note"><b>10%</b> di commissione su ogni spedizione generata tramite il tuo codice — una sola commissione per spedizione, a chi ha portato il cliente. È disponibile anche un piano gratuito senza canone.</p>
+  </div>
+</section>
+
+<section id="rivenditori">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Reseller &amp; White Label</div>
+      <h2>Rivendi la suite Touch&amp;Go</h2>
+      <p>Per catene alberghiere, gruppi retail, tour operator strutturati e operatori logistici: l'intera suite Touch&amp;Go — classificazione AI, gestione ritiri, documentazione doganale — integrabile nella tua offerta o nel tuo brand.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🏷️</div>
+        <h3>A marchio tuo</h3>
+        <p>Il servizio può essere presentato sotto il tuo brand, integrato nell'esperienza che già offri ai tuoi clienti.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>Integrazione su misura</h3>
+        <p>Dalla singola struttura alla rete multi-sede: condizioni commerciali e integrazione tecnica costruite sul tuo volume.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤝</div>
+        <h3>Un referente unico</h3>
+        <p>Un solo interlocutore Touch&amp;Go per l'intera rete, invece di attivazioni negozio per negozio.</p>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:36px">
+      <a class="btn-primary" href="mailto:partnership@touchandgo.it?subject=Reseller%20%2F%20White%20Label">Parliamone → partnership@touchandgo.it</a>
+    </p>
+    <p style="text-align:center;margin-top:14px;font-size:12px;color:var(--muted)">Le condizioni commerciali si definiscono caso per caso, in base a volumi e tipo di integrazione.</p>
+  </div>
+</section>
+
+<section class="dark-band" id="chi-siamo">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Chi siamo</div>
+      <h2>Digitale nell'esecuzione, autentico nel proposito</h2>
+      <p>Touch&amp;Go è un progetto pre-seed sviluppato a Catania, in fase di candidatura a Smart&amp;Start Italia.</p>
+    </div>
+    <p style="max-width:640px;margin:0 auto;text-align:center;font-size:14px;color:#B8B0A0;line-height:1.8">Nasce da una convinzione semplice: l'autenticità del prodotto italiano — artigianato, moda, enogastronomia, design — non deve fermarsi alla soglia di un negozio per un problema di valigia piena. La nostra piattaforma è tecnologica nel funzionamento, ma il suo scopo resta lo stesso di sempre: portare a casa, letteralmente, le esperienze che solo l'Italia sa offrire.</p>
+  </div>
+</section>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2>Provalo ora, gratuitamente</h2>
+    <p>Il prototipo è live: fotografa un oggetto e guarda la classificazione AI in tempo reale.</p>
+    <a class="btn-primary" href="#" id="app-link-cta">Apri l'app Touch&amp;Go →</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h5>Touch&amp;Go</h5>
+        <a href="#come-funziona">Come funziona</a>
+        <a href="#turisti">Per i turisti</a>
+        <a href="#partner">Per i negozi</a>
+      </div>
+      <div class="footer-col">
+        <h5>Azienda</h5>
+        <a href="#chi-siamo">Chi siamo</a>
+        <a href="investitori.html">Investitori</a>
+        <a href="#">Contatti</a>
+      </div>
+      <div class="footer-col">
+        <h5>Legale</h5>
+        <a href="termini.html">Termini di servizio</a>
+        <a href="privacy.html">Privacy</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      Prototipo Touch&amp;Go · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>
+      Alcune parti del servizio restano simulate in fase di test.
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Punta tutti i pulsanti "Apri l'app" allo stesso indirizzo dell'app reale.
+  var APP_URL = "https://genuine-mochi-93948a.netlify.app";
+  document.querySelectorAll("#app-link-top, #app-link-hero, #app-link-cta").forEach(function(a){
+    a.setAttribute("href", APP_URL);
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener");
+  });
+</script>
+
+</body>
+</html>

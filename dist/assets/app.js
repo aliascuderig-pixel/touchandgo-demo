@@ -17,9 +17,38 @@ const STEPS = [
   "Tracking live fino alla consegna a casa",
 ];
 
-const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","weight_kg":1.0,"dimensions_cm":"L x P x H stimate","value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note":"..."}`;
+const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note":"..."}`;
 
-const FLAT_FEE = 39;
+// L'imballo non è un margine fisso: più l'oggetto è grande, più materiale
+// serve in termini assoluti (stessa percentuale); se è fragile, il
+// materiale protettivo (bolle d'aria, angolari, doppia parete) quasi
+// raddoppia il margine necessario per lato.
+const PACKAGING_BASE_RATE = 0.08; // 8% della dimensione, margine strutturale di base
+const PACKAGING_MIN_CM = 2; // margine minimo anche per oggetti minuscoli
+const PACKAGING_FRAGILE_MULTIPLIER = 1.8; // materiale protettivo extra se fragile
+
+function packagingPadding(dimCm, fragile) {
+  const dim = parseFloat(dimCm) || 0;
+  const base = Math.max(PACKAGING_MIN_CM, dim * PACKAGING_BASE_RATE);
+  return base * (fragile ? PACKAGING_FRAGILE_MULTIPLIER : 1);
+}
+
+function packagedDimensions(r) {
+  if (!r || !r.length_cm || !r.width_cm || !r.height_cm) return null;
+  const fragile = !!r.fragile;
+  const pad = (n) => {
+    const dim = parseFloat(n) || 0;
+    return Math.round((dim + packagingPadding(dim, fragile)) * 10) / 10;
+  };
+  return { l: pad(r.length_cm), w: pad(r.width_cm), h: pad(r.height_cm) };
+}
+
+function formatDims(l, w, h) {
+  return `${l} × ${w} × ${h} cm`;
+}
+
+const FULL_FEE = 39;
+const SUBSCRIBED_FEE = 19;
 
 const DESTINATIONS = [
   { name: "Italia / UE", zone: "eu" },
@@ -38,15 +67,36 @@ const ZONE_RATES = {
   intercontinental: { base: 19, perKg: 8, eta: "3–7 giorni lavorativi" },
 };
 
-function priceFor(weightKg, destinationName) {
+function shippingCost(weightKg, destinationName) {
   const w = Math.max(0.3, parseFloat(weightKg) || 1);
   const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[3];
   const rate = ZONE_RATES[dest.zone];
-  const shipping = rate.base + w * rate.perKg;
   return {
-    grandTotal: parseFloat((shipping + FLAT_FEE).toFixed(2)),
+    shipping: parseFloat((rate.base + w * rate.perKg).toFixed(2)),
     eta: rate.eta,
   };
+}
+
+// Restituisce le due quotazioni sempre confrontate esplicitamente: prezzo
+// pieno e prezzo con abbonamento — mostrate fin dalla primissima spedizione,
+// per ogni cliente, senza eccezioni.
+function priceQuotes(weightKg, destinationName) {
+  const { shipping, eta } = shippingCost(weightKg, destinationName);
+  const round = (n) => parseFloat(n.toFixed(2));
+  return {
+    shipping,
+    eta,
+    full: round(shipping + FULL_FEE),
+    subscribed: round(shipping + SUBSCRIBED_FEE),
+  };
+}
+
+// Prezzo effettivo da applicare dato lo stato del cliente (usato per
+// compatibilità con il resto del codice che si aspetta un unico totale).
+function priceFor(weightKg, destinationName) {
+  const q = priceQuotes(weightKg, destinationName);
+  const grandTotal = state.isSubscribed ? q.subscribed : q.full;
+  return { grandTotal, eta: q.eta, quotes: q };
 }
 
 async function classify(messages) {
@@ -103,8 +153,28 @@ const state = {
   locationPhoto: null,
   pickupPoint: "Catania",
   pickupSource: null,
+  isOffline: typeof navigator !== "undefined" && "onLine" in navigator ? !navigator.onLine : false,
+  locationReminderDismissed: false,
   bookingCode: null,
+  pendingItems: [],
+  lastQueuedItem: null,
+  shippedGroups: [],
+  purchaseHistory: [],
+  activePartnerCode: null,
+  partnerLoggedCode: null,
+  editingItemId: null,
+  viewingItemId: null,
+  viewingDocsItemId: null,
+  checkingItemId: null,
+  docsReturnTo: null,
   touristName: null,
+  touristEmail: null,
+  biometricCredentialId: null,
+  biometricVerified: false,
+  isSubscribed: false,
+  priceConfirmedForThisResult: false,
+  idDocument: null,
+  signatureDetected: false,
 };
 const app = document.getElementById("app");
 
@@ -112,6 +182,7 @@ function render() {
   app.innerHTML = "";
   app.appendChild(Header());
   if (state.mode === "partner") app.appendChild(PartnerScreen());
+  else if (state.screen === "biometric-lock") app.appendChild(BiometricLockScreen());
   else if (state.screen === "cover") app.appendChild(CoverScreen());
   else if (state.screen === "identify") app.appendChild(IdentifyScreen());
   else if (state.screen === "home") app.appendChild(HomeScreen());
@@ -120,7 +191,15 @@ function render() {
   else if (state.screen === "choose-address") app.appendChild(ChooseAddressScreen());
   else if (state.screen === "analyzing") app.appendChild(AnalyzingScreen());
   else if (state.screen === "result") app.appendChild(ResultScreen());
-  else if (state.screen === "booked") app.appendChild(BookedScreen());
+  else if (state.screen === "queued") app.appendChild(QueuedScreen());
+  else if (state.screen === "conclude") app.appendChild(ConcludeScreen());
+  else if (state.screen === "shipped") app.appendChild(ShippedScreen());
+  else if (state.screen === "history") app.appendChild(HistoryScreen());
+  else if (state.screen === "edit-item-address") app.appendChild(EditItemAddressScreen());
+  else if (state.screen === "view-item-photo") app.appendChild(ViewItemPhotoScreen());
+  else if (state.screen === "dashboard") app.appendChild(DashboardScreen());
+  else if (state.screen === "documents") app.appendChild(DocumentsScreen());
+  else if (state.screen === "package-check") app.appendChild(PackageCheckScreen());
   if (state.screen === "home") app.appendChild(Footer());
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
@@ -139,9 +218,16 @@ function Header() {
   const header = el("div", "header");
   header.innerHTML = `
     <div class="brand"><span class="brand-name">Touch<b>&amp;</b>Go</span></div>
-    <button class="header-reset" id="header-reset" title="Resetta profilo e ricomincia">⟲ Reset</button>`;
+    <div class="header-actions">
+      <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">🌐 Sito</a>
+      <button class="header-reset" id="header-reset" title="Resetta profilo e ricomincia">⟲ Reset</button>
+    </div>`;
   wrap.appendChild(header);
   header.querySelector("#header-reset").addEventListener("click", resetEverything);
+
+  if (state.isOffline) {
+    wrap.appendChild(el("div", "offline-banner", "📡 Sei offline — la classificazione AI e le foto delle città non sono disponibili finché non torni online. I tuoi acquisti, indirizzi e dashboard restano comunque consultabili."));
+  }
 
   const toggle = el("div", "mode-toggle");
   toggle.innerHTML = `
@@ -168,6 +254,61 @@ function PartnerScreen() {
 
   const cta = el("button", "btn-primary", "Scopri i piani partner →");
   wrap.appendChild(cta);
+
+  wrap.appendChild(PartnerLoginAndHistory());
+
+  return wrap;
+}
+
+function PartnerLoginAndHistory() {
+  const wrap = el("div");
+  wrap.appendChild(el("div", "tg-lbl", "Area riservata partner"));
+
+  if (!state.partnerLoggedCode) {
+    const intro = el(
+      "div",
+      "identify-intro",
+      "Inserisci il tuo codice partner per vedere solo le vendite generate tramite il tuo negozio e le commissioni maturate."
+    );
+    wrap.appendChild(intro);
+
+    const field = el("div", "dest-field");
+    field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${state.activePartnerCode || ""}" />`;
+    wrap.appendChild(field);
+
+    const loginBtn = el("button", "btn-secondary", "Accedi");
+    loginBtn.addEventListener("click", () => {
+      const code = document.getElementById("partner-code-input").value.trim().toUpperCase();
+      if (!code) return;
+      state.partnerLoggedCode = code;
+      render();
+    });
+    wrap.appendChild(loginBtn);
+    return wrap;
+  }
+
+  const myItems = state.purchaseHistory.filter((it) => it.partnerCode === state.partnerLoggedCode);
+  const commissionRate = 0.1;
+  const totalCommission = myItems.reduce((sum, it) => sum + it.price * commissionRate, 0);
+
+  const summary = el("div", "info-card");
+  summary.innerHTML = `
+    <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
+    <div class="info-row"><span>Vendite registrate</span><b>${myItems.length}</b></div>
+    <div class="info-row total"><span>Commissioni maturate (10%)</span><b>€${totalCommission.toFixed(2)}</b></div>`;
+  wrap.appendChild(summary);
+
+  const logoutBtn = el("button", "reset-link", "Esci dall'area partner");
+  logoutBtn.addEventListener("click", () => {
+    state.partnerLoggedCode = null;
+    render();
+  });
+  wrap.appendChild(logoutBtn);
+
+  wrap.appendChild(el("div", "tg-lbl", "Vendite generate dal tuo codice"));
+  wrap.appendChild(
+    PurchaseHistoryList(myItems, "Nessuna vendita ancora registrata con questo codice partner.")
+  );
 
   return wrap;
 }
@@ -294,6 +435,33 @@ function HomeScreen() {
   const wrap = el("div");
   wrap.appendChild(TrustRow());
 
+  if (state.pickupSource !== "gps" && !state.locationReminderDismissed) {
+    const loc = el("div", "location-reminder");
+    loc.innerHTML = `
+      <div class="loc-avatar">📍</div>
+      <div class="loc-text"><b>Attiva la posizione dal telefono</b><br/>Così rileviamo il punto di ritiro con precisione (ora usiamo una stima meno precisa dalla rete).</div>
+      <button class="loc-dismiss" aria-label="Chiudi">✕</button>`;
+    loc.querySelector(".loc-dismiss").addEventListener("click", () => {
+      state.locationReminderDismissed = true;
+      render();
+    });
+    loc.querySelector(".loc-avatar").addEventListener("click", () => loadLocation());
+    wrap.appendChild(loc);
+  }
+
+  if (state.pendingItems.length > 0) {
+    const banner = el("div", "pending-banner");
+    banner.innerHTML = `<div class="pending-count">🧳 ${state.pendingItems.length} acquist${state.pendingItems.length === 1 ? "o" : "i"} in sospeso presso i negozi</div>
+      <div class="pending-sub">Il ritiro parte solo quando concludi il soggiorno</div>`;
+    const concludeBtn = el("button", "btn-secondary", "Concludi il soggiorno e invia il ritiro →");
+    concludeBtn.addEventListener("click", () => {
+      state.screen = "conclude";
+      render();
+    });
+    banner.appendChild(concludeBtn);
+    wrap.appendChild(banner);
+  }
+
   if (state.error) {
     wrap.appendChild(el("div", "alert", `⚠️ ${state.error}`));
   }
@@ -390,6 +558,11 @@ function DestinationScreen() {
   const goBtn = el("button", "btn-primary", "Analizza e calcola il prezzo →");
   goBtn.addEventListener("click", () => {
     if (!state.pendingInput) return;
+    if (state.isOffline) {
+      state.error = "Sei offline: la classificazione AI richiede una connessione. Riprova quando torni online.";
+      render();
+      return;
+    }
     const promise =
       state.pendingInput.type === "image"
         ? classifyImage(state.pendingInput.base64, state.pendingInput.mediaType)
@@ -402,20 +575,29 @@ function DestinationScreen() {
 }
 
 function PickupField() {
-  const wrap = el("div", "dest-field");
+  const wrap = el("div");
+  const field = el("div", "dest-field");
   const label =
     state.pickupSource === "gps"
       ? "Punto di ritiro (GPS)"
       : state.pickupSource === "ip"
       ? "Punto di ritiro (rete)"
       : "Punto di ritiro";
-  wrap.innerHTML = `
+  field.innerHTML = `
     <div class="dest-lbl">${label}</div>
     <input class="dest-input" id="pickup-input" value="${state.pickupPoint}" />`;
-  wrap.querySelector("#pickup-input").addEventListener("input", (e) => {
+  field.querySelector("#pickup-input").addEventListener("input", (e) => {
     state.pickupPoint = e.target.value;
     state.pickupSource = null;
   });
+  wrap.appendChild(field);
+  wrap.appendChild(
+    el(
+      "div",
+      "pickup-note",
+      "Modificabile se il ritiro avviene altrove (es. un servizio di imballaggio esterno), non solo presso il punto vendita."
+    )
+  );
   return wrap;
 }
 
@@ -450,7 +632,7 @@ function AnalyzingScreen() {
 function ResultScreen() {
   const r = state.result;
   const p = state.price;
-  const courierCost = (p.grandTotal - FLAT_FEE).toFixed(2);
+  const q = p.quotes || priceQuotes(r.weight_kg, (getSelectedAddress() || {}).country);
   const wrap = el("div");
 
   const topbar = el("div", "topbar");
@@ -473,9 +655,12 @@ function ResultScreen() {
   card.appendChild(top);
 
   const grid = el("div", "result-grid");
+  const pkg = packagedDimensions(r);
+  const objDims = r.length_cm && r.width_cm && r.height_cm ? formatDims(r.length_cm, r.width_cm, r.height_cm) : "—";
   grid.innerHTML = `
     <div><div class="result-lbl">Peso stimato</div><div class="result-val">${r.weight_kg ?? "—"} kg</div></div>
-    <div><div class="result-lbl">Dimensioni stimate</div><div class="result-val">${r.dimensions_cm || "—"}</div></div>
+    <div><div class="result-lbl">Dimensioni oggetto</div><div class="result-val">${objDims}</div></div>
+    <div><div class="result-lbl">Dimensioni pacco (con imballo)</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
     <div><div class="result-lbl">Fragilità</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? "⚠️ Fragile" : "Non fragile"}</div></div>
     <div><div class="result-lbl">Ritiro da</div><div class="result-val">${state.pickupPoint}</div></div>
     <div><div class="result-lbl">Destinazione</div><div class="result-val">${formatAddress(getSelectedAddress())}</div></div>`;
@@ -502,17 +687,54 @@ function ResultScreen() {
     wrap.appendChild(secure);
   }
 
-  const priceCard = el("div", "price-card");
-  priceCard.innerHTML = `
-    <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente</div>
-    <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€${FLAT_FEE}</b></div>
-    <div class="info-row"><span>Corriere internazionale</span><b>€${courierCost}</b></div>
-    <div class="info-row total"><span>Totale</span><b id="res-total">€0</b></div>
-    <div class="info-line" style="margin-top:8px">Consegna in ${p.eta} · tracciamento incluso · copertura standard inclusa</div>`;
-  wrap.appendChild(priceCard);
+  let priceCard;
+  if (!state.isSubscribed && !state.priceConfirmedForThisResult) {
+    const dual = el("div", "price-dual");
+    dual.innerHTML = `<div class="tg-lbl" style="margin-bottom:10px">Scegli come pagare — confronto sempre visibile, per ogni spedizione</div>`;
+    const optFull = el("div", "price-option");
+    optFull.innerHTML = `
+      <div class="price-option-lbl">Prezzo pieno</div>
+      <div class="price-option-total">€${q.full.toFixed(2)}</div>
+      <div class="price-option-note">Fee €${FULL_FEE} + corriere €${q.shipping.toFixed(2)} — nessun impegno</div>`;
+    const fullBtn = el("button", "btn-secondary", "Continua a prezzo pieno");
+    fullBtn.addEventListener("click", () => {
+      state.price = { grandTotal: q.full, eta: q.eta, quotes: q };
+      state.priceConfirmedForThisResult = true;
+      render();
+    });
+    optFull.appendChild(fullBtn);
+    dual.appendChild(optFull);
+
+    const optSub = el("div", "price-option highlight");
+    optSub.innerHTML = `
+      <div class="price-option-lbl">Con abbonamento</div>
+      <div class="price-option-total">€${q.subscribed.toFixed(2)}</div>
+      <div class="price-option-note">Fee scontata €${SUBSCRIBED_FEE} + corriere €${q.shipping.toFixed(2)} — su questa e le prossime spedizioni</div>`;
+    const subBtn = el("button", "btn-primary", "Abbonati e risparmia →");
+    subBtn.addEventListener("click", () => {
+      state.isSubscribed = true;
+      saveProfile();
+      state.price = { grandTotal: q.subscribed, eta: q.eta, quotes: q };
+      state.priceConfirmedForThisResult = true;
+      render();
+    });
+    optSub.appendChild(subBtn);
+    dual.appendChild(optSub);
+    wrap.appendChild(dual);
+  } else {
+    const fee = state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+    priceCard = el("div", "price-card");
+    priceCard.innerHTML = `
+      <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${state.isSubscribed ? "· prezzo abbonato" : ""}</div>
+      <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€${fee}</b></div>
+      <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
+      <div class="info-row total"><span>Totale</span><b id="res-total">€0</b></div>
+      <div class="info-line" style="margin-top:8px">Consegna in ${q.eta} · tracciamento incluso · copertura standard inclusa</div>`;
+    wrap.appendChild(priceCard);
+  }
 
   const actions = el("div", "result-actions");
-  const bookBtn = el("button", "btn-primary", "Richiedi il ritiro →");
+  const bookBtn = el("button", "btn-primary", "Genera QR code →");
   bookBtn.addEventListener("click", () => {
     state.screen = "choose-address";
     render();
@@ -585,27 +807,191 @@ async function animateResult(r, p) {
   if (total) await countUp(total, p.grandTotal, 700);
 }
 
+function syncPurchaseToCRM(item) {
+  fetch("/.netlify/functions/save-purchase", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(item),
+  }).catch(() => {
+    // Offline or server unavailable — the purchase still lives in the
+    // tourist's local history; it just won't appear centrally until
+    // the next successful sync attempt.
+  });
+}
+
+function PackageCheckScreen() {
+  const wrap = el("div", "section");
+  const item =
+    state.pendingItems.find((it) => it.id === state.checkingItemId) ||
+    state.purchaseHistory.find((it) => it.id === state.checkingItemId);
+  const back = el("div", "back", "← Torna indietro");
+  back.addEventListener("click", () => {
+    state.screen = state.lastQueuedItem && state.lastQueuedItem.id === state.checkingItemId ? "queued" : "history";
+    render();
+  });
+  wrap.appendChild(back);
+
+  if (!item) {
+    wrap.appendChild(el("div", "identify-intro", "Acquisto non trovato."));
+    return wrap;
+  }
+
+  wrap.appendChild(el("div", "step-lbl", "Verifica imballo"));
+
+  if (item.packageDims) {
+    const recCard = el("div", "pack-card");
+    recCard.innerHTML = `<div class="pack-label">Dimensioni consigliate</div><div class="pack-dims">${formatDims(item.packageDims.l, item.packageDims.w, item.packageDims.h)}</div>`;
+    wrap.appendChild(recCard);
+  }
+
+  const resultBox = el("div", "id", "package-check-result");
+  resultBox.id = "package-check-result";
+  if (item.packageCheck) {
+    resultBox.appendChild(renderPackageCheckResult(item.packageCheck));
+  }
+
+  const captureCard = el("div", "capture-card");
+  captureCard.innerHTML = `<div class="capture-icon">📷</div><h3>Fotografa l'imballo pronto</h3><p>Tocca per aprire la fotocamera</p>`;
+  const input = el("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.capture = "environment";
+  input.style.display = "none";
+  input.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (state.isOffline) {
+      alert("Sei offline: la verifica dell'imballo richiede una connessione.");
+      return;
+    }
+    resultBox.innerHTML = `<div class="pack-checking">🔎 Verifico l'imballo…</div>`;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const photo = await compressImage(reader.result, 500, 0.6);
+        const check = await checkPackage(photo, item.packageDims);
+        item.packageCheck = check;
+        savePending();
+        saveHistory();
+        resultBox.innerHTML = "";
+        resultBox.appendChild(renderPackageCheckResult(check));
+      } catch (err) {
+        resultBox.innerHTML = `<div class="alert">⚠️ Verifica non riuscita. Riprova.</div>`;
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  captureCard.appendChild(input);
+  captureCard.addEventListener("click", () => input.click());
+  wrap.appendChild(captureCard);
+  wrap.appendChild(resultBox);
+
+  return wrap;
+}
+
+function renderPackageCheckResult(check) {
+  const box = el("div", "pack-check-result " + (check.oversized ? "warn" : "ok"));
+  box.innerHTML = `
+    <div class="pack-check-title">${check.oversized ? "⚠️ Imballo più grande del necessario" : "✓ Imballo conforme"}</div>
+    <div class="pack-check-dims">Dimensioni rilevate: ${formatDims(check.length_cm, check.width_cm, check.height_cm)}</div>
+    <div class="pack-check-note">${check.note || ""}</div>`;
+  return box;
+}
+
+async function checkPackage(photoDataUrl, recommendedDims) {
+  const base64 = photoDataUrl.split(",")[1];
+  const mediaType = photoDataUrl.split(";")[0].split(":")[1] || "image/jpeg";
+  const recText = recommendedDims
+    ? `Le dimensioni consigliate per questo imballo erano ${recommendedDims.l} x ${recommendedDims.w} x ${recommendedDims.h} cm.`
+    : "Non ci sono dimensioni consigliate di riferimento.";
+  return classify([
+    {
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+        {
+          type: "text",
+          text: `Sei un esperto di imballaggi per spedizioni. Analizza questa foto di un pacco pronto per la spedizione e stima le sue dimensioni esterne in centimetri. ${recText} Rispondi SOLO con JSON valido: {"length_cm":0,"width_cm":0,"height_cm":0,"oversized":true o false,"note":"breve commento, es. se è più grande del necessario rispetto alle dimensioni consigliate"}`,
+        },
+      ],
+    },
+  ]);
+}
+
+async function shareQR(item, qrUrl) {
+  const text = `Touch&Go — QR di deposito per "${item.objectName}"\nCodice: ${item.id}\nPunto di ritiro: ${item.pickupPoint}\nDestinazione: ${item.addressLabel}`;
+  try {
+    if (navigator.share) {
+      try {
+        const res = await fetch(qrUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `touchandgo-qr-${item.id}.png`, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text, title: "QR Touch&Go" });
+          return;
+        }
+      } catch (e) {
+        // fetch/File sharing not supported — fall through to text share
+      }
+      await navigator.share({ text, title: "QR Touch&Go", url: qrUrl });
+      return;
+    }
+  } catch (e) {
+    // user cancelled or share failed — fall back to clipboard
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${qrUrl}`);
+    alert("Link e dettagli del QR copiati — incollali nel messaggio a chi imballa.");
+  } catch (e) {
+    alert("Copia manualmente questo codice per chi imballa: " + item.id);
+  }
+}
+
 function generateBookingCode() {
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
   return `TG-${rand}`;
 }
 
-function BookedScreen() {
+function QueuedScreen() {
+  const item = state.lastQueuedItem;
   const wrap = el("div", "section booked-screen");
-  const qrData = encodeURIComponent(
-    `TouchAndGo|${state.bookingCode}|ritiro:${state.pickupPoint}|dest:${formatAddress(getSelectedAddress())}`
-  );
+  const qrData = encodeURIComponent(`TouchAndGo|${item.id}|negozio:${item.pickupPoint}|dest:${item.addressLabel}`);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
   wrap.innerHTML = `
-    <div class="booked-icon">✓</div>
-    <div class="booked-title">Richiesta di ritiro inviata</div>
-    <div class="booked-text">Il corriere passerà a ritirare l'oggetto da <b>${state.pickupPoint}</b> entro le prossime 24 ore. Mostra questo QR al ritiro.</div>
+    <div class="booked-icon">🕓</div>
+    <div class="booked-title">QR generato — in sospeso</div>
+    <div class="booked-text">Mostra questo QR al negozio per lasciare l'oggetto. <b>Il ritiro non parte ancora:</b> resta in sospeso finché non concludi il soggiorno e invii l'ordine di ritiro per tutti gli acquisti.</div>
     <div class="qr-card">
-      <img src="${qrUrl}" alt="QR di ritiro" class="qr-img" />
-      <div class="qr-code">${state.bookingCode}</div>
-      <div class="qr-note">Valido 48h · monouso</div>
-    </div>
-    <div class="booked-note">Prototipo — nessuna richiesta reale è stata inviata a un corriere.</div>`;
+      <img src="${qrUrl}" alt="QR di deposito" class="qr-img" />
+      <div class="qr-code">${item.id}</div>
+      <div class="qr-note">Il QR contiene il codice di riferimento — lettera di vettura, fattura e documento sono collegati a questo codice</div>
+    </div>`;
+  const shareBtn = el("button", "btn-secondary", "📤 Invia il QR a chi imballa");
+  shareBtn.addEventListener("click", () => shareQR(item, qrUrl));
+  wrap.appendChild(shareBtn);
+  if (item.packageDims) {
+    const pkgCard = el("div", "pack-card");
+    pkgCard.innerHTML = `
+      <div class="pack-label">📦 Per chi imballa — dimensioni consigliate</div>
+      <div class="pack-dims">${formatDims(item.packageDims.l, item.packageDims.w, item.packageDims.h)}</div>
+      <div class="pack-warn">Un imballo più grande del necessario aumenta il costo di spedizione: usa una scatola il più vicino possibile a queste misure.</div>`;
+    wrap.appendChild(pkgCard);
+    const checkBtn = el("button", "btn-secondary", "📷 Fotografa l'imballo per validarlo");
+    checkBtn.addEventListener("click", () => {
+      state.checkingItemId = item.id;
+      state.screen = "package-check";
+      render();
+    });
+    wrap.appendChild(checkBtn);
+  }
+  wrap.appendChild(el("div", "booked-note", `Hai ora ${state.pendingItems.length} acquist${state.pendingItems.length === 1 ? "o" : "i"} in sospeso.`));
+  const docsBtn = el("button", "btn-secondary", "Vedi lettera di vettura e fattura →");
+  docsBtn.addEventListener("click", () => {
+    state.viewingDocsItemId = item.id;
+    state.screen = "documents";
+    render();
+  });
+  wrap.appendChild(docsBtn);
   const backBtn = el("button", "btn-primary", "Torna alla home");
   backBtn.addEventListener("click", () => {
     state.screen = "home";
@@ -616,36 +1002,295 @@ function BookedScreen() {
   return wrap;
 }
 
+function DocumentsScreen() {
+  const wrap = el("div", "section");
+  const item =
+    state.pendingItems.find((it) => it.id === state.viewingDocsItemId) ||
+    state.purchaseHistory.find((it) => it.id === state.viewingDocsItemId);
+  const back = el("div", "back", "← Torna indietro");
+  back.addEventListener("click", () => {
+    state.screen = state.docsReturnTo || "home";
+    render();
+  });
+  wrap.appendChild(back);
+
+  if (!item) {
+    wrap.appendChild(el("div", "identify-intro", "Documenti non trovati."));
+    return wrap;
+  }
+
+  const addr = state.addresses.find((a) => a.id === item.addressId);
+  const dateStr = new Date(item.date).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+
+  wrap.appendChild(el("div", "step-lbl", "Lettera di vettura"));
+  const waybill = el("div", "doc-card");
+  waybill.innerHTML = `
+    <div class="doc-row"><span>Riferimento</span><b>${item.id}</b></div>
+    <div class="doc-row"><span>Mittente</span><b>${item.touristName || "—"}</b></div>
+    <div class="doc-row"><span>Punto di ritiro</span><b>${item.pickupPoint}</b></div>
+    <div class="doc-row"><span>Destinatario</span><b>${item.touristName || "—"}</b></div>
+    <div class="doc-row"><span>Indirizzo di consegna</span><b>${item.addressLabel}</b></div>
+    <div class="doc-row"><span>Contenuto</span><b>${item.objectName}</b></div>
+    <div class="doc-row"><span>Codice doganale HS</span><b>${item.hsCode}</b></div>
+    <div class="doc-row"><span>Peso</span><b>${item.weightKg} kg</b></div>
+    <div class="doc-row"><span>Dimensioni pacco</span><b>${item.packageDims ? formatDims(item.packageDims.l, item.packageDims.w, item.packageDims.h) : "—"}</b></div>
+    <div class="doc-row"><span>Data emissione</span><b>${dateStr}</b></div>`;
+  wrap.appendChild(waybill);
+
+  wrap.appendChild(el("div", "tg-lbl", "Fattura proforma"));
+  const invoice = el("div", "doc-card");
+  invoice.innerHTML = `
+    <div class="doc-row"><span>Numero fattura</span><b>PF-${item.id}</b></div>
+    <div class="doc-row"><span>Venditore</span><b>Touch&amp;Go — spedizione turistica</b></div>
+    <div class="doc-row"><span>Acquirente</span><b>${item.touristName || "—"}</b></div>
+    <div class="doc-row"><span>Descrizione merce</span><b>${item.objectName}</b></div>
+    <div class="doc-row"><span>Valore dichiarato</span><b>€${(item.itemValue || 0).toFixed(2)}</b></div>
+    <div class="doc-row"><span>Esenzione IVA</span><b>Art. 8 DPR 633/72</b></div>
+    <div class="doc-row"><span>Costo spedizione</span><b>€${item.price}</b></div>`;
+  wrap.appendChild(invoice);
+
+  const sigBlock = el("div", "sig-block");
+  if (item.hasSignedInvoice) {
+    sigBlock.innerHTML = `<div class="tg-lbl">Firma</div><div class="identify-intro">✓ Firma rilevata sul documento di riconoscimento caricato in fase di registrazione da ${item.touristName || "il turista"} — usata per firmare digitalmente questa fattura.</div>`;
+  } else {
+    sigBlock.innerHTML = `<div class="tg-lbl">Firma</div><div class="identify-intro">Nessuna firma rilevata sul documento caricato in fase di registrazione. La fattura non risulta firmata digitalmente.</div>`;
+  }
+  wrap.appendChild(sigBlock);
+
+  wrap.appendChild(el("div", "tg-lbl", "Documento di riconoscimento"));
+  if (item.hasIdOnFile) {
+    wrap.appendChild(el("div", "identify-intro", "✓ Copia del documento associata a questo mittente, conservata sul dispositivo. Non riprodotta qui per riservatezza — disponibile al corriere tramite il codice di riferimento del QR."));
+  } else {
+    wrap.appendChild(el("div", "identify-intro", "Nessun documento di riconoscimento associato a questo profilo."));
+  }
+
+  return wrap;
+}
+
+function ConcludeScreen() {
+  const wrap = el("div", "section");
+  const back = el("div", "back", "← Torna alla home");
+  back.addEventListener("click", () => {
+    state.screen = "home";
+    render();
+  });
+  wrap.appendChild(back);
+
+  wrap.appendChild(el("div", "step-lbl", "Concludi il soggiorno"));
+  wrap.appendChild(
+    el(
+      "div",
+      "identify-intro",
+      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, invii un unico ordine di ritiro consolidato per ciascuna destinazione."
+    )
+  );
+
+  const list = el("div", "queue-list");
+  state.pendingItems.forEach((it) => {
+    const row = el("div", "queue-item clickable");
+    row.innerHTML = `<div class="queue-item-name">${it.objectName}</div>
+      <div class="queue-item-meta">Negozio: ${it.pickupPoint} · HS ${it.hsCode}</div>
+      <div class="queue-item-meta">→ ${it.addressLabel} · €${it.price}</div>`;
+    row.addEventListener("click", () => {
+      state.viewingItemId = it.id;
+      state.viewItemReturnTo = "conclude";
+      state.screen = "view-item-photo";
+      render();
+    });
+    const changeBtn = el("button", "queue-item-change", "Cambia destinazione");
+    changeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.editingItemId = it.id;
+      state.editItemReturnTo = "conclude";
+      state.screen = "edit-item-address";
+      render();
+    });
+    row.appendChild(changeBtn);
+    list.appendChild(row);
+  });
+  wrap.appendChild(list);
+
+  const totalsByDest = {};
+  state.pendingItems.forEach((it) => {
+    totalsByDest[it.addressLabel] = (totalsByDest[it.addressLabel] || 0) + it.price;
+  });
+  const groups = Object.keys(totalsByDest).length;
+  const summary = el(
+    "div",
+    "info-line",
+    `${state.pendingItems.length} oggetti verranno consolidati in ${groups} spedizion${groups === 1 ? "e" : "i"} (una per destinazione), invece di ${state.pendingItems.length} separate.`
+  );
+  wrap.appendChild(summary);
+
+  const confirmBtn = el("button", "btn-primary", "Conferma e invia ordine di ritiro consolidato →");
+  confirmBtn.addEventListener("click", () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Invio ordine…";
+    setTimeout(() => {
+      state.shippedGroups = Object.entries(totalsByDest).map(([dest, total]) => ({
+        dest,
+        total: total.toFixed(2),
+        code: generateBookingCode(),
+        count: state.pendingItems.filter((it) => it.addressLabel === dest).length,
+      }));
+      state.pendingItems.forEach((it) => {
+        it.status = "ritirato";
+        syncPurchaseToCRM(it);
+      });
+      state.pendingItems = [];
+      savePending();
+      saveHistory();
+      state.screen = "shipped";
+      render();
+    }, 800);
+  });
+  wrap.appendChild(confirmBtn);
+
+  return wrap;
+}
+
+function ShippedScreen() {
+  const wrap = el("div", "section booked-screen");
+  wrap.appendChild(el("div", "booked-icon", "✓"));
+  wrap.appendChild(el("div", "booked-title", "Ordine di ritiro inviato"));
+  wrap.appendChild(
+    el(
+      "div",
+      "booked-text",
+      `Il corriere passerà a ritirare tutti gli oggetti lasciati nei negozi entro le prossime 24 ore, consolidati in ${state.shippedGroups.length} spedizion${state.shippedGroups.length === 1 ? "e" : "i"}.`
+    )
+  );
+  (state.shippedGroups || []).forEach((g) => {
+    const card = el("div", "qr-card");
+    card.innerHTML = `<div class="qr-code">${g.code}</div>
+      <div class="qr-note">${g.count} oggett${g.count === 1 ? "o" : "i"} → ${g.dest}</div>
+      <div class="qr-note">Totale €${g.total}</div>`;
+    wrap.appendChild(card);
+  });
+  wrap.appendChild(el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere."));
+  const backBtn = el("button", "btn-primary", "Torna alla home");
+  backBtn.addEventListener("click", () => {
+    state.screen = "home";
+    render();
+  });
+  wrap.appendChild(backBtn);
+  return wrap;
+}
+
 function IdentifyScreen() {
   const wrap = el("div", "section identify-screen");
   wrap.innerHTML = `
     <div class="step-lbl">Prima di iniziare · Chi sei</div>
-    <div class="identify-intro">Ci serve sapere chi sei e dove deve arrivare l'acquisto — così calcoliamo il prezzo giusto e prepariamo i documenti doganali a tuo nome.</div>`;
+    <div class="identify-intro">Ci serve sapere chi sei e dove deve arrivare l'acquisto — così calcoliamo il prezzo giusto e prepariamo i documenti doganali a tuo nome. Il documento viene chiesto una sola volta.</div>`;
 
   const nameField = el("div", "dest-field");
   nameField.innerHTML = `<div class="dest-lbl">Il tuo nome</div><input class="dest-input" id="name-input" placeholder="Es. Maria Rossi" />`;
   wrap.appendChild(nameField);
 
+  const emailField = el("div", "dest-field");
+  emailField.innerHTML = `<div class="dest-lbl">Email (per il tuo account)</div><input class="dest-input" id="email-input" type="email" placeholder="maria@esempio.com" />`;
+  wrap.appendChild(emailField);
+
   wrap.appendChild(el("div", "tg-lbl", "Indirizzo di destinazione"));
   wrap.appendChild(AddressFormFields("identify"));
 
+  wrap.appendChild(el("div", "tg-lbl", "Documento di riconoscimento"));
+  const idCard = el("div", "id-upload-card");
+  idCard.innerHTML = `<div class="id-upload-ic">🪪</div><div class="id-upload-txt">Tocca per fotografare o caricare un documento (carta d'identità, passaporto)</div><div class="id-upload-status" id="id-upload-status">Nessun documento caricato</div>`;
+  const idInput = el("input");
+  idInput.type = "file";
+  idInput.accept = "image/*";
+  idInput.style.display = "none";
+  let idDocumentData = null;
+  let signatureDetected = false;
+  idInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById("id-upload-status");
+    const reader = new FileReader();
+    reader.onload = async () => {
+      idDocumentData = await compressImage(reader.result, 700, 0.6);
+      statusEl.textContent = "🔎 Verifico se il documento contiene una firma…";
+      statusEl.classList.remove("ok");
+      try {
+        const detection = await detectSignature(idDocumentData);
+        signatureDetected = !!detection.has_signature;
+        statusEl.textContent = signatureDetected
+          ? "✓ Documento caricato — firma rilevata sul documento"
+          : "✓ Documento caricato — nessuna firma rilevata sul documento";
+        if (signatureDetected) statusEl.classList.add("ok");
+      } catch (err) {
+        signatureDetected = false;
+        statusEl.textContent = "✓ Documento caricato — verifica firma non riuscita, riprova più tardi";
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  idCard.appendChild(idInput);
+  idCard.addEventListener("click", () => idInput.click());
+  wrap.appendChild(idCard);
+  wrap.appendChild(
+    el("div", "home-foot", "Se il documento contiene già una firma visibile, verrà usata per firmare digitalmente le tue fatture proforma — nessuna firma aggiuntiva richiesta. Il documento resta salvato solo sul tuo dispositivo.")
+  );
+
   const goBtn = el("button", "btn-primary", "Salva e continua →");
-  goBtn.addEventListener("click", () => {
+  goBtn.addEventListener("click", async () => {
     const name = document.getElementById("name-input").value.trim();
+    const email = document.getElementById("email-input").value.trim();
     const addr = readAddressForm("identify");
     if (!addr.city || !addr.country) return;
+    if (!email || !email.includes("@")) {
+      alert("Inserisci un'email valida — serve per il tuo account.");
+      return;
+    }
     state.touristName = name || "Ospite";
+    state.touristEmail = email;
     addr.label = "Casa";
     addr.id = "addr-" + Date.now();
     state.addresses = [addr];
     state.selectedAddressId = addr.id;
+    state.idDocument = idDocumentData;
+    state.signatureDetected = signatureDetected;
     saveProfile();
+
+    if (isBiometricSupported()) {
+      goBtn.disabled = true;
+      goBtn.textContent = "Attivo lo sblocco biometrico…";
+      try {
+        const credentialId = await registerBiometric(email, name);
+        state.biometricCredentialId = credentialId;
+        state.biometricVerified = true;
+        saveProfile();
+      } catch (e) {
+        // L'utente ha annullato o il dispositivo non supporta il sensore —
+        // si continua comunque senza sblocco biometrico.
+      }
+    }
+
     state.screen = "home";
     render();
   });
   wrap.appendChild(goBtn);
 
   return wrap;
+}
+
+async function detectSignature(idDocumentDataUrl) {
+  const base64 = idDocumentDataUrl.split(",")[1];
+  const mediaType = idDocumentDataUrl.split(";")[0].split(":")[1] || "image/jpeg";
+  const result = await classify([
+    {
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+        {
+          type: "text",
+          text: 'Analizza questa immagine di un documento di identità. Contiene una firma manoscritta visibile del titolare? Rispondi SOLO con JSON valido: {"has_signature": true o false}',
+        },
+      ],
+    },
+  ]);
+  return result;
 }
 
 function AddressFormFields(prefix) {
@@ -786,18 +1431,63 @@ function ChooseAddressScreen() {
   });
   wrap.appendChild(addBtn);
 
+  wrap.appendChild(el("div", "tg-lbl", "Punto di ritiro per questo acquisto"));
+  const pickupField = el("div", "dest-field");
+  pickupField.innerHTML = `<div class="dest-lbl">Se diverso dal punto vendita rilevato</div><input class="dest-input" id="item-pickup-input" value="${state.pickupPoint}" />`;
+  wrap.appendChild(pickupField);
+  wrap.appendChild(
+    el("div", "home-foot", "Utile se chi imballa/consegna l'oggetto non è lo stesso negozio dove hai fatto l'acquisto.")
+  );
+
   const confirmBtn = el("button", "btn-primary", "Conferma e genera QR →");
-  confirmBtn.addEventListener("click", () => {
+  confirmBtn.addEventListener("click", async () => {
     if (!state.selectedAddressId) return;
+    const itemPickupPoint = document.getElementById("item-pickup-input").value.trim() || state.pickupPoint;
     const addr = getSelectedAddress();
     if (state.result) {
       state.price = priceFor(state.result.weight_kg, addr ? addr.country : null);
     }
     confirmBtn.disabled = true;
-    confirmBtn.textContent = "Invio richiesta…";
+    confirmBtn.textContent = "Genero QR…";
+
+    let photo = null;
+    let textDescription = null;
+    if (state.pendingInput && state.pendingInput.type === "image") {
+      photo = await compressImage(state.pendingInput.dataUrl, 480, 0.6);
+    } else if (state.pendingInput && state.pendingInput.type === "text") {
+      textDescription = state.pendingInput.label;
+    }
+
     setTimeout(() => {
-      state.bookingCode = generateBookingCode();
-      state.screen = "booked";
+      const item = {
+        id: generateBookingCode(),
+        objectName: (state.result && state.result.object_it) || "Oggetto",
+        hsCode: (state.result && state.result.hs_code) || "—",
+        weightKg: state.result ? state.result.weight_kg : 1,
+        packageDims: packagedDimensions(state.result),
+        itemValue: state.result && typeof state.result.value_eur === "number" ? state.result.value_eur : 0,
+        pricingTier: state.isSubscribed ? "abbonato" : "pieno",
+        pickupPoint: itemPickupPoint,
+        pickupSource: itemPickupPoint === state.pickupPoint ? state.pickupSource : null,
+        addressId: addr ? addr.id : null,
+        addressLabel: addr ? `${addr.label || "Indirizzo"} — ${formatAddress(addr)}` : "—",
+        price: state.price ? state.price.grandTotal : 0,
+        touristName: state.touristName,
+        partnerCode: state.activePartnerCode || null,
+        status: "in sospeso",
+        date: new Date().toISOString(),
+        photo,
+        textDescription,
+        hasSignedInvoice: !!state.signatureDetected,
+        hasIdOnFile: !!state.idDocument,
+      };
+      state.pendingItems.push(item);
+      state.purchaseHistory.push(item);
+      savePending();
+      saveHistory();
+      syncPurchaseToCRM(item);
+      state.lastQueuedItem = item;
+      state.screen = "queued";
       render();
     }, 700);
   });
@@ -806,19 +1496,268 @@ function ChooseAddressScreen() {
   return wrap;
 }
 
+function EditItemAddressScreen() {
+  const wrap = el("div", "section");
+  const item = state.pendingItems.find((it) => it.id === state.editingItemId);
+  const returnTo = state.editItemReturnTo || "conclude";
+
+  const back = el("div", "back", "← Annulla");
+  back.addEventListener("click", () => {
+    state.editingItemId = null;
+    state.screen = returnTo;
+    render();
+  });
+  wrap.appendChild(back);
+
+  if (!item) {
+    wrap.appendChild(el("div", "identify-intro", "Acquisto non trovato."));
+    return wrap;
+  }
+
+  wrap.appendChild(el("div", "step-lbl", "Cambia destinazione"));
+  wrap.appendChild(el("div", "identify-intro", `${item.objectName} — attualmente verso: ${item.addressLabel}`));
+
+  const list = el("div", "addr-list");
+  state.addresses.forEach((a) => {
+    const row = el("div", "addr-option" + (a.id === item.addressId ? " selected" : ""));
+    row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
+    row.addEventListener("click", () => {
+      item.addressId = a.id;
+      item.addressLabel = `${a.label || "Indirizzo"} — ${formatAddress(a)}`;
+      item.price = priceFor(item.weightKg, a.country).grandTotal;
+      savePending();
+      saveHistory();
+      state.editingItemId = null;
+      state.screen = returnTo;
+      render();
+    });
+    list.appendChild(row);
+  });
+  wrap.appendChild(list);
+
+  const addBtn = el("button", "btn-secondary", "+ Aggiungi un nuovo indirizzo");
+  addBtn.addEventListener("click", () => {
+    state.addAddressReturnTo = "edit-item-address";
+    state.screen = "add-address";
+    render();
+  });
+  wrap.appendChild(addBtn);
+
+  return wrap;
+}
+
+function compressImage(dataUrl, maxDim, quality) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width;
+      let h = img.height;
+      if (w > h && w > maxDim) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+      } else if (h > maxDim) {
+        w = Math.round((w * maxDim) / h);
+        h = maxDim;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+function ViewItemPhotoScreen() {
+  const wrap = el("div", "section");
+  const item =
+    state.purchaseHistory.find((it) => it.id === state.viewingItemId) ||
+    state.pendingItems.find((it) => it.id === state.viewingItemId);
+  const back = el("div", "back", "← Torna indietro");
+  back.addEventListener("click", () => {
+    state.viewingItemId = null;
+    state.screen = state.viewItemReturnTo || "history";
+    render();
+  });
+  wrap.appendChild(back);
+
+  if (!item) {
+    wrap.appendChild(el("div", "identify-intro", "Acquisto non trovato."));
+    return wrap;
+  }
+
+  wrap.appendChild(el("div", "step-lbl", "Foto originale dell'acquisto"));
+  if (item.photo) {
+    const img = el("img", "capture-preview");
+    img.src = item.photo;
+    wrap.appendChild(img);
+  } else if (item.textDescription) {
+    wrap.appendChild(el("div", "pending-desc", `"${item.textDescription}"`));
+    wrap.appendChild(el("div", "identify-intro", "Questo acquisto è stato descritto a testo, senza foto."));
+  } else {
+    wrap.appendChild(el("div", "identify-intro", "Nessuna foto disponibile per questo acquisto."));
+  }
+
+  const info = el("div", "info-card");
+  info.innerHTML = `
+    <div class="info-row"><span>Oggetto</span><b>${item.objectName}</b></div>
+    <div class="info-row"><span>Codice HS</span><b>${item.hsCode}</b></div>
+    <div class="info-row"><span>Ritiro</span><b>${item.pickupPoint}</b></div>
+    <div class="info-row"><span>Destinazione</span><b>${item.addressLabel}</b></div>`;
+  wrap.appendChild(info);
+
+  return wrap;
+}
+
+function DashboardScreen() {
+  const wrap = el("div", "section");
+  const back = el("div", "back", "← Torna alla home");
+  back.addEventListener("click", () => {
+    state.screen = "home";
+    render();
+  });
+  wrap.appendChild(back);
+  wrap.appendChild(el("div", "step-lbl", "La tua spesa"));
+
+  const items = state.purchaseHistory;
+  const totalValue = items.reduce((s, it) => s + (it.itemValue || 0), 0);
+  const totalService = items.reduce((s, it) => s + (it.price || 0), 0);
+  const pendingCount = items.filter((it) => it.status === "in sospeso").length;
+  const doneCount = items.filter((it) => it.status === "ritirato").length;
+
+  const summary = el("div", "info-card");
+  summary.innerHTML = `
+    <div class="info-row"><span>Acquisti registrati</span><b>${items.length}</b></div>
+    <div class="info-row"><span>In sospeso / ritirati</span><b>${pendingCount} / ${doneCount}</b></div>
+    <div class="info-row"><span>Valore acquisti (stima AI)</span><b>€${totalValue.toFixed(2)}</b></div>
+    <div class="info-row"><span>Speso in servizi Touch&amp;Go</span><b>€${totalService.toFixed(2)}</b></div>
+    <div class="info-row total"><span>Totale complessivo</span><b>€${(totalValue + totalService).toFixed(2)}</b></div>`;
+  wrap.appendChild(summary);
+
+  wrap.appendChild(el("div", "tg-lbl", "Dettaglio per acquisto"));
+  const list = el("div", "history-list");
+  if (!items.length) {
+    list.appendChild(el("div", "identify-intro", "Non hai ancora registrato nessun acquisto."));
+  } else {
+    items
+      .slice()
+      .reverse()
+      .forEach((it) => {
+        const row = el("div", "history-item");
+        row.innerHTML = `
+          <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${it.status === "ritirato" ? "done" : "pending"}">${it.status}</span></div>
+          <div class="history-meta">Valore oggetto: €${(it.itemValue || 0).toFixed(2)} · Servizio Touch&amp;Go: €${it.price}</div>`;
+        list.appendChild(row);
+      });
+  }
+  wrap.appendChild(list);
+
+  return wrap;
+}
+
 function resetEverything() {
-  if (!confirm("Cancellare nome, indirizzi salvati e ricominciare da capo?")) return;
+  if (!confirm("Cancellare nome, indirizzi salvati, acquisti in sospeso, lo storico acquisti e ricominciare da capo?")) return;
   try {
     localStorage.removeItem("tg_profile");
+    localStorage.removeItem("tg_pending");
+    localStorage.removeItem("tg_history");
   } catch (e) {}
   state.touristName = null;
+  state.touristEmail = null;
+  state.biometricCredentialId = null;
+  state.biometricVerified = false;
+  state.isSubscribed = false;
+  state.idDocument = null;
+  state.signatureDetected = false;
   state.addresses = [];
   state.selectedAddressId = null;
   state.destinationFromProfile = true;
   state.pendingInput = null;
+  state.pendingItems = [];
+  state.purchaseHistory = [];
   state.mode = "turista";
   state.screen = "cover";
   render();
+}
+
+function isBiometricSupported() {
+  return !!(window.PublicKeyCredential && navigator.credentials);
+}
+
+function randomChallenge() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return arr;
+}
+
+function bufToBase64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+function base64ToBuf(b64) {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+async function registerBiometric(email, name) {
+  const userId = new Uint8Array(16);
+  crypto.getRandomValues(userId);
+  const credential = await navigator.credentials.create({
+    publicKey: {
+      challenge: randomChallenge(),
+      rp: { name: "Touch&Go" },
+      user: { id: userId, name: email, displayName: name || email },
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+      timeout: 60000,
+    },
+  });
+  return bufToBase64(credential.rawId);
+}
+
+async function verifyBiometric(credentialIdBase64) {
+  await navigator.credentials.get({
+    publicKey: {
+      challenge: randomChallenge(),
+      allowCredentials: [{ id: base64ToBuf(credentialIdBase64), type: "public-key" }],
+      userVerification: "required",
+      timeout: 60000,
+    },
+  });
+}
+
+function BiometricLockScreen() {
+  const wrap = el("div", "section biometric-lock");
+  wrap.innerHTML = `
+    <div class="biometric-icon">🔒</div>
+    <div class="step-lbl" style="justify-content:center;text-align:center">Sblocca Touch&amp;Go</div>
+    <div class="identify-intro" style="text-align:center">Ciao ${state.touristName || ""} — verifica la tua identità per continuare.</div>`;
+  const unlockBtn = el("button", "btn-primary", "🔓 Sblocca con Face ID / Touch ID / impronta");
+  const errBox = el("div", "alert hidden");
+  unlockBtn.addEventListener("click", async () => {
+    unlockBtn.disabled = true;
+    unlockBtn.textContent = "Verifico…";
+    errBox.classList.add("hidden");
+    try {
+      await verifyBiometric(state.biometricCredentialId);
+      state.biometricVerified = true;
+      state.screen = state.touristName ? "home" : "cover";
+      render();
+    } catch (e) {
+      errBox.textContent = "⚠️ Verifica non riuscita o annullata. Riprova.";
+      errBox.classList.remove("hidden");
+      unlockBtn.disabled = false;
+      unlockBtn.textContent = "🔓 Sblocca con Face ID / Touch ID / impronta";
+    }
+  });
+  wrap.appendChild(unlockBtn);
+  wrap.appendChild(errBox);
+  const skipBtn = el("button", "reset-link", "Non riesco a sbloccare — resetta l'account");
+  skipBtn.addEventListener("click", resetEverything);
+  wrap.appendChild(skipBtn);
+  return wrap;
 }
 
 function saveProfile() {
@@ -827,8 +1766,13 @@ function saveProfile() {
       "tg_profile",
       JSON.stringify({
         name: state.touristName,
+        email: state.touristEmail,
         addresses: state.addresses,
         selectedAddressId: state.selectedAddressId,
+        idDocument: state.idDocument,
+        signatureDetected: state.signatureDetected,
+        biometricCredentialId: state.biometricCredentialId,
+        isSubscribed: state.isSubscribed,
       })
     );
   } catch (e) {}
@@ -840,19 +1784,138 @@ function loadProfile() {
     if (!raw) return;
     const p = JSON.parse(raw);
     if (p.name) state.touristName = p.name;
+    if (p.email) state.touristEmail = p.email;
     if (p.addresses && p.addresses.length) {
       state.addresses = p.addresses;
       state.selectedAddressId = p.selectedAddressId || p.addresses[0].id;
       state.destinationFromProfile = true;
     }
+    if (p.idDocument) state.idDocument = p.idDocument;
+    if (typeof p.signatureDetected === "boolean") state.signatureDetected = p.signatureDetected;
+    if (p.biometricCredentialId) state.biometricCredentialId = p.biometricCredentialId;
+    if (typeof p.isSubscribed === "boolean") state.isSubscribed = p.isSubscribed;
   } catch (e) {}
 }
+
+function savePending() {
+  try {
+    localStorage.setItem("tg_pending", JSON.stringify(state.pendingItems));
+  } catch (e) {}
+}
+
+function loadPending() {
+  try {
+    const raw = localStorage.getItem("tg_pending");
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (Array.isArray(items)) state.pendingItems = items;
+  } catch (e) {}
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem("tg_history", JSON.stringify(state.purchaseHistory));
+  } catch (e) {}
+}
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem("tg_history");
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (Array.isArray(items)) state.purchaseHistory = items;
+  } catch (e) {}
+}
+
+function PurchaseHistoryList(items, emptyText, editable) {
+  const wrap = el("div", "history-list");
+  if (!items.length) {
+    wrap.appendChild(el("div", "identify-intro", emptyText));
+    return wrap;
+  }
+  items
+    .slice()
+    .reverse()
+    .forEach((it) => {
+      const row = el("div", "history-item");
+      const dt = new Date(it.date);
+      const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+      const sourceLbl = it.pickupSource === "gps" ? "GPS" : it.pickupSource === "ip" ? "rete" : "manuale";
+      row.innerHTML = `
+        <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${it.status === "ritirato" ? "done" : "pending"}">${it.status}</span></div>
+        <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${it.pickupPoint}</b> · HS ${it.hsCode}</div>
+        <div class="history-meta">→ ${it.addressLabel} · €${it.price}</div>
+        <div class="history-meta">${it.touristName ? it.touristName + " · " : ""}${dateStr}</div>`;
+      if (editable) {
+        row.classList.add("clickable");
+        row.addEventListener("click", () => {
+          state.viewingItemId = it.id;
+          state.viewItemReturnTo = "history";
+          state.screen = "view-item-photo";
+          render();
+        });
+        const docsBtn = el("button", "queue-item-change", "Lettera di vettura e fattura");
+        docsBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          state.viewingDocsItemId = it.id;
+          state.docsReturnTo = "history";
+          state.screen = "documents";
+          render();
+        });
+        row.appendChild(docsBtn);
+      }
+      if (editable && it.status === "in sospeso") {
+        const changeBtn = el("button", "queue-item-change", "Cambia destinazione");
+        changeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          state.editingItemId = it.id;
+          state.editItemReturnTo = "history";
+          state.screen = "edit-item-address";
+          render();
+        });
+        row.appendChild(changeBtn);
+      }
+      wrap.appendChild(row);
+    });
+  return wrap;
+}
+
+function HistoryScreen() {
+  const wrap = el("div", "section");
+  const back = el("div", "back", "← Torna alla home");
+  back.addEventListener("click", () => {
+    state.screen = "home";
+    render();
+  });
+  wrap.appendChild(back);
+  wrap.appendChild(el("div", "step-lbl", "I tuoi acquisti"));
+  wrap.appendChild(PurchaseHistoryList(state.purchaseHistory, "Non hai ancora registrato nessun acquisto.", true));
+  return wrap;
+}
+
+
 
 function Footer() {
   const f = el("div", "footer");
   f.innerHTML = `<p>Prototipo Touch&amp;Go · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Classificazione AI reale · Quote e pagamenti simulati per il test</p>
-    <button class="reset-link" id="reset-link">Resetta tutto</button>`;
+    <div class="footer-links">
+      <button class="reset-link" id="dashboard-link">La tua spesa</button>
+      <button class="reset-link" id="history-link">I tuoi acquisti (${state.purchaseHistory.length})</button>
+      <button class="reset-link" id="reset-link">Resetta tutto</button>
+    </div>
+    <div class="footer-links">
+      <a class="reset-link" href="/site/termini.html">Termini di servizio</a>
+      <a class="reset-link" href="/site/privacy.html">Privacy</a>
+    </div>`;
   f.querySelector("#reset-link").addEventListener("click", resetEverything);
+  f.querySelector("#history-link").addEventListener("click", () => {
+    state.screen = "history";
+    render();
+  });
+  f.querySelector("#dashboard-link").addEventListener("click", () => {
+    state.screen = "dashboard";
+    render();
+  });
   return f;
 }
 
@@ -867,6 +1930,7 @@ async function runClassification(promise) {
     state.result = result;
     const addr = getSelectedAddress();
     state.price = priceFor(result.weight_kg, addr ? addr.country : null);
+    state.priceConfirmedForThisResult = false;
     state.screen = "result";
   } catch (err) {
     state.error = /401/.test(err.message) ? "Chiave API non valida. Riprova più tardi." : "Errore AI. Riprova.";
@@ -894,5 +1958,40 @@ function handleDescribe(label) {
 }
 
 loadProfile();
+loadPending();
+if (state.biometricCredentialId && isBiometricSupported()) {
+  state.screen = "biometric-lock";
+}
+function capturePartnerCode() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("partner");
+    if (fromUrl) {
+      state.activePartnerCode = fromUrl.trim().toUpperCase();
+      localStorage.setItem("tg_active_partner", state.activePartnerCode);
+    } else {
+      const saved = localStorage.getItem("tg_active_partner");
+      if (saved) state.activePartnerCode = saved;
+    }
+  } catch (e) {}
+}
+
+capturePartnerCode();
+loadHistory();
 render();
 loadLocation();
+
+window.addEventListener("online", () => {
+  state.isOffline = false;
+  render();
+});
+window.addEventListener("offline", () => {
+  state.isOffline = true;
+  render();
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

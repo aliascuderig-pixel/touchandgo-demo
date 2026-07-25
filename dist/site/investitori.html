@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0F0F0F" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Area Investitori — Touch&amp;Go</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0F0F0F; --paper:#FAF8F4; --cream:#F4EFE6;
+  --gold:#C9A96E; --gold-soft:#E8D5B0; --gold-deep:#8B6914; --clay:#7A5C0A;
+  --muted:#6B655A; --line:#EAE4D8; --warn-bg:#FFF8EC;
+  --display:'Cormorant Garamond',serif; --body:'Montserrat',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--body);background:var(--paper);color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:var(--gold-deep)}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+nav{background:var(--ink);padding:16px 0}
+.nav-inner{max-width:720px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;align-items:center}
+.brand{font-family:var(--display);font-size:20px;color:var(--cream)}
+.brand em{font-style:italic;color:var(--gold)}
+.back-link{color:#B8B0A0;text-decoration:none;font-size:13px}
+header.page-head{padding:56px 0 20px;text-align:center}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);font-weight:600;margin-bottom:14px}
+h1{font-family:var(--display);font-size:34px;font-weight:500;margin:0 0 10px}
+.lead{font-size:13.5px;color:var(--muted);max-width:440px;margin:0 auto}
+
+/* Gate */
+.gate{max-width:360px;margin:36px auto 90px;text-align:center}
+.gate input{width:100%;border:1px solid var(--line);padding:14px 16px;font-family:var(--body);font-size:14px;background:#fff;box-sizing:border-box;margin-bottom:12px;text-align:center;letter-spacing:.05em}
+.gate button{width:100%;background:var(--ink);color:var(--cream);border:none;padding:14px;font-size:12.5px;font-weight:700;letter-spacing:.03em;cursor:pointer}
+.gate-error{color:#B23A2E;font-size:12.5px;margin-top:10px;min-height:18px}
+
+/* Content */
+main{display:none;padding-bottom:90px}
+main.show{display:block}
+.wrap-content{max-width:680px;margin:0 auto;padding:0 24px}
+.inv-section{margin-bottom:44px}
+.inv-section .eyebrow{margin-bottom:12px}
+.inv-section p{font-size:14px;color:#2A2820}
+.inv-stats{display:flex;gap:30px;margin-bottom:16px;flex-wrap:wrap}
+.inv-stat b{display:block;font-family:var(--display);font-size:28px;color:var(--gold-deep);font-weight:500}
+.inv-stat span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.inv-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
+.inv-table th,.inv-table td{border:1px solid var(--line);padding:9px 12px;text-align:left}
+.inv-table th{background:#fff;font-weight:700}
+.inv-table tr.total td{font-weight:800;background:var(--warn-bg)}
+.inv-list{padding-left:18px;font-size:14px}
+.inv-list li{margin-bottom:6px}
+.inv-confidential{text-align:center;font-size:11px;color:var(--clay);letter-spacing:.06em;text-transform:uppercase;border-top:1px solid var(--line);padding-top:20px;margin-top:50px}
+footer{background:#0A0A08;color:#8A8577;padding:30px 0;font-size:12px;text-align:center}
+footer a{color:#8A8577}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" style="text-decoration:none"><div class="brand">Touch<em>&amp;</em>Go</div></a>
+    <a class="back-link" href="index.html">← Torna al sito</a>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="eyebrow">Accesso riservato</div>
+  <h1>Area Investitori</h1>
+  <p class="lead">Materiale confidenziale — dati finanziari, partnership strategiche e modalità di partecipazione al round. Non distribuire senza NDA firmato.</p>
+</header>
+
+<div class="gate" id="gate">
+  <input type="password" id="pw-input" placeholder="Password investitori" autocomplete="off" />
+  <button id="pw-submit">Accedi →</button>
+  <div class="gate-error" id="pw-error"></div>
+</div>
+
+<main id="main">
+  <div class="wrap-content" id="content"></div>
+</main>
+
+<footer>
+  <div class="wrap">Prototipo Touch&amp;Go · Catania 2026 · Pre-seed · <a href="index.html">Torna al sito</a></div>
+</footer>
+
+<script>
+async function tryLogin() {
+  const pw = document.getElementById('pw-input').value;
+  const errBox = document.getElementById('pw-error');
+  const btn = document.getElementById('pw-submit');
+  errBox.textContent = '';
+  if (!pw) return;
+  btn.disabled = true;
+  btn.textContent = 'Verifico…';
+  try {
+    const res = await fetch('/.netlify/functions/investor-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errBox.textContent = data.error || 'Accesso negato.';
+      btn.disabled = false;
+      btn.textContent = 'Accedi →';
+      return;
+    }
+    document.getElementById('content').innerHTML = data.html;
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('main').classList.add('show');
+  } catch (e) {
+    errBox.textContent = 'Errore di connessione. Riprova.';
+    btn.disabled = false;
+    btn.textContent = 'Accedi →';
+  }
+}
+document.getElementById('pw-submit').addEventListener('click', tryLogin);
+document.getElementById('pw-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') tryLogin();
+});
+</script>
+
+</body>
+</html>
