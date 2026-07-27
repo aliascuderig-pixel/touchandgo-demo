@@ -88,14 +88,19 @@ function priceQuotes(weightKg, destinationName) {
     eta,
     full: round(shipping + FULL_FEE),
     subscribed: round(shipping + SUBSCRIBED_FEE),
+    breakeven: round(shipping),
   };
 }
 
 // Prezzo effettivo da applicare dato lo stato del cliente (usato per
 // compatibilità con il resto del codice che si aspetta un unico totale).
+// Se è attivo un codice invito valido e non ancora usato, la fee di
+// servizio Touch&Go viene azzerata per questa sola spedizione: il turista
+// paga solo il corriere, a costo vivo — nessun margine per Touch&Go.
 function priceFor(weightKg, destinationName) {
   const q = priceQuotes(weightKg, destinationName);
-  const grandTotal = state.isSubscribed ? q.subscribed : q.full;
+  const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
+  const grandTotal = onBreakeven ? q.breakeven : state.isSubscribed ? q.subscribed : q.full;
   return { grandTotal, eta: q.eta, quotes: q };
 }
 
@@ -173,8 +178,14 @@ const state = {
   biometricVerified: false,
   isSubscribed: false,
   priceConfirmedForThisResult: false,
+  priceConfirmedAsBreakeven: false,
   idDocument: null,
   signatureDetected: false,
+  promoCode: null,
+  promoChecked: false,
+  promoValid: false,
+  promoRedeemedThisOrder: false,
+  showPromoInput: false,
 };
 const app = document.getElementById("app");
 
@@ -516,6 +527,39 @@ function HomeScreen() {
 
   const foot = el("div", "home-foot", "Peso e dimensioni stimati dalla foto · prezzo calcolato sulla destinazione");
   section.appendChild(foot);
+
+  if (!state.promoValid) {
+    if (!state.showPromoInput) {
+      const promoLink = el("div", "promo-link", "Hai un codice invito?");
+      promoLink.addEventListener("click", () => {
+        state.showPromoInput = true;
+        render();
+      });
+      section.appendChild(promoLink);
+    } else {
+      const promoBox = el("div", "describe-box");
+      const promoInput = el("input");
+      promoInput.type = "text";
+      promoInput.placeholder = "Codice invito";
+      promoInput.value = state.promoCode || "";
+      const promoGo = el("button", null, "→");
+      promoGo.addEventListener("click", () => {
+        if (promoInput.value.trim()) checkPromoCode(promoInput.value.trim());
+      });
+      promoInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && promoInput.value.trim()) checkPromoCode(promoInput.value.trim());
+      });
+      promoBox.appendChild(promoInput);
+      promoBox.appendChild(promoGo);
+      section.appendChild(promoBox);
+      if (state.promoChecked && !state.promoValid) {
+        section.appendChild(el("div", "promo-invalid", "Codice non valido o già utilizzato."));
+      }
+    }
+  } else {
+    section.appendChild(el("div", "promo-active-note", `✓ Codice invito ${state.promoCode} attivo — sconto applicato alla prossima spedizione`));
+  }
+
   wrap.appendChild(section);
 
   return wrap;
@@ -688,7 +732,30 @@ function ResultScreen() {
   }
 
   let priceCard;
-  if (!state.isSubscribed && !state.priceConfirmedForThisResult) {
+  const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
+
+  if (onBreakeven && !state.priceConfirmedForThisResult) {
+    const promo = el("div", "promo-card-inline");
+    promo.innerHTML = `
+      <div class="promo-badge">Una tantum · invito ${state.promoCode}</div>
+      <div class="promo-headline-inline">La tua prima spedizione,<br><em>al prezzo che costa a noi.</em></div>
+      <div class="promo-price-row">
+        <span class="promo-price-new">€${q.breakeven.toFixed(2)}</span>
+        <span class="promo-price-old">€${q.full.toFixed(2)}</span>
+      </div>
+      <div class="info-row waived"><span>Fee di servizio Touch&amp;Go</span><b>€0</b></div>
+      <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
+      <div class="promo-note-inline">Nessun margine per Touch&amp;Go su questa spedizione — offerta valida una sola volta.</div>`;
+    const promoBtn = el("button", "btn-primary", "Attiva l'offerta e continua →");
+    promoBtn.addEventListener("click", () => {
+      state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
+      state.priceConfirmedForThisResult = true;
+      state.priceConfirmedAsBreakeven = true;
+      render();
+    });
+    promo.appendChild(promoBtn);
+    wrap.appendChild(promo);
+  } else if (!state.isSubscribed && !state.priceConfirmedForThisResult) {
     const dual = el("div", "price-dual");
     dual.innerHTML = `<div class="tg-lbl" style="margin-bottom:10px">Scegli come pagare — confronto sempre visibile, per ogni spedizione</div>`;
     const optFull = el("div", "price-option");
@@ -722,10 +789,10 @@ function ResultScreen() {
     dual.appendChild(optSub);
     wrap.appendChild(dual);
   } else {
-    const fee = state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+    const fee = onBreakeven ? 0 : state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
     priceCard = el("div", "price-card");
     priceCard.innerHTML = `
-      <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${state.isSubscribed ? "· prezzo abbonato" : ""}</div>
+      <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${onBreakeven ? "· offerta breakeven" : state.isSubscribed ? "· prezzo abbonato" : ""}</div>
       <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€${fee}</b></div>
       <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="info-row total"><span>Totale</span><b id="res-total">€0</b></div>
@@ -1449,6 +1516,7 @@ function ChooseAddressScreen() {
     }
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Genero QR…";
+    if (state.priceConfirmedAsBreakeven) redeemPromoCode();
 
     let photo = null;
     let textDescription = null;
@@ -1466,7 +1534,7 @@ function ChooseAddressScreen() {
         weightKg: state.result ? state.result.weight_kg : 1,
         packageDims: packagedDimensions(state.result),
         itemValue: state.result && typeof state.result.value_eur === "number" ? state.result.value_eur : 0,
-        pricingTier: state.isSubscribed ? "abbonato" : "pieno",
+        pricingTier: state.priceConfirmedAsBreakeven ? "breakeven" : state.isSubscribed ? "abbonato" : "pieno",
         pickupPoint: itemPickupPoint,
         pickupSource: itemPickupPoint === state.pickupPoint ? state.pickupSource : null,
         addressId: addr ? addr.id : null,
@@ -1931,6 +1999,7 @@ async function runClassification(promise) {
     const addr = getSelectedAddress();
     state.price = priceFor(result.weight_kg, addr ? addr.country : null);
     state.priceConfirmedForThisResult = false;
+    state.priceConfirmedAsBreakeven = false;
     state.screen = "result";
   } catch (err) {
     state.error = /401/.test(err.message) ? "Chiave API non valida. Riprova più tardi." : "Errore AI. Riprova.";
@@ -1977,6 +2046,61 @@ function capturePartnerCode() {
 }
 
 capturePartnerCode();
+
+// Codice invito per l'offerta "prima spedizione a prezzo breakeven".
+// A differenza del codice partner, non viene mai mostrato di default:
+// compare solo se arriva da un link diretto (?invito=CODICE) o se il
+// turista lo digita esplicitamente. Il codice è single-use e viene
+// verificato/consumato lato server (netlify/functions/promo.js).
+function capturePromoCode() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("invito");
+    if (fromUrl) {
+      state.promoCode = fromUrl.trim().toUpperCase();
+    }
+  } catch (e) {}
+}
+
+async function checkPromoCode(code) {
+  const normalized = (code || "").trim().toUpperCase();
+  if (!normalized) return;
+  state.promoCode = normalized;
+  state.promoChecked = false;
+  state.promoValid = false;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/promo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "check", code: normalized }),
+    });
+    const data = await res.json();
+    state.promoChecked = true;
+    state.promoValid = !!data.valid;
+  } catch (e) {
+    state.promoChecked = true;
+    state.promoValid = false;
+  }
+  render();
+}
+
+function redeemPromoCode() {
+  if (!state.promoCode || !state.promoValid || state.promoRedeemedThisOrder) return;
+  state.promoRedeemedThisOrder = true;
+  fetch("/.netlify/functions/promo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "redeem", code: state.promoCode }),
+  }).catch(() => {
+    // Se la conferma server-side fallisce, la spedizione resta comunque
+    // valida per il turista: il codice andrà verificato manualmente lato
+    // admin prima di essere riutilizzato per un nuovo invito.
+  });
+}
+
+capturePromoCode();
+if (state.promoCode) checkPromoCode(state.promoCode);
 loadHistory();
 render();
 loadLocation();

@@ -341,6 +341,9 @@ button{font-family:inherit;cursor:pointer}
 .tg-ex{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--line);padding:12px 15px;margin-bottom:7px;font-size:12.5px;font-weight:600;color:#222}
 .ex-n{font-family:var(--display);color:var(--gold-deep);font-size:13px;font-style:italic}
 .home-foot{font-size:9.5px;color:var(--muted);text-align:center;margin-top:14px}
+.promo-link{font-size:10.5px;color:var(--muted);text-align:center;margin-top:16px;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.promo-invalid{font-size:10.5px;color:#B33;text-align:center;margin-top:6px}
+.promo-active-note{font-size:11px;color:var(--gold-deep);background:var(--warn-bg);border:1px solid var(--gold-soft);padding:9px 12px;text-align:center;margin-top:16px;font-weight:600}
 
 /* ---------- Info section ---------- */
 .info-section{border-top:1px solid var(--line);margin-top:6px}
@@ -402,3 +405,16 @@ button{font-family:inherit;cursor:pointer}
 .price-option-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);margin-bottom:6px}
 .price-option-total{font-family:var(--display);font-size:24px;font-weight:600;color:var(--ink);margin-bottom:6px}
 .price-option-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+
+.promo-card-inline{margin:16px 20px 0;background:var(--ink);color:var(--cream);padding:18px 20px;position:relative;border:1px solid var(--gold-deep)}
+.promo-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:var(--gold-soft);padding:4px 9px;border-radius:999px;margin-bottom:12px}
+.promo-headline-inline{font-family:var(--display);font-size:21px;font-weight:600;line-height:1.22;margin-bottom:14px}
+.promo-headline-inline em{font-style:italic;color:var(--gold-soft)}
+.promo-price-row{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.promo-price-new{font-family:var(--display);font-size:30px;font-weight:700;color:var(--gold-soft)}
+.promo-price-old{font-size:13px;color:#9a9284;text-decoration:line-through}
+.promo-card-inline .info-row{border-bottom-color:#333;color:#d8d2c4}
+.promo-card-inline .info-row.waived b{text-decoration:line-through;color:#9a9284}
+.promo-card-inline .info-row b{color:var(--gold-soft)}
+.promo-note-inline{font-size:11px;color:#b8b0a0;line-height:1.5;margin:10px 0 14px}
+.promo-card-inline .btn-primary{background:var(--gold-soft);color:var(--ink)}
