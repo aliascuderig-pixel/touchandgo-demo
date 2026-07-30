@@ -174,6 +174,9 @@ const state = {
   docsReturnTo: null,
   touristName: null,
   touristEmail: null,
+  guestDestinationCountry: null,
+  identifyPrompt: null,
+  identifyReturnTo: null,
   biometricCredentialId: null,
   biometricVerified: false,
   isSubscribed: false,
@@ -436,7 +439,7 @@ function CoverScreen() {
     <div class="cover-caption">📍 Punto di ritiro rilevato<br><span>${state.pickupPoint}</span></div>
     <div class="cover-tap">Tocca per iniziare →</div>`;
   wrap.addEventListener("click", () => {
-    state.screen = state.touristName ? "home" : "identify";
+    state.screen = "home";
     render();
   });
   return wrap;
@@ -676,7 +679,7 @@ function AnalyzingScreen() {
 function ResultScreen() {
   const r = state.result;
   const p = state.price;
-  const q = p.quotes || priceQuotes(r.weight_kg, (getSelectedAddress() || {}).country);
+  const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName());
   const wrap = el("div");
 
   const topbar = el("div", "topbar");
@@ -707,7 +710,9 @@ function ResultScreen() {
     <div><div class="result-lbl">Dimensioni pacco (con imballo)</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
     <div><div class="result-lbl">Fragilità</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? "⚠️ Fragile" : "Non fragile"}</div></div>
     <div><div class="result-lbl">Ritiro da</div><div class="result-val">${state.pickupPoint}</div></div>
-    <div><div class="result-lbl">Destinazione</div><div class="result-val">${formatAddress(getSelectedAddress())}</div></div>`;
+    <div><div class="result-lbl">Destinazione</div><div class="result-val">${
+      getSelectedAddress() ? formatAddress(getSelectedAddress()) : state.guestDestinationCountry || "—"
+    }</div></div>`;
   card.appendChild(grid);
 
   const hs = el("div", "hs-block");
@@ -1246,9 +1251,13 @@ function ShippedScreen() {
 
 function IdentifyScreen() {
   const wrap = el("div", "section identify-screen");
+  const isBookingGate = !!state.identifyPrompt;
   wrap.innerHTML = `
-    <div class="step-lbl">Prima di iniziare · Chi sei</div>
-    <div class="identify-intro">Ci serve sapere chi sei e dove deve arrivare l'acquisto — così calcoliamo il prezzo giusto e prepariamo i documenti doganali a tuo nome. Il documento viene chiesto una sola volta.</div>`;
+    <div class="step-lbl">${isBookingGate ? "Ultimo passo · Registrati per spedire" : "Prima di iniziare · Chi sei"}</div>
+    <div class="identify-intro">${
+      state.identifyPrompt ||
+      "Ci serve sapere chi sei e dove deve arrivare l'acquisto — così calcoliamo il prezzo giusto e prepariamo i documenti doganali a tuo nome. Il documento viene chiesto una sola volta."
+    }</div>`;
 
   const nameField = el("div", "dest-field");
   nameField.innerHTML = `<div class="dest-lbl">Il tuo nome</div><input class="dest-input" id="name-input" placeholder="Es. Maria Rossi" />`;
@@ -1259,7 +1268,12 @@ function IdentifyScreen() {
   wrap.appendChild(emailField);
 
   wrap.appendChild(el("div", "tg-lbl", "Indirizzo di destinazione"));
-  wrap.appendChild(AddressFormFields("identify"));
+  const addressFields = AddressFormFields("identify");
+  wrap.appendChild(addressFields);
+  if (state.guestDestinationCountry) {
+    const countrySelect = addressFields.querySelector("#identify-country");
+    if (countrySelect) countrySelect.value = state.guestDestinationCountry;
+  }
 
   wrap.appendChild(el("div", "tg-lbl", "Documento di riconoscimento"));
   const idCard = el("div", "id-upload-card");
@@ -1334,7 +1348,10 @@ function IdentifyScreen() {
       }
     }
 
-    state.screen = "home";
+    const returnTo = state.identifyReturnTo;
+    state.identifyPrompt = null;
+    state.identifyReturnTo = null;
+    state.screen = returnTo || "home";
     render();
   });
   wrap.appendChild(goBtn);
@@ -1397,7 +1414,40 @@ function getSelectedAddress() {
   return state.addresses.find((a) => a.id === state.selectedAddressId) || state.addresses[0] || null;
 }
 
+// Destinazione da usare per il calcolo prezzo: l'indirizzo salvato se il
+// turista è registrato, altrimenti il solo paese generico scelto in Passo 2
+// (nessun indirizzo completo richiesto finché non si conferma davvero).
+function currentDestinationName() {
+  const addr = getSelectedAddress();
+  return addr ? addr.country : state.guestDestinationCountry;
+}
+
+function GuestDestinationField() {
+  if (!state.guestDestinationCountry) state.guestDestinationCountry = DESTINATIONS[0].name;
+  const wrap = el("div", "dest-field-block");
+  const field = el("div", "dest-field");
+  field.innerHTML = `<div class="dest-lbl">Paese di destinazione</div>
+    <select class="dest-select" id="guest-country-input">
+      ${DESTINATIONS.map(
+        (d) => `<option value="${d.name}" ${d.name === state.guestDestinationCountry ? "selected" : ""}>${d.name}</option>`
+      ).join("")}
+    </select>`;
+  field.querySelector("#guest-country-input").addEventListener("change", (e) => {
+    state.guestDestinationCountry = e.target.value;
+  });
+  wrap.appendChild(field);
+  wrap.appendChild(
+    el(
+      "div",
+      "pickup-note",
+      "Basta il paese per calcolare subito il prezzo — l'indirizzo completo verrà chiesto solo quando confermi davvero la spedizione."
+    )
+  );
+  return wrap;
+}
+
 function DestinationField() {
+  if (state.addresses.length === 0) return GuestDestinationField();
   const wrap = el("div", "dest-field-block");
   const label = state.destinationFromProfile ? "Dal tuo profilo" : "Destinazione selezionata";
   const current = getSelectedAddress();
@@ -1477,26 +1527,36 @@ function ChooseAddressScreen() {
     el("div", "identify-intro", `${state.result ? state.result.object_it : "Oggetto"} — scegli l'indirizzo per questa spedizione.`)
   );
 
-  const list = el("div", "addr-list");
-  state.addresses.forEach((a) => {
-    const row = el("div", "addr-option" + (a.id === state.selectedAddressId ? " selected" : ""));
-    row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
-    row.addEventListener("click", () => {
-      state.selectedAddressId = a.id;
-      state.destinationFromProfile = false;
+  if (state.addresses.length === 0) {
+    wrap.appendChild(
+      el(
+        "div",
+        "identify-intro",
+        `Destinazione indicata finora: ${state.guestDestinationCountry || "—"}. L'indirizzo completo verrà chiesto al passo successivo, quando confermi davvero la spedizione.`
+      )
+    );
+  } else {
+    const list = el("div", "addr-list");
+    state.addresses.forEach((a) => {
+      const row = el("div", "addr-option" + (a.id === state.selectedAddressId ? " selected" : ""));
+      row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
+      row.addEventListener("click", () => {
+        state.selectedAddressId = a.id;
+        state.destinationFromProfile = false;
+        render();
+      });
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+
+    const addBtn = el("button", "btn-secondary", "+ Aggiungi un nuovo indirizzo");
+    addBtn.addEventListener("click", () => {
+      state.addAddressReturnTo = "choose-address";
+      state.screen = "add-address";
       render();
     });
-    list.appendChild(row);
-  });
-  wrap.appendChild(list);
-
-  const addBtn = el("button", "btn-secondary", "+ Aggiungi un nuovo indirizzo");
-  addBtn.addEventListener("click", () => {
-    state.addAddressReturnTo = "choose-address";
-    state.screen = "add-address";
-    render();
-  });
-  wrap.appendChild(addBtn);
+    wrap.appendChild(addBtn);
+  }
 
   wrap.appendChild(el("div", "tg-lbl", "Punto di ritiro per questo acquisto"));
   const pickupField = el("div", "dest-field");
@@ -1508,11 +1568,18 @@ function ChooseAddressScreen() {
 
   const confirmBtn = el("button", "btn-primary", "Conferma e genera QR →");
   confirmBtn.addEventListener("click", async () => {
+    if (!state.touristName) {
+      state.identifyPrompt = "Ultimo passo: registrati per completare la spedizione — il preventivo resta questo.";
+      state.identifyReturnTo = "choose-address";
+      state.screen = "identify";
+      render();
+      return;
+    }
     if (!state.selectedAddressId) return;
     const itemPickupPoint = document.getElementById("item-pickup-input").value.trim() || state.pickupPoint;
     const addr = getSelectedAddress();
     if (state.result) {
-      state.price = priceFor(state.result.weight_kg, addr ? addr.country : null);
+      state.price = priceFor(state.result.weight_kg, currentDestinationName());
     }
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Genero QR…";
@@ -1743,6 +1810,9 @@ function resetEverything() {
   state.addresses = [];
   state.selectedAddressId = null;
   state.destinationFromProfile = true;
+  state.guestDestinationCountry = null;
+  state.identifyPrompt = null;
+  state.identifyReturnTo = null;
   state.pendingInput = null;
   state.pendingItems = [];
   state.purchaseHistory = [];
@@ -1996,8 +2066,7 @@ async function runClassification(promise) {
   try {
     const result = await promise;
     state.result = result;
-    const addr = getSelectedAddress();
-    state.price = priceFor(result.weight_kg, addr ? addr.country : null);
+    state.price = priceFor(result.weight_kg, currentDestinationName());
     state.priceConfirmedForThisResult = false;
     state.priceConfirmedAsBreakeven = false;
     state.screen = "result";
