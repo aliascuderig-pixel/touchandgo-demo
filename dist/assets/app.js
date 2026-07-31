@@ -167,6 +167,9 @@ const state = {
   purchaseHistory: [],
   activePartnerCode: null,
   partnerLoggedCode: null,
+  partnerLoginLoading: false,
+  partnerLoginError: null,
+  partnerStats: null,
   editingItemId: null,
   viewingItemId: null,
   viewingDocsItemId: null,
@@ -290,39 +293,62 @@ function PartnerLoginAndHistory() {
     field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${state.activePartnerCode || ""}" />`;
     wrap.appendChild(field);
 
-    const loginBtn = el("button", "btn-secondary", "Accedi");
-    loginBtn.addEventListener("click", () => {
+    if (state.partnerLoginError) {
+      wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerLoginError}`));
+    }
+
+    const loginBtn = el("button", "btn-secondary", state.partnerLoginLoading ? "Verifico…" : "Accedi");
+    loginBtn.disabled = state.partnerLoginLoading;
+    loginBtn.addEventListener("click", async () => {
       const code = document.getElementById("partner-code-input").value.trim().toUpperCase();
-      if (!code) return;
-      state.partnerLoggedCode = code;
+      if (!code || state.partnerLoginLoading) return;
+      state.partnerLoginLoading = true;
+      state.partnerLoginError = null;
+      render();
+      try {
+        const res = await fetch("/.netlify/functions/partner-stats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
+        if (data.valid) {
+          state.partnerLoggedCode = code;
+          state.partnerStats = {
+            partnerName: data.partnerName || "",
+            salesCount: data.salesCount || 0,
+            totalCommission: data.totalCommission || 0,
+          };
+        } else {
+          state.partnerLoginError = "Codice partner non riconosciuto.";
+        }
+      } catch (e) {
+        state.partnerLoginError = "Errore di connessione. Riprova.";
+      }
+      state.partnerLoginLoading = false;
       render();
     });
     wrap.appendChild(loginBtn);
     return wrap;
   }
 
-  const myItems = state.purchaseHistory.filter((it) => it.partnerCode === state.partnerLoggedCode);
-  const commissionRate = 0.1;
-  const totalCommission = myItems.reduce((sum, it) => sum + it.price * commissionRate, 0);
-
+  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalCommission: 0 };
   const summary = el("div", "info-card");
   summary.innerHTML = `
     <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
-    <div class="info-row"><span>Vendite registrate</span><b>${myItems.length}</b></div>
-    <div class="info-row total"><span>Commissioni maturate (10%)</span><b>€${totalCommission.toFixed(2)}</b></div>`;
+    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
+    <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
+    <div class="info-row total"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 
   const logoutBtn = el("button", "reset-link", "Esci dall'area partner");
   logoutBtn.addEventListener("click", () => {
     state.partnerLoggedCode = null;
+    state.partnerStats = null;
+    state.partnerLoginError = null;
     render();
   });
   wrap.appendChild(logoutBtn);
-
-  wrap.appendChild(el("div", "tg-lbl", "Vendite generate dal tuo codice"));
-  wrap.appendChild(
-    PurchaseHistoryList(myItems, "Nessuna vendita ancora registrata con questo codice partner.")
-  );
 
   return wrap;
 }
