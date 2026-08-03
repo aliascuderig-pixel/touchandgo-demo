@@ -28,7 +28,11 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ valid: false, error: "Codice mancante" }) };
     }
 
-    const promos = getStore("promo");
+    const promos = getStore({
+      name: "promo",
+      siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    });
     const record = await promos.get(normalized, { type: "json" });
 
     // Codice inesistente o disattivato dall'admin: stessa risposta di un

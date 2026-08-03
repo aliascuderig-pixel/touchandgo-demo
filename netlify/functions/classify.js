@@ -13,7 +13,11 @@ function getClientIp(event) {
 // RATE_LIMIT_WINDOW_MS, altrimenti l'endpoint diventa un proxy gratuito
 // verso l'API Anthropic pagata dalla nostra chiave.
 async function checkRateLimit(key) {
-  const store = getStore("rate-limits");
+  const store = getStore({
+    name: "rate-limits",
+    siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+    token: process.env.NETLIFY_BLOBS_TOKEN,
+  });
   const now = Date.now();
   const record = (await store.get(key, { type: "json" })) || { count: 0, windowStart: now };
   if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {

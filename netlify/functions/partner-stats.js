@@ -19,7 +19,11 @@ function getClientIp(event) {
 }
 
 async function checkRateLimit(key) {
-  const store = getStore("rate-limits");
+  const store = getStore({
+    name: "rate-limits",
+    siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+    token: process.env.NETLIFY_BLOBS_TOKEN,
+  });
   const now = Date.now();
   const record = (await store.get(key, { type: "json" })) || { count: 0, windowStart: now };
   if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -47,13 +51,21 @@ exports.handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ valid: false }) };
     }
 
-    const partners = getStore("partners");
+    const partners = getStore({
+      name: "partners",
+      siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    });
     const record = await partners.get(normalized, { type: "json" });
     if (!record) {
       return { statusCode: 200, body: JSON.stringify({ valid: false }) };
     }
 
-    const purchases = getStore("purchases");
+    const purchases = getStore({
+      name: "purchases",
+      siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    });
     const { blobs } = await purchases.list();
     const items = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
     const myItems = items.filter((it) => it.partnerCode === normalized);

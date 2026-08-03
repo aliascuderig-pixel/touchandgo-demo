@@ -12,7 +12,11 @@ function getClientIp(event) {
 }
 
 async function checkRateLimit(key) {
-  const store = getStore("rate-limits");
+  const store = getStore({
+    name: "rate-limits",
+    siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+    token: process.env.NETLIFY_BLOBS_TOKEN,
+  });
   const now = Date.now();
   const record = (await store.get(key, { type: "json" })) || { count: 0, windowStart: now };
   if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -54,7 +58,11 @@ exports.handler = async (event) => {
       return { statusCode: 429, body: JSON.stringify({ error: "Troppe richieste, riprova tra qualche minuto." }) };
     }
 
-    const store = getStore("purchases");
+    const store = getStore({
+      name: "purchases",
+      siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    });
     await store.setJSON(item.id, item);
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true }) };
   } catch (err) {
