@@ -192,6 +192,7 @@ const state = {
   promoValid: false,
   promoRedeemedThisOrder: false,
   showPromoInput: false,
+  assistantDismissed: {},
 };
 const app = document.getElementById("app");
 
@@ -453,6 +454,35 @@ function TrustRow() {
   return row;
 }
 
+const ASSISTANT_TIPS = {
+  home: "Fotografa l'oggetto che hai comprato, o descrivilo se preferisci — ci penso io a classificarlo.",
+  destination: "Conferma da dove ritirare l'acquisto e dove deve arrivare — poi calcolo il prezzo.",
+  analyzing: "Un attimo, sto analizzando l'oggetto e calcolando peso e categoria doganale.",
+  result: "Scegli tra prezzo pieno o abbonamento, poi genera il codice QR per lasciare l'oggetto in negozio.",
+  queued: "Mostra questo QR in negozio quando lasci l'acquisto — il ritiro parte a fine soggiorno.",
+  history: "Qui trovi tutti i tuoi acquisti passati e il loro stato di consegna.",
+};
+
+function AssistantAvatar(screenKey) {
+  if (state.assistantDismissed && state.assistantDismissed[screenKey]) return el("div");
+  const tip = ASSISTANT_TIPS[screenKey];
+  if (!tip) return el("div");
+
+  const wrap = el("div", "assistant-tip");
+  wrap.innerHTML = `
+    <div class="assistant-avatar">T&amp;G</div>
+    <div class="assistant-text">${tip}</div>
+    <button class="assistant-dismiss" aria-label="Chiudi suggerimento">✕</button>
+  `;
+  wrap.querySelector(".assistant-dismiss").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!state.assistantDismissed) state.assistantDismissed = {};
+    state.assistantDismissed[screenKey] = true;
+    render();
+  });
+  return wrap;
+}
+
 function CoverScreen() {
   const wrap = el("div", "cover-screen");
   if (state.locationPhoto) {
@@ -473,6 +503,7 @@ function CoverScreen() {
 
 function HomeScreen() {
   const wrap = el("div");
+  wrap.appendChild(AssistantAvatar("home"));
   wrap.appendChild(TrustRow());
 
   if (state.pickupSource !== "gps" && !state.locationReminderDismissed) {
@@ -596,6 +627,7 @@ function HomeScreen() {
 
 function DestinationScreen() {
   const wrap = el("div", "section");
+  wrap.appendChild(AssistantAvatar("destination"));
   const back = el("div", "back", "← Rifai la foto");
   back.addEventListener("click", () => {
     state.screen = "home";
@@ -698,7 +730,10 @@ function InfoSection() {
 
 function AnalyzingScreen() {
   const wrap = el("div", "analyzing");
-  wrap.innerHTML = `<div class="spinner"></div><p>Analisi in corso…</p>`;
+  wrap.appendChild(AssistantAvatar("analyzing"));
+  const spinnerBlock = el("div");
+  spinnerBlock.innerHTML = `<div class="spinner"></div><p>Analisi in corso…</p>`;
+  wrap.appendChild(spinnerBlock);
   return wrap;
 }
 
@@ -707,6 +742,7 @@ function ResultScreen() {
   const p = state.price;
   const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName());
   const wrap = el("div");
+  wrap.appendChild(AssistantAvatar("result"));
 
   const topbar = el("div", "topbar");
   const back = el("button", "back", "←");
@@ -1053,9 +1089,11 @@ function generateBookingCode() {
 function QueuedScreen() {
   const item = state.lastQueuedItem;
   const wrap = el("div", "section booked-screen");
+  wrap.appendChild(AssistantAvatar("queued"));
   const qrData = encodeURIComponent(`TouchAndGo|${item.id}|negozio:${item.pickupPoint}|dest:${item.addressLabel}`);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
-  wrap.innerHTML = `
+  const intro = el("div");
+  intro.innerHTML = `
     <div class="booked-icon">🕓</div>
     <div class="booked-title">QR generato — in sospeso</div>
     <div class="booked-text">Mostra questo QR al negozio per lasciare l'oggetto. <b>Il ritiro non parte ancora:</b> resta in sospeso finché non concludi il soggiorno e invii l'ordine di ritiro per tutti gli acquisti.</div>
@@ -1064,6 +1102,7 @@ function QueuedScreen() {
       <div class="qr-code">${item.id}</div>
       <div class="qr-note">Il QR contiene il codice di riferimento — lettera di vettura, fattura e documento sono collegati a questo codice</div>
     </div>`;
+  wrap.appendChild(intro);
   const shareBtn = el("button", "btn-secondary", "📤 Invia il QR a chi imballa");
   shareBtn.addEventListener("click", () => shareQR(item, qrUrl));
   wrap.appendChild(shareBtn);
@@ -2046,6 +2085,7 @@ function PurchaseHistoryList(items, emptyText, editable) {
 
 function HistoryScreen() {
   const wrap = el("div", "section");
+  wrap.appendChild(AssistantAvatar("history"));
   const back = el("div", "back", "← Torna alla home");
   back.addEventListener("click", () => {
     state.screen = "home";
