@@ -458,6 +458,7 @@ const ASSISTANT_TIPS = {
   home: "Fotografa l'oggetto che hai comprato, o descrivilo se preferisci — ci penso io a classificarlo.",
   destination: "Conferma da dove ritirare l'acquisto e dove deve arrivare — poi calcolo il prezzo.",
   analyzing: "Un attimo, sto analizzando l'oggetto e calcolando peso e categoria doganale.",
+  options: "Touch&Go si occupa di tutta la spedizione — corriere, dogana e assicurazione inclusi in base a peso, valore e destinazione.",
   result: "Scegli tra prezzo pieno o abbonamento, poi genera il codice QR per lasciare l'oggetto in negozio.",
   queued: "Mostra questo QR in negozio quando lasci l'acquisto — il ritiro parte a fine soggiorno.",
   history: "Qui trovi tutti i tuoi acquisti passati e il loro stato di consegna.",
@@ -743,6 +744,7 @@ function ResultScreen() {
   const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName());
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("result"));
+  wrap.appendChild(AssistantAvatar("options"));
 
   const topbar = el("div", "topbar");
   const back = el("button", "back", "←");
