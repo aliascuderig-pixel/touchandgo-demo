@@ -4,3 +4,6 @@
 
 [functions."kit-vault"]
   included_files = ["netlify/functions/kit-riservato/**"]
+
+[functions."crm"]
+  included_files = ["netlify/functions/kit-riservato/TOUCHandGO_Allin_One.html"]
