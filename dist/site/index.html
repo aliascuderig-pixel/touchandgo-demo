@@ -36,6 +36,9 @@ nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px sol
 .nav-links a{text-decoration:none;transition:color .15s}
 .nav-links a:hover{color:var(--gold-soft)}
 .nav-cta{background:var(--gold);color:var(--ink);padding:10px 20px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em}
+.nav-cta-group{display:flex;align-items:center;gap:10px}
+.nav-cta-secondary{background:transparent;color:var(--cream);border:1px solid #3A362C;padding:9px 16px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em}
+.nav-cta-secondary:hover{border-color:var(--gold-soft);color:var(--gold-soft)}
 .nav-menu-toggle{display:none;background:none;border:none;color:var(--cream);font-size:22px}
 
 /* Hero */
@@ -118,7 +121,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
   .hero-stats{gap:20px 34px}
   .nav-links{display:none}
   .footer-grid{gap:26px}
-  .nav-cta{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .nav-cta,.nav-cta-secondary{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   .btn-primary,.btn-outline{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 }
 
@@ -163,9 +166,11 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <a href="#partner">Per i partner</a>
       <a href="#rivenditori">Reseller</a>
       <a href="#chi-siamo">Chi siamo</a>
-      <a href="admin.html">Area riservata</a>
     </div>
-    <a class="nav-cta" href="#" id="app-link-top">Apri l'app →</a>
+    <div class="nav-cta-group">
+      <a class="nav-cta-secondary" href="admin.html" target="_blank" rel="noopener">CRM</a>
+      <a class="nav-cta" href="#" id="app-link-top">Apri l'app →</a>
+    </div>
   </div>
 </nav>
 
@@ -178,6 +183,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <a class="btn-primary" href="#" id="app-link-hero">Prova l'app →</a>
       <a class="btn-outline" href="#partner">Sono un partner</a>
     </div>
+    <p style="text-align:center;margin-top:16px;margin-bottom:0;font-size:12.5px;color:#C9C2B4">🎁 Prima spedizione senza fee di servizio — paghi solo il corriere</p>
     <div class="hero-stats">
       <div class="hero-stat"><b>57,4M</b><span>Turisti/anno in Italia</span></div>
       <div class="hero-stat"><b>0%</b><span>IVA su acquisti export</span></div>

@@ -267,10 +267,13 @@ function PartnerScreen() {
   wrap.appendChild(el("div", "tg-lbl", "Per negozi, hotel e tour operator"));
   const intro = el("div", "info-card");
   intro.innerHTML = `<div class="info-line">Offri Touch&amp;Go ai tuoi clienti: spedizione doganale con codice AI, esenzione IVA export automatica e tracciamento incluso — con un guadagno su ogni spedizione venduta tramite il tuo codice.</div>
-    <div class="info-line">Piani, canoni e dettagli sulla commissione sono su <b>touchandgo.it/partner</b>.</div>`;
+    <div class="info-line">Piani, canoni e dettagli sulla commissione sono nella sezione partner del sito.</div>`;
   wrap.appendChild(intro);
 
   const cta = el("button", "btn-primary", "Scopri i piani partner →");
+  cta.addEventListener("click", () => {
+    window.open("/site/index.html#partner", "_blank", "noopener");
+  });
   wrap.appendChild(cta);
 
   wrap.appendChild(PartnerLoginAndHistory());
@@ -715,7 +718,8 @@ function InfoSection() {
   priceInfo.innerHTML = `
     <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€39</b></div>
     <div class="info-row"><span>Costo corriere (varia per peso/destinazione)</span><b>calcolato all'istante</b></div>
-    <div class="info-row"><span>Nessun costo nascosto: vedi il totale prima di confermare</span></div>`;
+    <div class="info-row"><span>Nessun costo nascosto: vedi il totale prima di confermare</span></div>
+    <div class="info-line" style="margin-top:8px">🎁 <b>Prima spedizione senza fee di servizio</b> — paghi solo il corriere, a tariffa piena. Un modo per provare il servizio prima di scegliere se abbonarti.</div>`;
   wrap.appendChild(priceInfo);
 
   wrap.appendChild(el("div", "tg-lbl", "Copertura e dogana"));
@@ -802,6 +806,8 @@ function ResultScreen() {
 
   let priceCard;
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
+  const isFirstEverShipment = state.purchaseHistory.length === 0;
+  const firstTimeFree = !onBreakeven && !state.isSubscribed && isFirstEverShipment;
 
   if (onBreakeven && !state.priceConfirmedForThisResult) {
     const promo = el("div", "promo-card-inline");
@@ -815,6 +821,27 @@ function ResultScreen() {
       <div class="info-row waived"><span>Fee di servizio Touch&amp;Go</span><b>€0</b></div>
       <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="promo-note-inline">Nessun margine per Touch&amp;Go su questa spedizione — offerta valida una sola volta.</div>`;
+    const promoBtn = el("button", "btn-primary", "Attiva l'offerta e continua →");
+    promoBtn.addEventListener("click", () => {
+      state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
+      state.priceConfirmedForThisResult = true;
+      state.priceConfirmedAsBreakeven = true;
+      render();
+    });
+    promo.appendChild(promoBtn);
+    wrap.appendChild(promo);
+  } else if (firstTimeFree && !state.priceConfirmedForThisResult) {
+    const promo = el("div", "promo-card-inline");
+    promo.innerHTML = `
+      <div class="promo-badge">Prova gratuita · prima spedizione</div>
+      <div class="promo-headline-inline">La tua prima spedizione,<br><em>senza fee di servizio.</em></div>
+      <div class="promo-price-row">
+        <span class="promo-price-new">€${q.breakeven.toFixed(2)}</span>
+        <span class="promo-price-old">€${q.full.toFixed(2)}</span>
+      </div>
+      <div class="info-row waived"><span>Fee di servizio Touch&amp;Go</span><b>€0</b></div>
+      <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
+      <div class="promo-note-inline">Paghi solo il corriere, a tariffa piena — così puoi provare il servizio prima di scegliere se abbonarti. Vale una sola volta.</div>`;
     const promoBtn = el("button", "btn-primary", "Attiva l'offerta e continua →");
     promoBtn.addEventListener("click", () => {
       state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
@@ -858,10 +885,10 @@ function ResultScreen() {
     dual.appendChild(optSub);
     wrap.appendChild(dual);
   } else {
-    const fee = onBreakeven ? 0 : state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+    const fee = state.priceConfirmedAsBreakeven ? 0 : state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
     priceCard = el("div", "price-card");
     priceCard.innerHTML = `
-      <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${onBreakeven ? "· offerta breakeven" : state.isSubscribed ? "· prezzo abbonato" : ""}</div>
+      <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${state.priceConfirmedAsBreakeven ? "· offerta breakeven" : state.isSubscribed ? "· prezzo abbonato" : ""}</div>
       <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€${fee}</b></div>
       <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="info-row total"><span>Totale</span><b id="res-total">€0</b></div>
