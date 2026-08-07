@@ -971,10 +971,11 @@ async function animateResult(r, p) {
 }
 
 function syncPurchaseToCRM(item) {
+  const payload = item.touristEmail ? item : Object.assign({}, item, { touristEmail: state.touristEmail });
   fetch("/.netlify/functions/save-purchase", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(item),
+    body: JSON.stringify(payload),
   }).catch(() => {
     // Offline or server unavailable — the purchase still lives in the
     // tourist's local history; it just won't appear centrally until

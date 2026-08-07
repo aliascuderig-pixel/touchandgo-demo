@@ -29,6 +29,7 @@ async function checkRateLimit(key) {
 }
 
 const VALID_PRICING_TIERS = ["pieno", "abbonato", "breakeven"];
+const BLOCKED_MESSAGE = "Non è possibile completare la richiesta. Contatta l'assistenza.";
 
 // Rifiuta record palesemente inventati prima che finiscano nelle statistiche
 // del CRM: id presente, prezzo e peso in un range plausibile, tier di
@@ -41,6 +42,10 @@ function isValidPurchase(item) {
   if (typeof weight !== "number" || !isFinite(weight) || weight <= 0 || weight >= 50) return false;
   if (!VALID_PRICING_TIERS.includes(item.pricingTier)) return false;
   return true;
+}
+
+function normalizeEmail(email) {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
 exports.handler = async (event) => {
@@ -58,12 +63,44 @@ exports.handler = async (event) => {
       return { statusCode: 429, body: JSON.stringify({ error: "Troppe richieste, riprova tra qualche minuto." }) };
     }
 
-    const store = getStore({
-      name: "purchases",
+    const blobsAuth = {
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
-    });
-    await store.setJSON(item.id, item);
+    };
+    const purchases = getStore({ name: "purchases", ...blobsAuth });
+    const blocklist = getStore({ name: "blocklist", ...blobsAuth });
+
+    const email = normalizeEmail(item.touristEmail);
+
+    if (email) {
+      const existingBlock = await blocklist.get(email, { type: "json" });
+      if (existingBlock) {
+        return { statusCode: 403, body: JSON.stringify({ error: BLOCKED_MESSAGE }) };
+      }
+
+      // Blocco automatico: un cliente che non ha mai avuto un acquisto
+      // "abbonato" e tenta un secondo acquisto non-abbonato viene bloccato
+      // per tutte le richieste future (il controllo sopra lo intercetterà
+      // dal tentativo successivo in poi).
+      const { blobs } = await purchases.list();
+      const priorItems = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
+      const emailItems = priorItems.filter((it) => normalizeEmail(it.touristEmail) === email);
+
+      if (emailItems.length > 0 && item.pricingTier !== "abbonato") {
+        const everSubscribed = emailItems.some((it) => it.pricingTier === "abbonato");
+        if (!everSubscribed) {
+          await blocklist.setJSON(email, {
+            email,
+            reason: "Automatico: secondo acquisto senza abbonamento",
+            auto: true,
+            blockedAt: new Date().toISOString(),
+          });
+          return { statusCode: 403, body: JSON.stringify({ error: BLOCKED_MESSAGE }) };
+        }
+      }
+    }
+
+    await purchases.setJSON(item.id, item);
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
