@@ -95,6 +95,26 @@ section{padding:80px 0}
 .commission-note{text-align:center;margin-top:30px;font-size:13px;color:var(--muted)}
 .commission-note b{color:var(--ink)}
 
+/* Partner signup form */
+.partner-signup{max-width:520px;margin:40px auto 0;background:#fff;border:1px solid var(--line);padding:28px 26px}
+.partner-signup h3{font-family:var(--display);font-size:20px;font-weight:600;margin:0 0 18px;text-align:center}
+.partner-signup label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);font-weight:700;margin-bottom:6px}
+.partner-signup .field{margin-bottom:16px}
+.partner-signup input,.partner-signup select{width:100%;border:1px solid var(--line);padding:11px 12px;font-size:13.5px;font-family:var(--body);box-sizing:border-box;background:#fff;color:var(--ink)}
+.partner-signup button{width:100%;background:var(--gold);color:var(--ink);border:none;padding:14px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px}
+.partner-signup button:disabled{opacity:.6;cursor:default}
+.partner-signup .form-error{color:#B3261E;font-size:12.5px;margin-top:10px;text-align:center}
+
+/* Fattura proforma partner — stessa struttura/classi doc-card/doc-row
+   della fattura proforma turista nell'app (dist/assets/app.js). */
+.doc-card{background:#fff;border:1px solid var(--line);padding:14px 16px;margin-top:18px}
+.doc-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;gap:16px}
+.doc-row:last-child{border-bottom:none}
+.doc-row span{color:var(--muted)}
+.doc-row b{font-family:var(--display);font-weight:600;color:var(--ink);text-align:right}
+.partner-result-code{text-align:center;font-family:var(--display);font-size:26px;font-weight:700;color:var(--gold-deep);margin:18px 0 4px}
+.partner-result-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:0}
+
 /* IVA banner */
 .iva-banner{background:var(--good-bg);border:1px solid #C9DEC9;padding:26px 30px;display:flex;align-items:center;gap:20px;max-width:760px;margin:0 auto}
 .iva-banner .ic{font-size:30px}
@@ -325,6 +345,37 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <div class="plan-card"><h4>Tour Operator</h4><div class="price">€199<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Gestione multi-tappa per gruppi organizzati, più commissione come canale di acquisizione clienti prima della partenza.</p></div>
     </div>
     <p class="commission-note"><b>10%</b> di commissione su ogni spedizione generata tramite il tuo codice — una sola commissione per spedizione, a chi ha portato il cliente. È disponibile anche un piano gratuito senza canone.</p>
+
+    <form class="partner-signup" id="partner-signup-form">
+      <h3>Registra il tuo negozio</h3>
+      <div class="field">
+        <label for="ps-name">Nome negozio / attività</label>
+        <input id="ps-name" type="text" required placeholder="Es. Ceramiche Caltagirone" />
+      </div>
+      <div class="field">
+        <label for="ps-email">Email</label>
+        <input id="ps-email" type="email" required placeholder="nome@negozio.it" />
+      </div>
+      <div class="field">
+        <label for="ps-plan">Piano</label>
+        <select id="ps-plan">
+          <option value="boutique">Boutique — €49/mese</option>
+          <option value="enoteche">Enoteche &amp; Cantine — €59/mese</option>
+          <option value="sport">Sport &amp; Attrezzatura — €69/mese</option>
+          <option value="hotel">Hotel — €99/mese</option>
+          <option value="touroperator">Tour Operator — €199/mese</option>
+          <option value="free">Gratuito — solo commissione 10%</option>
+        </select>
+      </div>
+      <button type="submit" id="ps-submit">Registrati come partner →</button>
+      <div class="form-error" id="ps-error" style="display:none"></div>
+    </form>
+
+    <div id="partner-signup-result" style="display:none">
+      <div class="partner-result-code" id="ps-result-code"></div>
+      <p class="partner-result-sub">Il tuo codice partner — usalo nell'area partner dell'app per accedere alle vendite e generare il QR del tuo negozio.</p>
+      <div class="doc-card" id="ps-result-invoice"></div>
+    </div>
   </div>
 </section>
 
@@ -416,6 +467,54 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
     a.setAttribute("target", "_blank");
     a.setAttribute("rel", "noopener");
   });
+
+  // Registrazione self-service partner — chiama l'action "register-partner"
+  // in netlify/functions/crm.js, che crea il codice, salva il piano e
+  // genera subito la prima fattura del canone (via generate-partner-invoice).
+  var partnerForm = document.getElementById("partner-signup-form");
+  if (partnerForm) {
+    partnerForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var errorBox = document.getElementById("ps-error");
+      var submitBtn = document.getElementById("ps-submit");
+      errorBox.style.display = "none";
+      var name = document.getElementById("ps-name").value.trim();
+      var email = document.getElementById("ps-email").value.trim();
+      var plan = document.getElementById("ps-plan").value;
+      if (!name || !email) return;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Registrazione in corso…";
+      try {
+        var res = await fetch("/.netlify/functions/crm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "register-partner", name: name, email: email, plan: plan }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Errore in fase di registrazione");
+
+        var dateStr = new Date(data.invoice.date).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+        document.getElementById("ps-result-code").textContent = data.code;
+        document.getElementById("ps-result-invoice").innerHTML =
+          '<div class="doc-row"><span>Numero fattura</span><b>' + data.invoice.id + '</b></div>' +
+          '<div class="doc-row"><span>Venditore</span><b>Touch&amp;Go</b></div>' +
+          '<div class="doc-row"><span>Partner</span><b>' + data.partner.name + '</b></div>' +
+          '<div class="doc-row"><span>Piano</span><b>' + data.planLabel + '</b></div>' +
+          '<div class="doc-row"><span>Periodo</span><b>' + data.invoice.period + '</b></div>' +
+          '<div class="doc-row"><span>Canone mensile</span><b>€' + data.invoice.amount.toFixed(2) + '</b></div>' +
+          '<div class="doc-row"><span>Data emissione</span><b>' + dateStr + '</b></div>';
+
+        partnerForm.style.display = "none";
+        document.getElementById("partner-signup-result").style.display = "block";
+      } catch (err) {
+        errorBox.textContent = err.message || "Errore in fase di registrazione. Riprova.";
+        errorBox.style.display = "block";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Registrati come partner →";
+      }
+    });
+  }
 </script>
 
 </body>

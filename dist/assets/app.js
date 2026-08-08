@@ -199,6 +199,7 @@ const state = {
   partnerLoginLoading: false,
   partnerLoginError: null,
   partnerStats: null,
+  showPartnerQr: false,
   editingItemId: null,
   viewingItemId: null,
   viewingDocsItemId: null,
@@ -374,16 +375,70 @@ function PartnerLoginAndHistory() {
     <div class="info-row total"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 
+  wrap.appendChild(PartnerQRSection(state.partnerLoggedCode));
+
   const logoutBtn = el("button", "reset-link", "Esci dall'area partner");
   logoutBtn.addEventListener("click", () => {
     state.partnerLoggedCode = null;
     state.partnerStats = null;
     state.partnerLoginError = null;
+    state.showPartnerQr = false;
     render();
   });
   wrap.appendChild(logoutBtn);
 
   return wrap;
+}
+
+// QR che incorpora l'URL dell'app con ?partner=CODICE già impostato —
+// chi lo scansiona apre l'app con capturePartnerCode() che salva il
+// codice partner in automatico (vedi capturePartnerCode(), non toccata).
+function PartnerQRSection(code) {
+  const wrap = el("div");
+
+  if (!state.showPartnerQr) {
+    const qrBtn = el("button", "btn-secondary", "Genera QR per il tuo negozio");
+    qrBtn.addEventListener("click", () => {
+      state.showPartnerQr = true;
+      render();
+    });
+    wrap.appendChild(qrBtn);
+    return wrap;
+  }
+
+  const partnerUrl = `${window.location.origin}/?partner=${encodeURIComponent(code)}`;
+  const qrData = encodeURIComponent(partnerUrl);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
+
+  const card = el("div", "qr-card");
+  card.innerHTML = `
+    <img src="${qrUrl}" alt="QR del tuo negozio" class="qr-img" />
+    <div class="qr-code">${code}</div>
+    <div class="qr-note">Chi lo scansiona apre Touch&amp;Go con il tuo codice partner già applicato — ogni spedizione generata da questo QR viene attribuita a te.</div>`;
+  wrap.appendChild(card);
+
+  const downloadBtn = el("button", "btn-secondary", "⬇️ Scarica il QR");
+  downloadBtn.addEventListener("click", () => downloadQR(qrUrl, `touchandgo-partner-qr-${code}.png`));
+  wrap.appendChild(downloadBtn);
+
+  return wrap;
+}
+
+async function downloadQR(qrUrl, filename) {
+  try {
+    const res = await fetch(qrUrl);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    window.open(qrUrl, "_blank", "noopener");
+  }
 }
 
 function getGPSCoords() {
