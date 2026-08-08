@@ -51,37 +51,66 @@ const FULL_FEE = 39;
 const SUBSCRIBED_FEE = 19;
 
 const DESTINATIONS = [
-  { name: "Italia / UE", zone: "eu" },
-  { name: "Regno Unito", zone: "europe" },
-  { name: "Svizzera", zone: "europe" },
-  { name: "Stati Uniti", zone: "intercontinental" },
-  { name: "Emirati Arabi Uniti", zone: "intercontinental" },
-  { name: "Cina", zone: "intercontinental" },
-  { name: "Giappone", zone: "intercontinental" },
-  { name: "Altro / non specificata", zone: "intercontinental" },
+  { name: "Italia", zone: "domestico" },
+  { name: "Unione Europea", zone: "transfrontaliero" },
+  { name: "Regno Unito", zone: "transfrontaliero" },
+  { name: "Svizzera", zone: "transfrontaliero" },
+  { name: "Stati Uniti", zone: "worldwide" },
+  { name: "Emirati Arabi Uniti", zone: "worldwide" },
+  { name: "Cina", zone: "worldwide" },
+  { name: "Giappone", zone: "worldwide" },
+  { name: "Altro / non specificata", zone: "worldwide" },
 ];
 
-const ZONE_RATES = {
-  eu: { base: 5.5, perKg: 1.3, eta: "1–3 giorni lavorativi" },
-  europe: { base: 9, perKg: 2.1, eta: "2–4 giorni lavorativi" },
-  intercontinental: { base: 19, perKg: 8, eta: "3–7 giorni lavorativi" },
+// Tariffe a fasce di peso per zona. Valori indicativi stimati da ricerca di
+// mercato su corrieri italiani/EU/mondo 2026 — NON tariffe Packlink
+// ufficiali (Packlink è un comparatore dinamico, non pubblica un listino
+// fisso): base plausibile per il prototipo, da sostituire con contratti
+// corrieri reali prima di un lancio commerciale.
+// brackets: [peso_max_kg, prezzo]. Oltre l'ultima fascia si applica
+// perKgOver per ogni kg eccedente i 30kg.
+const SHIPPING_RATES = {
+  domestico: { brackets: [[1, 7], [2, 8.5], [5, 10], [10, 13], [20, 18], [30, 24]], perKgOver: 0.9, eta: "24–48 ore" },
+  transfrontaliero: { brackets: [[1, 12], [2, 15], [5, 19], [10, 25], [20, 32], [30, 40]], perKgOver: 1.6, eta: "2–4 giorni lavorativi" },
+  worldwide: { brackets: [[1, 22], [2, 28], [5, 38], [10, 55], [20, 78], [30, 105]], perKgOver: 3.2, eta: "4–8 giorni lavorativi" },
 };
 
-function shippingCost(weightKg, destinationName) {
-  const w = Math.max(0.3, parseFloat(weightKg) || 1);
-  const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[3];
-  const rate = ZONE_RATES[dest.zone];
+// I corrieri espresso reali fatturano sul maggiore tra peso reale e peso
+// volumetrico (L×W×H in cm / 5000) — un pacco grande ma leggero occupa
+// comunque spazio nel mezzo di trasporto.
+function volumetricWeight(dims) {
+  if (!dims) return 0;
+  const l = parseFloat(dims.length_cm) || 0;
+  const w = parseFloat(dims.width_cm) || 0;
+  const h = parseFloat(dims.height_cm) || 0;
+  if (!l || !w || !h) return 0;
+  return (l * w * h) / 5000;
+}
+
+function bracketPrice(zone, weightKg) {
+  for (const [maxKg, price] of zone.brackets) {
+    if (weightKg <= maxKg) return price;
+  }
+  const [lastMaxKg, lastPrice] = zone.brackets[zone.brackets.length - 1];
+  return lastPrice + (weightKg - lastMaxKg) * zone.perKgOver;
+}
+
+function shippingCost(weightKg, destinationName, dims) {
+  const realWeight = Math.max(0.3, parseFloat(weightKg) || 1);
+  const billableWeight = Math.max(realWeight, volumetricWeight(dims));
+  const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[DESTINATIONS.length - 1];
+  const zone = SHIPPING_RATES[dest.zone];
   return {
-    shipping: parseFloat((rate.base + w * rate.perKg).toFixed(2)),
-    eta: rate.eta,
+    shipping: parseFloat(bracketPrice(zone, billableWeight).toFixed(2)),
+    eta: zone.eta,
   };
 }
 
 // Restituisce le due quotazioni sempre confrontate esplicitamente: prezzo
 // pieno e prezzo con abbonamento — mostrate fin dalla primissima spedizione,
 // per ogni cliente, senza eccezioni.
-function priceQuotes(weightKg, destinationName) {
-  const { shipping, eta } = shippingCost(weightKg, destinationName);
+function priceQuotes(weightKg, destinationName, dims) {
+  const { shipping, eta } = shippingCost(weightKg, destinationName, dims);
   const round = (n) => parseFloat(n.toFixed(2));
   return {
     shipping,
@@ -97,8 +126,8 @@ function priceQuotes(weightKg, destinationName) {
 // Se è attivo un codice invito valido e non ancora usato, la fee di
 // servizio Touch&Go viene azzerata per questa sola spedizione: il turista
 // paga solo il corriere, a costo vivo — nessun margine per Touch&Go.
-function priceFor(weightKg, destinationName) {
-  const q = priceQuotes(weightKg, destinationName);
+function priceFor(weightKg, destinationName, dims) {
+  const q = priceQuotes(weightKg, destinationName, dims);
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
   const grandTotal = onBreakeven ? q.breakeven : state.isSubscribed ? q.subscribed : q.full;
   return { grandTotal, eta: q.eta, quotes: q };
@@ -745,7 +774,7 @@ function AnalyzingScreen() {
 function ResultScreen() {
   const r = state.result;
   const p = state.price;
-  const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName());
+  const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("result"));
   wrap.appendChild(AssistantAvatar("options"));
@@ -1674,7 +1703,7 @@ function ChooseAddressScreen() {
     const itemPickupPoint = document.getElementById("item-pickup-input").value.trim() || state.pickupPoint;
     const addr = getSelectedAddress();
     if (state.result) {
-      state.price = priceFor(state.result.weight_kg, currentDestinationName());
+      state.price = priceFor(state.result.weight_kg, currentDestinationName(), state.result);
     }
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Genero QR…";
@@ -1694,6 +1723,9 @@ function ChooseAddressScreen() {
         objectName: (state.result && state.result.object_it) || "Oggetto",
         hsCode: (state.result && state.result.hs_code) || "—",
         weightKg: state.result ? state.result.weight_kg : 1,
+        dims: state.result
+          ? { length_cm: state.result.length_cm, width_cm: state.result.width_cm, height_cm: state.result.height_cm }
+          : null,
         packageDims: packagedDimensions(state.result),
         itemValue: state.result && typeof state.result.value_eur === "number" ? state.result.value_eur : 0,
         pricingTier: state.priceConfirmedAsBreakeven ? "breakeven" : state.isSubscribed ? "abbonato" : "pieno",
@@ -1754,7 +1786,7 @@ function EditItemAddressScreen() {
     row.addEventListener("click", () => {
       item.addressId = a.id;
       item.addressLabel = `${a.label || "Indirizzo"} — ${formatAddress(a)}`;
-      item.price = priceFor(item.weightKg, a.country).grandTotal;
+      item.price = priceFor(item.weightKg, a.country, item.dims).grandTotal;
       savePending();
       saveHistory();
       state.editingItemId = null;
@@ -2162,7 +2194,7 @@ async function runClassification(promise) {
   try {
     const result = await promise;
     state.result = result;
-    state.price = priceFor(result.weight_kg, currentDestinationName());
+    state.price = priceFor(result.weight_kg, currentDestinationName(), result);
     state.priceConfirmedForThisResult = false;
     state.priceConfirmedAsBreakeven = false;
     state.screen = "result";
