@@ -6,4 +6,4 @@
   included_files = ["netlify/functions/kit-riservato/**"]
 
 [functions."crm"]
-  included_files = ["netlify/functions/kit-riservato/TOUCHandGO_Allin_One.html"]
+  included_files = ["netlify/functions/kit-riservato/TOUCHandGO_Allin_One.html", "MANUALE.md"]
