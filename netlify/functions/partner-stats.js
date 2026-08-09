@@ -77,7 +77,14 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ valid: true, partnerName: record.name || "", salesCount, totalSalesValue, totalCommission }),
+      body: JSON.stringify({
+        valid: true,
+        partnerName: record.name || "",
+        salesCount,
+        totalSalesValue,
+        totalCommission,
+        creditBalance: Math.round((record.creditBalance || 0) * 100) / 100,
+      }),
     };
   } catch (err) {
     // Stesso formato di un codice inesistente: non distinguere un errore

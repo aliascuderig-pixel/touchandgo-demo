@@ -6,6 +6,7 @@ const { getStore } = require("@netlify/blobs");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
+const COMMISSION_RATE = 0.1; // stessa aliquota usata come commissione/credito partner (crm.js, partner-stats.js)
 
 function getClientIp(event) {
   return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
@@ -101,6 +102,40 @@ exports.handler = async (event) => {
             blockedAt: new Date().toISOString(),
           });
           return { statusCode: 403, body: JSON.stringify({ error: BLOCKED_MESSAGE }) };
+        }
+      }
+    }
+
+    // Accredito partner al passaggio a "ritirato" — sincronizzato dal
+    // turista stesso (es. ConcludeScreen) tramite un resync completo
+    // dell'item, non tramite l'azione "update-status" del CRM. La copia
+    // già in store (non il payload in arrivo) è l'unica fonte affidabile
+    // per il flag creditIssued: un client che risincronizza più volte lo
+    // stesso item non deve poter far accreditare due volte il partner.
+    if (item.status === "ritirato" && item.partnerCode) {
+      const previousItem = await purchases.get(item.id, { type: "json" });
+      if (previousItem && previousItem.creditIssued) {
+        // Già accreditato: questo salvataggio sovrascrive l'intero record
+        // (non è un merge), quindi riporta qui i campi già presenti in
+        // store — altrimenti un resync da un client con copia locale
+        // "vecchia" li cancellerebbe, riaprendo la porta a un doppio
+        // accredito al prossimo resync.
+        item.creditIssued = true;
+        item.creditIssuedAmount = previousItem.creditIssuedAmount;
+        item.creditIssuedAt = previousItem.creditIssuedAt;
+      } else {
+        const commission = Math.round((item.price || 0) * COMMISSION_RATE * 100) / 100;
+        item.creditIssued = true;
+        item.creditIssuedAmount = commission;
+        item.creditIssuedAt = new Date().toISOString();
+        if (commission > 0) {
+          const partners = getStore({ name: "partners", ...blobsAuth });
+          const partner = await partners.get(item.partnerCode, { type: "json" });
+          if (partner) {
+            partner.creditBalance = Math.round(((partner.creditBalance || 0) + commission) * 100) / 100;
+            partner.updatedAt = new Date().toISOString();
+            await partners.setJSON(item.partnerCode, partner);
+          }
         }
       }
     }

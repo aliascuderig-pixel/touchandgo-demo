@@ -222,6 +222,19 @@ const state = {
   promoValid: false,
   promoRedeemedThisOrder: false,
   showPromoInput: false,
+  showPartnerDiscountInput: false,
+  partnerDiscountCodeInput: "",
+  partnerDiscountChecking: false,
+  partnerDiscountApplied: false,
+  partnerDiscountCode: null,
+  partnerDiscountAmount: 0,
+  partnerDiscountError: null,
+  partnerCreditRedeeming: false,
+  partnerCreditRedeemResult: null,
+  partnerCreditRedeemError: null,
+  partnerDiscountGenerating: false,
+  partnerGeneratedDiscountCode: null,
+  partnerDiscountGenerateError: null,
   assistantDismissed: {},
 };
 const app = document.getElementById("app");
@@ -353,6 +366,7 @@ function PartnerLoginAndHistory() {
             salesCount: data.salesCount || 0,
             totalSalesValue: data.totalSalesValue || 0,
             totalCommission: data.totalCommission || 0,
+            creditBalance: data.creditBalance || 0,
           };
         } else {
           state.partnerLoginError = "Codice partner non riconosciuto.";
@@ -367,15 +381,18 @@ function PartnerLoginAndHistory() {
     return wrap;
   }
 
-  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalSalesValue: 0, totalCommission: 0 };
+  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalSalesValue: 0, totalCommission: 0, creditBalance: 0 };
   const summary = el("div", "info-card");
   summary.innerHTML = `
     <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
     ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
     <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
     <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
-    <div class="info-row total"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
+    <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
+    <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
+
+  wrap.appendChild(PartnerCreditSection(stats));
 
   wrap.appendChild(PartnerQRSection(state.partnerLoggedCode));
 
@@ -385,9 +402,130 @@ function PartnerLoginAndHistory() {
     state.partnerStats = null;
     state.partnerLoginError = null;
     state.showPartnerQr = false;
+    state.partnerCreditRedeemResult = null;
+    state.partnerCreditRedeemError = null;
+    state.partnerGeneratedDiscountCode = null;
+    state.partnerDiscountGenerateError = null;
     render();
   });
   wrap.appendChild(logoutBtn);
+
+  return wrap;
+}
+
+// Ricarica le statistiche (incluso creditBalance) del partner loggato —
+// usata dopo un riscatto credito, così il saldo mostrato resta coerente
+// con quanto appena scalato lato server.
+async function refreshPartnerStats() {
+  if (!state.partnerLoggedCode) return;
+  try {
+    const res = await fetch("/.netlify/functions/partner-stats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: state.partnerLoggedCode }),
+    });
+    const data = await res.json();
+    if (data.valid) {
+      state.partnerStats = {
+        partnerName: data.partnerName || "",
+        salesCount: data.salesCount || 0,
+        totalSalesValue: data.totalSalesValue || 0,
+        totalCommission: data.totalCommission || 0,
+        creditBalance: data.creditBalance || 0,
+      };
+    }
+  } catch (e) {
+    // Aggiornamento saldo non riuscito — resta il valore già mostrato,
+    // il riscatto stesso ha comunque avuto successo lato server.
+  }
+}
+
+// Riscatto del credito partner: pagare il canone (fino a coprirlo) o
+// generare un codice sconto monouso da dare a un cliente.
+function PartnerCreditSection(stats) {
+  const wrap = el("div");
+
+  if (stats.creditBalance > 0) {
+    const redeemBtn = el("button", "btn-secondary", state.partnerCreditRedeeming ? "Applico il credito…" : "Usa credito per il canone");
+    redeemBtn.disabled = state.partnerCreditRedeeming;
+    redeemBtn.addEventListener("click", async () => {
+      state.partnerCreditRedeeming = true;
+      state.partnerCreditRedeemError = null;
+      state.partnerCreditRedeemResult = null;
+      render();
+      try {
+        const res = await fetch("/.netlify/functions/crm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "redeem-credit-for-invoice", code: state.partnerLoggedCode }),
+        });
+        const data = await res.json();
+        if (res.ok && data.invoice) {
+          state.partnerCreditRedeemResult = data.invoice;
+          await refreshPartnerStats();
+        } else {
+          state.partnerCreditRedeemError = data.error || "Riscatto non riuscito. Riprova.";
+        }
+      } catch (e) {
+        state.partnerCreditRedeemError = "Errore di connessione. Riprova.";
+      }
+      state.partnerCreditRedeeming = false;
+      render();
+    });
+    wrap.appendChild(redeemBtn);
+  }
+
+  if (state.partnerCreditRedeemResult) {
+    const r = state.partnerCreditRedeemResult;
+    const note = el("div", "promo-active-note");
+    note.textContent =
+      r.creditApplied > 0
+        ? `✓ Fattura ${r.id}: -€${r.creditApplied.toFixed(2)} di credito applicato — importo residuo da pagare €${r.amount.toFixed(2)}`
+        : `Fattura ${r.id} generata — nessun credito applicato (importo €${r.amount.toFixed(2)})`;
+    wrap.appendChild(note);
+  }
+  if (state.partnerCreditRedeemError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerCreditRedeemError}`));
+  }
+
+  const genBtn = el("button", "btn-secondary", state.partnerDiscountGenerating ? "Genero il codice…" : "Genera codice sconto per un cliente");
+  genBtn.disabled = state.partnerDiscountGenerating;
+  genBtn.addEventListener("click", async () => {
+    state.partnerDiscountGenerating = true;
+    state.partnerDiscountGenerateError = null;
+    render();
+    try {
+      const res = await fetch("/.netlify/functions/crm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate-partner-discount-code", code: state.partnerLoggedCode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.discountCode) {
+        state.partnerGeneratedDiscountCode = data.discountCode;
+      } else {
+        state.partnerDiscountGenerateError = data.error || "Generazione codice non riuscita. Riprova.";
+      }
+    } catch (e) {
+      state.partnerDiscountGenerateError = "Errore di connessione. Riprova.";
+    }
+    state.partnerDiscountGenerating = false;
+    render();
+  });
+  wrap.appendChild(genBtn);
+
+  if (state.partnerGeneratedDiscountCode) {
+    wrap.appendChild(
+      el(
+        "div",
+        "promo-active-note",
+        `✓ Codice sconto generato: ${state.partnerGeneratedDiscountCode} — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
+      )
+    );
+  }
+  if (state.partnerDiscountGenerateError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerDiscountGenerateError}`));
+  }
 
   return wrap;
 }
@@ -972,14 +1110,19 @@ function ResultScreen() {
     wrap.appendChild(dual);
   } else {
     const fee = state.priceConfirmedAsBreakeven ? 0 : state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+    const discount = state.partnerDiscountApplied ? state.partnerDiscountAmount : 0;
     priceCard = el("div", "price-card");
     priceCard.innerHTML = `
       <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${state.priceConfirmedAsBreakeven ? "· offerta breakeven" : state.isSubscribed ? "· prezzo abbonato" : ""}</div>
       <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€${fee}</b></div>
+      ${discount > 0 ? `<div class="info-row"><span>Sconto codice partner (${state.partnerDiscountCode})</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
       <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="info-row total"><span>Totale</span><b id="res-total">€0</b></div>
       <div class="info-line" style="margin-top:8px">Consegna in ${q.eta} · tracciamento incluso · copertura standard inclusa</div>`;
     wrap.appendChild(priceCard);
+    if (fee > 0) {
+      wrap.appendChild(PartnerDiscountField(fee));
+    }
   }
 
   const actions = el("div", "result-actions");
@@ -1001,6 +1144,92 @@ function ResultScreen() {
   wrap.appendChild(actions);
 
   return wrap;
+}
+
+// Campo "Hai un codice sconto partner?" nella schermata di conferma
+// prezzo — stesso pattern del codice invito in HomeScreen (link che apre
+// un piccolo input), ma valida/consuma il codice tramite
+// partner-discount.js invece di promo.js.
+function PartnerDiscountField(fee) {
+  const wrap = el("div");
+
+  if (state.partnerDiscountApplied) {
+    wrap.appendChild(
+      el(
+        "div",
+        "promo-active-note",
+        `✓ Codice sconto partner ${state.partnerDiscountCode} applicato — -€${state.partnerDiscountAmount.toFixed(2)} sulla fee di servizio`
+      )
+    );
+    return wrap;
+  }
+
+  if (!state.showPartnerDiscountInput) {
+    const link = el("div", "promo-link", "Hai un codice sconto partner?");
+    link.addEventListener("click", () => {
+      state.showPartnerDiscountInput = true;
+      render();
+    });
+    wrap.appendChild(link);
+    return wrap;
+  }
+
+  const box = el("div", "describe-box");
+  const input = el("input");
+  input.type = "text";
+  input.placeholder = "Codice sconto partner";
+  input.value = state.partnerDiscountCodeInput || "";
+  input.addEventListener("input", (e) => {
+    state.partnerDiscountCodeInput = e.target.value;
+  });
+  const go = el("button", null, state.partnerDiscountChecking ? "…" : "→");
+  go.disabled = state.partnerDiscountChecking;
+  const submit = () => {
+    const code = (input.value || "").trim();
+    if (!code || state.partnerDiscountChecking) return;
+    applyPartnerDiscountCode(code, fee);
+  };
+  go.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  box.appendChild(input);
+  box.appendChild(go);
+  wrap.appendChild(box);
+
+  if (state.partnerDiscountError) {
+    wrap.appendChild(el("div", "promo-invalid", state.partnerDiscountError));
+  }
+
+  return wrap;
+}
+
+async function applyPartnerDiscountCode(code, fee) {
+  state.partnerDiscountChecking = true;
+  state.partnerDiscountError = null;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/partner-discount", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "redeem", code, fee, touristEmail: state.touristEmail }),
+    });
+    const data = await res.json();
+    if (data.valid) {
+      state.partnerDiscountApplied = true;
+      state.partnerDiscountCode = code.trim().toUpperCase();
+      state.partnerDiscountAmount = data.discountAmount || 0;
+      if (state.price) {
+        state.price.grandTotal = Math.max(0, Math.round((state.price.grandTotal - state.partnerDiscountAmount) * 100) / 100);
+      }
+    } else {
+      state.partnerDiscountError = data.error || "Codice non valido o già utilizzato.";
+    }
+  } catch (e) {
+    state.partnerDiscountError = "Errore di connessione. Riprova.";
+  }
+  state.partnerDiscountChecking = false;
+  render();
 }
 
 // ---------------- Reveal animations ----------------
@@ -1881,6 +2110,8 @@ function ChooseAddressScreen() {
         price: state.price ? state.price.grandTotal : 0,
         touristName: state.touristName,
         partnerCode: state.activePartnerCode || null,
+        partnerDiscountCode: state.partnerDiscountApplied ? state.partnerDiscountCode : null,
+        partnerDiscountAmount: state.partnerDiscountApplied ? state.partnerDiscountAmount : null,
         status: "in sospeso",
         date: new Date().toISOString(),
         photo,
@@ -2368,6 +2599,13 @@ async function runClassification(promise) {
     state.price = priceFor(result.weight_kg, currentDestinationName(), result);
     state.priceConfirmedForThisResult = false;
     state.priceConfirmedAsBreakeven = false;
+    state.showPartnerDiscountInput = false;
+    state.partnerDiscountCodeInput = "";
+    state.partnerDiscountChecking = false;
+    state.partnerDiscountApplied = false;
+    state.partnerDiscountCode = null;
+    state.partnerDiscountAmount = 0;
+    state.partnerDiscountError = null;
     state.screen = "result";
   } catch (err) {
     state.error = /401/.test(err.message) ? "Chiave API non valida. Riprova più tardi." : "Errore AI. Riprova.";
