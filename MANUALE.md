@@ -50,7 +50,11 @@ Sbloccare una qualsiasi tra Documenti / Pitch Deck / Legale / Riservato con la p
 
 ### Tab Panoramica
 
-Tutta calcolata **lato client** dagli stessi dati già caricati dalla chiamata `action: "list"` (acquisti e anagrafica partner) — nessuna chiamata aggiuntiva al backend, nessun nuovo store. Quattro sezioni, ciascuna con le proprie card:
+Tutta calcolata **lato client** dagli stessi dati già caricati dalla chiamata `action: "list"` (acquisti e anagrafica partner) — nessuna chiamata aggiuntiva al backend, nessun nuovo store.
+
+In cima alla tab, **sempre visibile** (non un tooltip, non un elemento nascosto/collassato), un banner di trasparenza: *"I dati mostrati riflettono lo stato attuale del database — se il progetto è in fase di test, i numeri includono acquisti/partner di prova."* — promemoria che queste metriche non distinguono dati reali da dati di prova finché non c'è una pulizia/segregazione esplicita dei record.
+
+Quattro sezioni, ciascuna con le proprie card:
 
 - **Volume e ricavi**: GMV processato (somma `itemValue`, il valore dichiarato della merce), ricavi servizio Touch&Go (somma `price`, le fee incassate — il corriere è pass-through e non ci finisce), spedizioni totali, quante completate (stato "ritirato") con percentuale.
 - **Funnel di conversione**: quanti acquisti in ciascuno dei 4 stati (numero e percentuale sul totale), più il **tasso di conversione ad abbonato** — tra le email che hanno almeno un acquisto a tariffa "pieno" o "breakeven" (quindi non ancora abbonate a quel punto), quale percentuale ha *anche* almeno un acquisto "abbonato" (quindi lo è diventata in seguito).
