@@ -1067,6 +1067,94 @@ function syncPurchaseToCRM(item) {
   });
 }
 
+function historyStatusClass(status) {
+  if (status === "ritirato") return "done";
+  if (status === "ritiro richiesto") return "requested";
+  if (status === "in confezionamento") return "packaging";
+  return "pending";
+}
+
+// Applica sull'oggetto locale i campi eventualmente aggiornati lato CRM
+// (es. lo staff ha inviato l'oggetto a confezionamento o ha cambiato il
+// punto di ritiro da un altro dispositivo). Ritorna true se qualcosa è
+// cambiato, per sapere se salvare/ri-renderizzare.
+function applyRemotePurchaseUpdate(local, remote) {
+  let changed = false;
+  ["status", "pickupPoint", "pickupPointChanged", "pickupPointChangedAt", "previousPickupPoint", "packagingDispatch", "pickupRequestedAt"].forEach((key) => {
+    if (remote[key] !== undefined && JSON.stringify(remote[key]) !== JSON.stringify(local[key])) {
+      local[key] = remote[key];
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+// Allinea localmente lo stato degli acquisti già noti con quanto
+// aggiornato nel frattempo dallo staff nel CRM (invio a confezionamento,
+// cambio punto di ritiro). Chiamata all'avvio e ogni volta che il turista
+// apre lo storico acquisti — è così che il banner "punto di ritiro
+// aggiornato" compare quando il turista riapre l'app.
+async function syncPurchaseUpdatesFromCRM() {
+  const ids = state.purchaseHistory.map((it) => it.id).filter(Boolean);
+  if (!ids.length) return;
+  try {
+    const res = await fetch("/.netlify/functions/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get-purchases", ids }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const byId = {};
+    (data.items || []).forEach((it) => {
+      if (it && it.id) byId[it.id] = it;
+    });
+    let changed = false;
+    state.purchaseHistory.forEach((local) => {
+      const remote = byId[local.id];
+      if (remote && applyRemotePurchaseUpdate(local, remote)) changed = true;
+    });
+    state.pendingItems.forEach((local) => {
+      const remote = byId[local.id];
+      if (remote && applyRemotePurchaseUpdate(local, remote)) changed = true;
+    });
+    if (changed) {
+      saveHistory();
+      savePending();
+      render();
+    }
+  } catch (e) {
+    // Offline o server irraggiungibile — lo storico locale resta quello
+    // che era, si riproverà al prossimo avvio/apertura dello storico.
+  }
+}
+
+function markPickupPointSeen(item) {
+  item.pickupPointChanged = false;
+  saveHistory();
+  savePending();
+  fetch("/.netlify/functions/crm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "ack-pickup-point", id: item.id }),
+  }).catch(() => {
+    // Se la conferma non arriva al server, il banner potrebbe ripresentarsi
+    // al prossimo sync — non blocca comunque il turista.
+  });
+  render();
+}
+
+function pickupPointUpdateBanner(item) {
+  if (!item.pickupPointChanged) return null;
+  const banner = el("div", "pickup-update-banner");
+  banner.innerHTML = `📍 Punto di ritiro aggiornato: ${item.pickupPoint}<div class="pickup-update-note">Tocca per confermare di aver visto l'aggiornamento</div>`;
+  banner.addEventListener("click", (e) => {
+    e.stopPropagation();
+    markPickupPointSeen(item);
+  });
+  return banner;
+}
+
 function PackageCheckScreen() {
   const wrap = el("div", "section");
   const item =
@@ -1963,9 +2051,11 @@ function DashboardScreen() {
       .slice()
       .reverse()
       .forEach((it) => {
+        const banner = pickupPointUpdateBanner(it);
+        if (banner) list.appendChild(banner);
         const row = el("div", "history-item");
         row.innerHTML = `
-          <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${it.status === "ritirato" ? "done" : "pending"}">${it.status}</span></div>
+          <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
           <div class="history-meta">Valore oggetto: €${(it.itemValue || 0).toFixed(2)} · Servizio Touch&amp;Go: €${it.price}</div>`;
         list.appendChild(row);
       });
@@ -2157,12 +2247,14 @@ function PurchaseHistoryList(items, emptyText, editable) {
     .slice()
     .reverse()
     .forEach((it) => {
+      const banner = pickupPointUpdateBanner(it);
+      if (banner) wrap.appendChild(banner);
       const row = el("div", "history-item");
       const dt = new Date(it.date);
       const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
       const sourceLbl = it.pickupSource === "gps" ? "GPS" : it.pickupSource === "ip" ? "rete" : "manuale";
       row.innerHTML = `
-        <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${it.status === "ritirato" ? "done" : "pending"}">${it.status}</span></div>
+        <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
         <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${it.pickupPoint}</b> · HS ${it.hsCode}</div>
         <div class="history-meta">→ ${it.addressLabel} · €${it.price}</div>
         <div class="history-meta">${it.touristName ? it.touristName + " · " : ""}${dateStr}</div>`;
@@ -2194,6 +2286,19 @@ function PurchaseHistoryList(items, emptyText, editable) {
           render();
         });
         row.appendChild(changeBtn);
+      }
+      if (editable && it.status === "in confezionamento") {
+        const pickupBtn = el("button", "queue-item-change", "📦 Richiedi ritiro");
+        pickupBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          it.status = "ritiro richiesto";
+          it.pickupRequestedAt = new Date().toISOString();
+          savePending();
+          saveHistory();
+          syncPurchaseToCRM(it);
+          render();
+        });
+        row.appendChild(pickupBtn);
       }
       wrap.appendChild(row);
     });
@@ -2232,10 +2337,12 @@ function Footer() {
   f.querySelector("#history-link").addEventListener("click", () => {
     state.screen = "history";
     render();
+    syncPurchaseUpdatesFromCRM();
   });
   f.querySelector("#dashboard-link").addEventListener("click", () => {
     state.screen = "dashboard";
     render();
+    syncPurchaseUpdatesFromCRM();
   });
   return f;
 }
@@ -2356,6 +2463,7 @@ if (state.promoCode) checkPromoCode(state.promoCode);
 loadHistory();
 render();
 loadLocation();
+syncPurchaseUpdatesFromCRM();
 
 window.addEventListener("online", () => {
   state.isOffline = false;
