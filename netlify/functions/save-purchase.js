@@ -84,7 +84,12 @@ exports.handler = async (event) => {
       // dal tentativo successivo in poi).
       const { blobs } = await purchases.list();
       const priorItems = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
-      const emailItems = priorItems.filter((it) => normalizeEmail(it.touristEmail) === email);
+      // Esclude il record dell'item stesso: un acquisto già salvato che
+      // viene semplicemente ri-sincronizzato (es. cambio status "in
+      // sospeso" -> "in confezionamento" -> "ritiro richiesto" ->
+      // "ritirato") non è un "secondo acquisto" e non deve auto-bloccare
+      // il cliente al primo acquisto legittimo.
+      const emailItems = priorItems.filter((it) => normalizeEmail(it.touristEmail) === email && it.id !== item.id);
 
       if (emailItems.length > 0 && item.pricingTier !== "abbonato") {
         const everSubscribed = emailItems.some((it) => it.pricingTier === "abbonato");

@@ -286,9 +286,16 @@ button{font-family:inherit;cursor:pointer}
 .history-name{font-family:var(--display);font-size:14px;font-weight:600;color:var(--ink)}
 .history-status{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px}
 .history-status.pending{background:var(--warn-bg);color:var(--clay)}
+.history-status.packaging{background:var(--gold-soft);color:var(--gold-deep)}
+.history-status.requested{background:var(--cream);color:var(--ink)}
 .history-status.done{background:var(--good-bg);color:var(--good)}
 .history-meta{font-size:10.5px;color:var(--muted);margin-top:2px}
 .footer-links{display:flex;justify-content:center;gap:14px;margin-top:8px}
+
+/* ---------- Pickup point updated banner ---------- */
+.pickup-update-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
+.pickup-update-banner:active{background:var(--gold-soft)}
+.pickup-update-note{font-size:9.5px;font-weight:400;text-transform:none;letter-spacing:0;margin-top:3px;opacity:.85}
 
 /* ---------- Reset ---------- */
 .reset-link{display:inline-block;margin:0;background:none;border:none;font-size:10px;color:var(--muted);text-decoration:underline;padding:6px}
