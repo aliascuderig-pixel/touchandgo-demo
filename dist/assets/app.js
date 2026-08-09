@@ -351,6 +351,7 @@ function PartnerLoginAndHistory() {
           state.partnerStats = {
             partnerName: data.partnerName || "",
             salesCount: data.salesCount || 0,
+            totalSalesValue: data.totalSalesValue || 0,
             totalCommission: data.totalCommission || 0,
           };
         } else {
@@ -366,12 +367,13 @@ function PartnerLoginAndHistory() {
     return wrap;
   }
 
-  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalCommission: 0 };
+  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalSalesValue: 0, totalCommission: 0 };
   const summary = el("div", "info-card");
   summary.innerHTML = `
     <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
     ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
     <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
+    <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
     <div class="info-row total"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 
@@ -2032,6 +2034,8 @@ function DashboardScreen() {
   const totalService = items.reduce((s, it) => s + (it.price || 0), 0);
   const pendingCount = items.filter((it) => it.status === "in sospeso").length;
   const doneCount = items.filter((it) => it.status === "ritirato").length;
+  const fullPriceCount = items.filter((it) => it.pricingTier === "pieno").length;
+  const subscriptionSavings = fullPriceCount * (FULL_FEE - SUBSCRIBED_FEE);
 
   const summary = el("div", "info-card");
   summary.innerHTML = `
@@ -2039,6 +2043,11 @@ function DashboardScreen() {
     <div class="info-row"><span>In sospeso / ritirati</span><b>${pendingCount} / ${doneCount}</b></div>
     <div class="info-row"><span>Valore acquisti (stima AI)</span><b>€${totalValue.toFixed(2)}</b></div>
     <div class="info-row"><span>Speso in servizi Touch&amp;Go</span><b>€${totalService.toFixed(2)}</b></div>
+    ${
+      subscriptionSavings > 0
+        ? `<div class="info-row"><span>${state.isSubscribed ? "Risparmiato abbonandoti" : "Risparmieresti abbonandoti"}</span><b>€${subscriptionSavings.toFixed(2)}</b></div>`
+        : ""
+    }
     <div class="info-row total"><span>Totale complessivo</span><b>€${(totalValue + totalService).toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 

@@ -70,12 +70,14 @@ exports.handler = async (event) => {
     const items = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
     const myItems = items.filter((it) => it.partnerCode === normalized);
     const salesCount = myItems.length;
-    const totalCommission = Math.round(myItems.reduce((sum, it) => sum + (it.price || 0), 0) * COMMISSION_RATE * 100) / 100;
+    const rawSalesValue = myItems.reduce((sum, it) => sum + (it.price || 0), 0);
+    const totalSalesValue = Math.round(rawSalesValue * 100) / 100;
+    const totalCommission = Math.round(rawSalesValue * COMMISSION_RATE * 100) / 100;
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ valid: true, partnerName: record.name || "", salesCount, totalCommission }),
+      body: JSON.stringify({ valid: true, partnerName: record.name || "", salesCount, totalSalesValue, totalCommission }),
     };
   } catch (err) {
     // Stesso formato di un codice inesistente: non distinguere un errore
