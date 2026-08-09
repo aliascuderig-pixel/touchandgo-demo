@@ -63,6 +63,8 @@ Quattro sezioni, ciascuna con le proprie card:
 
 ### Tab Acquisti
 
+In cima, lo stesso banner di trasparenza della tab Panoramica (sempre visibile, non un tooltip): i dati riflettono lo stato attuale del database e possono includere record di prova.
+
 Una riga per acquisto, con: data, turista, email, oggetto, punto di ritiro, destinazione, partner di riferimento (o "diretto"), importo del servizio, stato.
 
 Lo stato di un acquisto ha **4 valori possibili** (vedi anche "App turista" più sotto): `in sospeso` → `in confezionamento` → `ritiro richiesto` → `ritirato`. Il pallino colorato in tabella riflette lo stato corrente.
@@ -77,6 +79,8 @@ Azioni disponibili per riga (cambiano in base allo stato):
 - **Dettagli**: espande una riga con chi/quando per ogni transizione registrata (invio confezionamento con destinatario, cambio punto di ritiro con vecchio/nuovo valore, richiesta ritiro).
 
 ### Tab Partner & Commissioni
+
+Stesso banner di trasparenza in cima (dati/database attuale, possibili record di prova).
 
 Una riga per ogni partner (codice), con: vendite generate, ricavo generato, commissione (10%), **credito disponibile**, codici sconto generati/usati, stato pagamento canone, note.
 
@@ -102,6 +106,8 @@ Guida su come e quando condividere ciascun documento (investitori, partner, tecn
 Questa tab permette in teoria di creare/eliminare codici invito per l'offerta "prima spedizione a prezzo breakeven" (fee di servizio azzerata). **Allo stato attuale del codice, però, non è collegata correttamente al backend**: l'interfaccia chiama le azioni `save-promo` e `delete-promo` su `crm.js`, ma `crm.js` non le implementa (esistono solo `check`/`redeem` in `netlify/functions/promo.js`, usate dall'app turista per *consumare* un codice già esistente, non per crearlo). Il risultato pratico è che oggi **non è possibile creare un nuovo codice invito dalla tab Inviti** — va fatto scrivendo direttamente un record nello store Netlify Blobs `promo` (fuori dal CRM) finché questo gap non viene colmato con un'azione dedicata in `crm.js`.
 
 ### Tab Bloccati
+
+Stesso banner di trasparenza in cima — inclusa qui perché le voci di questa tab nascono dagli stessi acquisti/tentativi reali (o di prova) registrati in `purchases`, non sono contenuto statico.
 
 Elenco dei clienti bloccati, con motivo, data, tipo (Automatico/Manuale) e bottone di sblocco. Vedi "Blocco automatico anti-abuso" più sotto per come scattano i blocchi automatici.
 
