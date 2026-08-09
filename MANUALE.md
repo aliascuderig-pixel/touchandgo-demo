@@ -35,6 +35,7 @@ Il CRM è un'unica pagina con tab in alto. Carica tutti i dati con un'unica chia
 
 | Tab | Protetta? | A cosa serve |
 |---|---|---|
+| **Panoramica** | No | Prima tab che si vede aprendo il CRM: metriche di business aggregate in un colpo d'occhio (volume/ricavi, funnel, MRR/ARR reale, rete partner) — pensata per un investitore o per lo staff, non un elenco riga-per-riga. |
 | **Acquisti** | No | Vedi ogni acquisto registrato da qualunque turista/dispositivo, con stato e azioni per farlo avanzare. |
 | **Partner & Commissioni** | No | Anagrafica partner, vendite generate, commissioni, credito, codici sconto. |
 | **Documenti** | Sì — `KIT_VAULT_PASSWORD` | Sintesi esecutiva del progetto per uso interno (problema, soluzione, modello di ricavo, competitor...) + il **Manuale del progetto** (vedi sezione dedicata più sotto). |
@@ -46,6 +47,15 @@ Il CRM è un'unica pagina con tab in alto. Carica tutti i dati con un'unica chia
 | **Impostazioni** | No | Riepilogo di sola lettura delle tariffe/fee attuali (per modificarle serve cambiare il codice). |
 
 Sbloccare una qualsiasi tra Documenti / Pitch Deck / Legale / Riservato con la password sblocca automaticamente anche le altre tre — condividono la stessa password e la stessa variabile in memoria del browser (si richiede di nuovo solo dopo un refresh della pagina).
+
+### Tab Panoramica
+
+Tutta calcolata **lato client** dagli stessi dati già caricati dalla chiamata `action: "list"` (acquisti e anagrafica partner) — nessuna chiamata aggiuntiva al backend, nessun nuovo store. Quattro sezioni, ciascuna con le proprie card:
+
+- **Volume e ricavi**: GMV processato (somma `itemValue`, il valore dichiarato della merce), ricavi servizio Touch&Go (somma `price`, le fee incassate — il corriere è pass-through e non ci finisce), spedizioni totali, quante completate (stato "ritirato") con percentuale.
+- **Funnel di conversione**: quanti acquisti in ciascuno dei 4 stati (numero e percentuale sul totale), più il **tasso di conversione ad abbonato** — tra le email che hanno almeno un acquisto a tariffa "pieno" o "breakeven" (quindi non ancora abbonate a quel punto), quale percentuale ha *anche* almeno un acquisto "abbonato" (quindi lo è diventata in seguito).
+- **Ricavi ricorrenti partner (MRR/ARR reale)**: MRR calcolato solo sui partner con canone **effettivamente pagato** (`paid === true`, non su tutti i registrati), ARR = MRR × 12, e i canoni ancora in sospeso mostrati separatamente (non sommati nell'MRR, per non gonfiarlo).
+- **Rete partner**: partner totali registrati, quanti hanno almeno una vendita associata ("attivi"), quanti sono registrati ma non hanno mai generato una vendita, e il credito totale in circolo (somma `creditBalance` di tutti i partner — utile per capire l'esposizione del sistema di crediti, vedi "Sistema crediti partner").
 
 ### Tab Acquisti
 
