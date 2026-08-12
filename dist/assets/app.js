@@ -812,6 +812,7 @@ function PartnerLoginAndHistory() {
     const field = el("div", "dest-field");
     field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${state.activePartnerCode || ""}" />`;
     wrap.appendChild(field);
+    addVoiceButton(field.querySelector("#partner-code-input"));
 
     if (state.partnerLoginError) {
       wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerLoginError}`));
@@ -821,7 +822,12 @@ function PartnerLoginAndHistory() {
     loginBtn.disabled = state.partnerLoginLoading;
     loginBtn.addEventListener("click", async () => {
       const code = document.getElementById("partner-code-input").value.trim().toUpperCase();
-      if (!code || state.partnerLoginLoading) return;
+      if (state.partnerLoginLoading) return;
+      if (!code) {
+        state.partnerLoginError = "Inserisci il codice partner prima di accedere.";
+        render();
+        return;
+      }
       state.partnerLoginLoading = true;
       state.partnerLoginError = null;
       render();

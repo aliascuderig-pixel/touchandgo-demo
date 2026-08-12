@@ -4,7 +4,7 @@
 // generation still require a live connection and are handled gracefully
 // in-app when offline.
 
-const CACHE_NAME = "touchandgo-shell-v1";
+const CACHE_NAME = "touchandgo-shell-v2";
 const APP_SHELL = ["/", "/index.html", "/assets/app.js", "/assets/style.css"];
 
 self.addEventListener("install", (event) => {
@@ -37,6 +37,26 @@ self.addEventListener("fetch", (event) => {
     url.hostname.includes("ipapi.co") ||
     url.hostname.includes("wikipedia.org")
   ) {
+    return;
+  }
+
+  const isAppShell = url.origin === self.location.origin && APP_SHELL.includes(url.pathname);
+
+  if (isAppShell) {
+    // App shell: rete prima di tutto, così ogni turista vede subito
+    // l'ultima versione deployata al primo caricamento — la cache serve
+    // solo come fallback quando il dispositivo è offline.
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
     return;
   }
 
