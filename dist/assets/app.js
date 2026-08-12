@@ -1756,6 +1756,87 @@ function ShippedScreen() {
   return wrap;
 }
 
+// Aggiunge un pulsante microfono accanto a un campo di testo per dettare a
+// voce invece di scrivere (turisti di fretta o con difficoltà con la
+// tastiera). Usa la Web Speech API nativa del browser — nessun servizio
+// esterno. Se il browser non la supporta, non aggiunge nulla: il campo
+// resta scrivibile normalmente, senza errori.
+function addVoiceButton(input) {
+  if (!input) return;
+  if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) return;
+  const parent = input.parentElement;
+  if (!parent) return;
+
+  const wrap = el("div", "voice-field-wrap" + (input.classList.contains("addr-cap") ? " voice-cap" : ""));
+  parent.insertBefore(wrap, input);
+  wrap.appendChild(input);
+
+  const btn = el("button", "voice-btn", "🎤");
+  btn.type = "button";
+  btn.title = "Detta a voce";
+  btn.setAttribute("aria-label", "Detta a voce");
+  wrap.appendChild(btn);
+
+  const toast = el("div", "voice-toast");
+  toast.hidden = true;
+  wrap.appendChild(toast);
+  let toastTimer = null;
+  const showToast = (msg) => {
+    toast.textContent = msg;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.hidden = true;
+    }, 4000);
+  };
+
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizing = false;
+
+  btn.addEventListener("click", () => {
+    if (recognizing) return;
+    let recognition;
+    try {
+      recognition = new Recognition();
+    } catch (err) {
+      return;
+    }
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.addEventListener("result", (ev) => {
+      const transcript = (ev.results[0] && ev.results[0][0] && ev.results[0][0].transcript || "").trim();
+      if (!transcript) return;
+      const existing = input.value.trim();
+      input.value = existing ? `${existing} ${transcript}` : transcript;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    recognition.addEventListener("error", (ev) => {
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        showToast("🎤 Microfono non autorizzato — puoi comunque scrivere qui a mano.");
+      } else if (ev.error !== "aborted" && ev.error !== "no-speech") {
+        showToast("Non ho capito bene — riprova o scrivi a mano.");
+      }
+    });
+
+    recognition.addEventListener("end", () => {
+      recognizing = false;
+      btn.classList.remove("listening");
+    });
+
+    try {
+      recognition.start();
+      recognizing = true;
+      btn.classList.add("listening");
+    } catch (err) {
+      recognizing = false;
+      btn.classList.remove("listening");
+    }
+  });
+}
+
 function IdentifyScreen() {
   const wrap = el("div", "section identify-screen");
   const isBookingGate = !!state.identifyPrompt;
@@ -1769,6 +1850,7 @@ function IdentifyScreen() {
   const nameField = el("div", "dest-field");
   nameField.innerHTML = `<div class="dest-lbl">Il tuo nome</div><input class="dest-input" id="name-input" placeholder="Es. Maria Rossi" />`;
   wrap.appendChild(nameField);
+  addVoiceButton(nameField.querySelector("#name-input"));
 
   const emailField = el("div", "dest-field");
   emailField.innerHTML = `<div class="dest-lbl">Email (per il tuo account)</div><input class="dest-input" id="email-input" type="email" placeholder="maria@esempio.com" />`;
@@ -1895,6 +1977,9 @@ function AddressFormFields(prefix) {
     <select class="dest-select addr-country" id="${prefix}-country">
       ${DESTINATIONS.map((d) => `<option value="${d.name}">${d.name}</option>`).join("")}
     </select>`;
+  addVoiceButton(wrap.querySelector(`#${prefix}-street`));
+  addVoiceButton(wrap.querySelector(`#${prefix}-city`));
+  addVoiceButton(wrap.querySelector(`#${prefix}-cap`));
   return wrap;
 }
 
@@ -1999,6 +2084,7 @@ function AddAddressScreen() {
   const labelField = el("div", "dest-field");
   labelField.innerHTML = `<div class="dest-lbl">Etichetta</div><input class="dest-input" id="newaddr-label" placeholder="Es. Casa, Ufficio…" />`;
   wrap.appendChild(labelField);
+  addVoiceButton(labelField.querySelector("#newaddr-label"));
 
   wrap.appendChild(AddressFormFields("newaddr"));
 
