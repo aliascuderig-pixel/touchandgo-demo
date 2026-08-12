@@ -338,6 +338,11 @@ button{font-family:inherit;cursor:pointer}
 .header-site-link{font-family:var(--body);font-size:10px;color:#B8B0A0;text-decoration:none;border:1px solid #34301F;padding:6px 10px}
 .offline-banner{background:#3A2A12;color:#E8D5B0;font-size:11px;padding:10px 20px;line-height:1.6}
 
+/* ---------- Selettore lingua (IT/EN) — sempre visibile nell'header ---------- */
+.lang-switch{display:flex;border:1px solid #34301F;border-radius:999px;overflow:hidden}
+.lang-btn{background:transparent;border:none;color:#B8B0A0;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.04em;padding:6px 9px}
+.lang-btn.on{background:var(--gold-soft);color:var(--ink)}
+
 .location-reminder{display:flex;align-items:flex-start;gap:12px;background:var(--warn-bg);border-bottom:1px solid var(--gold-soft);padding:14px 20px}
 .loc-avatar{width:34px;height:34px;border-radius:999px;background:var(--ink);color:var(--gold);font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
 .loc-text{font-size:11.5px;color:var(--clay);line-height:1.6;flex:1}

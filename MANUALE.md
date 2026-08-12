@@ -148,6 +148,20 @@ Per i turisti di fretta o con difficoltà a digitare, alcuni campi testuali poss
 
 È applicata a: nome del turista (`name-input`), etichetta indirizzo (`newaddr-label`) e ai campi via/città/CAP generati da `AddressFormFields()` (quindi automaticamente su ogni indirizzo, non solo uno). **Non** è applicata al campo email — dettare un indirizzo email a voce è troppo impreciso.
 
+### Multilingua italiano/inglese (in corso — FASE 1)
+
+L'app supporta italiano e inglese con rilevamento automatico, in `dist/assets/app.js`:
+
+- **Dizionario** `I18N = { it: {...}, en: {...} }` — stesse chiavi in entrambe le lingue, organizzato per schermata con commenti di sezione.
+- **Helper** `t(key, params)` — restituisce la stringa nella lingua corrente (`state.lang`), con fallback all'italiano e infine alla chiave stessa (mai una stringa vuota a schermo). Supporta un secondo argomento opzionale `params` per sostituire placeholder `{nome}` nel testo (es. `t("home_promo_active", { code: state.promoCode })`), usato ovunque il testo contenga un valore dinamico (prezzi, codici, conteggi).
+- **Rilevamento iniziale** (`detectInitialLang()`): preferenza salvata in `localStorage` (`tg_lang`) se presente, altrimenti inglese se `navigator.language` inizia con "en", italiano in ogni altro caso.
+- **Selettore manuale** — pulsanti "IT / EN" sempre visibili nell'header (`Header()`, che viene renderizzato su ogni schermata senza eccezioni), cliccabili in qualsiasi momento del percorso. Il click chiama `setLang(lang)`, che aggiorna `state.lang`, salva la preferenza in `localStorage` e ri-renderizza.
+- **ETA di spedizione**: i tre valori fissi di `SHIPPING_RATES` (es. "24–48 ore") vengono tradotti a display tramite una piccola mappa dedicata (`ETA_TRANSLATIONS` + `localizeEta()`), senza toccare la struttura dati originale usata anche da codice non ancora tradotto.
+
+**Cosa copre la FASE 1** (architettura + percorso principale d'acquisto): CoverScreen, HomeScreen, DestinationScreen, AnalyzingScreen, ResultScreen, PackageCheckScreen, IdentifyScreen, DocumentsScreen, più i componenti condivisi che vi compaiono (Header, Footer, TrustRow, AssistantAvatar, PickupField/DestinationField/GuestDestinationField, PartnerDiscountField, AddressFormFields).
+
+**Cosa NON è ancora tradotto** (restano in italiano fisso finché non migrate in una fase successiva, riusando la stessa architettura I18N/t()): PartnerScreen e tutta l'area partner, Dashboard, History, AddAddress, ChooseAddress, EditItemAddress, ViewItemPhoto, Queued, Conclude, Shipped, BiometricLock. I nomi dei paesi di destinazione (`DESTINATIONS`) e i contenuti generati dall'AI di classificazione (nome oggetto, descrizione HS, categoria, note di spedizione) restano anch'essi in italiano — sono dati, non testo statico dell'interfaccia, e la loro traduzione richiederebbe intervento sul backend (`classify.js`), fuori scope per questa fase.
+
 ### Stati di un acquisto
 
 Un acquisto (`item`) attraversa fino a 4 stati:
