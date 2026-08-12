@@ -56,7 +56,7 @@ In cima alla tab, **sempre visibile** (non un tooltip, non un elemento nascosto/
 
 Quattro sezioni, ciascuna con le proprie card:
 
-- **Volume e ricavi**: GMV processato (somma `itemValue`, il valore dichiarato della merce), ricavi servizio Touch&Go (somma `price`, le fee incassate — il corriere è pass-through e non ci finisce), spedizioni totali, quante completate (stato "ritirato") con percentuale.
+- **Volume e ricavi**: GMV processato (somma `itemValue`, il valore dichiarato della merce), ricavi servizio Touch&Go (somma `price` — include sia la fee di servizio sia il margine del 20% sul servizio di spedizione, `SHIPPING_MARGIN`: il corriere non è più puro pass-through, vedi "Dual pricing e offerte"), spedizioni totali, quante completate (stato "ritirato") con percentuale.
 - **Funnel di conversione**: quanti acquisti in ciascuno dei 4 stati (numero e percentuale sul totale), più il **tasso di conversione ad abbonato** — tra le email che hanno almeno un acquisto a tariffa "pieno" o "breakeven" (quindi non ancora abbonate a quel punto), quale percentuale ha *anche* almeno un acquisto "abbonato" (quindi lo è diventata in seguito).
 - **Ricavi ricorrenti partner (MRR/ARR reale)**: MRR calcolato solo sui partner con canone **effettivamente pagato** (`paid === true`, non su tutti i registrati), ARR = MRR × 12, e i canoni ancora in sospeso mostrati separatamente (non sommati nell'MRR, per non gonfiarlo).
 - **Rete partner**: partner totali registrati, quanti hanno almeno una vendita associata ("attivi"), quanti sono registrati ma non hanno mai generato una vendita, e il credito totale in circolo (somma `creditBalance` di tutti i partner — utile per capire l'esposizione del sistema di crediti, vedi "Sistema crediti partner").
@@ -117,7 +117,7 @@ Password `KIT_VAULT_PASSWORD`, separata concettualmente dalle altre anche se nel
 
 ### Tab Impostazioni
 
-Sola lettura: fee di servizio, commissione partner, tariffe di spedizione per zona. Una nota ricorda che questi valori sono presi dalla logica dell'app — per cambiarli davvero va modificato il codice (`FULL_FEE`, `SUBSCRIBED_FEE`, `SHIPPING_RATES` in `app.js`), non questa pagina.
+Sola lettura: fee di servizio, commissione partner, tariffe di spedizione per zona (margine 20% già incluso). Una nota ricorda che questi valori sono presi dalla logica dell'app — per cambiarli davvero va modificato il codice (`FULL_FEE`, `SUBSCRIBED_FEE`, `SHIPPING_RATES`, `SHIPPING_MARGIN` in `app.js`), non questa pagina.
 
 ---
 
@@ -162,11 +162,11 @@ Riepilogo di tutti gli acquisti del turista: numero totale, quanti in sospeso/ri
 
 ### Dual pricing e offerte
 
-Ogni preventivo mostra sempre, esplicitamente, sia il prezzo pieno che quello con abbonamento — mai un prezzo unico nascosto. Le costanti sono `FULL_FEE = €39` e `SUBSCRIBED_FEE = €19` di fee di servizio, più il costo del corriere (calcolato a fasce di peso/volume per zona: Italia/UE, Europa extra-UE, resto del mondo — vedi `SHIPPING_RATES`).
+Ogni preventivo mostra sempre, esplicitamente, sia il prezzo pieno che quello con abbonamento — mai un prezzo unico nascosto. Le costanti sono `FULL_FEE = €39` e `SUBSCRIBED_FEE = €19` di fee di servizio, più il costo del servizio di spedizione (calcolato a fasce di peso/volume per zona — domestico/transfrontaliero/worldwide, vedi `SHIPPING_RATES` — con un margine Touch&Go del 20% applicato sopra il costo grezzo del corriere, `SHIPPING_MARGIN`, sempre incluso nel valore mostrato).
 
 Oltre al dual pricing standard, tre offerte possono ridurre il totale (mostrate in ordine di priorità, una alla volta):
 
-1. **Codice invito — offerta breakeven**: un codice monouso (gestito nello store Blobs `promo`, validato/consumato da `netlify/functions/promo.js`) azzera la fee di servizio per quella spedizione — il turista paga solo il corriere, a costo vivo, zero margine per Touch&Go. Il codice non è mai mostrato spontaneamente in app: si attiva solo con un link diretto (`?invito=CODICE`) o digitandolo manualmente.
+1. **Codice invito — offerta breakeven**: un codice monouso (gestito nello store Blobs `promo`, validato/consumato da `netlify/functions/promo.js`) azzera la fee di servizio per quella spedizione — il turista paga solo il servizio di spedizione (margine 20% incluso, non più a costo vivo: solo la fee è azzerata). Il codice non è mai mostrato spontaneamente in app: si attiva solo con un link diretto (`?invito=CODICE`) o digitandolo manualmente.
 2. **Prima spedizione gratuita**: se il turista non ha mai fatto un acquisto (`purchaseHistory` vuoto) e non è già abbonato, la prima spedizione ha la stessa condizione della breakeven (fee azzerata) — per fargli provare il servizio prima di scegliere se abbonarsi.
 3. **Codice sconto partner**: un codice monouso generato da un partner (vedi "Area partner"), applica il 10% di sconto sulla sola fee di servizio (non sul corriere) — vedi "Sistema crediti partner".
 

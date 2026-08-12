@@ -62,18 +62,24 @@ const DESTINATIONS = [
   { name: "Altro / non specificata", zone: "worldwide" },
 ];
 
-// Tariffe a fasce di peso per zona. Valori indicativi stimati da ricerca di
-// mercato su corrieri italiani/EU/mondo 2026 — NON tariffe Packlink
-// ufficiali (Packlink è un comparatore dinamico, non pubblica un listino
-// fisso): base plausibile per il prototipo, da sostituire con contratti
-// corrieri reali prima di un lancio commerciale.
+// Tariffe a fasce di peso per zona — costo GREZZO del corriere, prima del
+// margine Touch&Go (vedi SHIPPING_MARGIN sotto). Valori aggiornati da
+// ricerca reale sui corrieri aggregati da Packlink (BRT/Poste per il
+// domestico, TNT/Poste Crono Internazionale per l'EU, screenshot reale
+// Packlink per il worldwide: 0,5kg Italia→USA = €49-55).
 // brackets: [peso_max_kg, prezzo]. Oltre l'ultima fascia si applica
 // perKgOver per ogni kg eccedente i 30kg.
 const SHIPPING_RATES = {
-  domestico: { brackets: [[1, 7], [2, 8.5], [5, 10], [10, 13], [20, 18], [30, 24]], perKgOver: 0.9, eta: "24–48 ore" },
-  transfrontaliero: { brackets: [[1, 12], [2, 15], [5, 19], [10, 25], [20, 32], [30, 40]], perKgOver: 1.6, eta: "2–4 giorni lavorativi" },
-  worldwide: { brackets: [[1, 22], [2, 28], [5, 38], [10, 55], [20, 78], [30, 105]], perKgOver: 3.2, eta: "4–8 giorni lavorativi" },
+  domestico: { brackets: [[1, 9], [2, 11], [5, 14], [10, 18], [20, 25], [30, 33]], perKgOver: 1.1, eta: "24–48 ore" },
+  transfrontaliero: { brackets: [[1, 15], [2, 20], [5, 26], [10, 34], [20, 44], [30, 55]], perKgOver: 2.2, eta: "2–4 giorni lavorativi" },
+  worldwide: { brackets: [[1, 50], [2, 58], [5, 75], [10, 95], [20, 130], [30, 165]], perKgOver: 5.5, eta: "4–8 giorni lavorativi" },
 };
+
+// Margine Touch&Go applicato sopra il costo grezzo del corriere. Applicato
+// una sola volta, dentro shippingCost() — ogni preventivo, riepilogo e
+// salvataggio a save-purchase.js legge sempre e solo il valore già
+// comprensivo di margine, mai il grezzo.
+const SHIPPING_MARGIN = 0.2;
 
 // I corrieri espresso reali fatturano sul maggiore tra peso reale e peso
 // volumetrico (L×W×H in cm / 5000) — un pacco grande ma leggero occupa
@@ -100,8 +106,9 @@ function shippingCost(weightKg, destinationName, dims) {
   const billableWeight = Math.max(realWeight, volumetricWeight(dims));
   const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[DESTINATIONS.length - 1];
   const zone = SHIPPING_RATES[dest.zone];
+  const rawCost = bracketPrice(zone, billableWeight);
   return {
-    shipping: parseFloat(bracketPrice(zone, billableWeight).toFixed(2)),
+    shipping: parseFloat((rawCost * (1 + SHIPPING_MARGIN)).toFixed(2)),
     eta: zone.eta,
   };
 }
@@ -125,7 +132,9 @@ function priceQuotes(weightKg, destinationName, dims) {
 // compatibilità con il resto del codice che si aspetta un unico totale).
 // Se è attivo un codice invito valido e non ancora usato, la fee di
 // servizio Touch&Go viene azzerata per questa sola spedizione: il turista
-// paga solo il corriere, a costo vivo — nessun margine per Touch&Go.
+// paga solo il servizio di spedizione (che include comunque il margine
+// SHIPPING_MARGIN — non è più a costo vivo per Touch&Go, solo la fee è
+// azzerata).
 function priceFor(weightKg, destinationName, dims) {
   const q = priceQuotes(weightKg, destinationName, dims);
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
@@ -941,9 +950,9 @@ function InfoSection() {
   const priceInfo = el("div", "info-card");
   priceInfo.innerHTML = `
     <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€39</b></div>
-    <div class="info-row"><span>Costo corriere (varia per peso/destinazione)</span><b>calcolato all'istante</b></div>
+    <div class="info-row"><span>Costo servizio di spedizione (varia per peso/destinazione)</span><b>calcolato all'istante</b></div>
     <div class="info-row"><span>Nessun costo nascosto: vedi il totale prima di confermare</span></div>
-    <div class="info-line" style="margin-top:8px">🎁 <b>Prima spedizione senza fee di servizio</b> — paghi solo il corriere, a tariffa piena. Un modo per provare il servizio prima di scegliere se abbonarti.</div>`;
+    <div class="info-line" style="margin-top:8px">🎁 <b>Prima spedizione senza fee di servizio</b> — paghi solo il servizio di spedizione, a tariffa piena. Un modo per provare il servizio prima di scegliere se abbonarti.</div>`;
   wrap.appendChild(priceInfo);
 
   wrap.appendChild(el("div", "tg-lbl", "Copertura e dogana"));
@@ -1043,8 +1052,8 @@ function ResultScreen() {
         <span class="promo-price-old">€${q.full.toFixed(2)}</span>
       </div>
       <div class="info-row waived"><span>Fee di servizio Touch&amp;Go</span><b>€0</b></div>
-      <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
-      <div class="promo-note-inline">Nessun margine per Touch&amp;Go su questa spedizione — offerta valida una sola volta.</div>`;
+      <div class="info-row"><span>Servizio di spedizione internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
+      <div class="promo-note-inline">Nessuna fee di servizio su questa spedizione — offerta valida una sola volta.</div>`;
     const promoBtn = el("button", "btn-primary", "Attiva l'offerta e continua →");
     promoBtn.addEventListener("click", () => {
       state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
@@ -1064,8 +1073,8 @@ function ResultScreen() {
         <span class="promo-price-old">€${q.full.toFixed(2)}</span>
       </div>
       <div class="info-row waived"><span>Fee di servizio Touch&amp;Go</span><b>€0</b></div>
-      <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
-      <div class="promo-note-inline">Paghi solo il corriere, a tariffa piena — così puoi provare il servizio prima di scegliere se abbonarti. Vale una sola volta.</div>`;
+      <div class="info-row"><span>Servizio di spedizione internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
+      <div class="promo-note-inline">Paghi solo il servizio di spedizione, a tariffa piena — così puoi provare il servizio prima di scegliere se abbonarti. Vale una sola volta.</div>`;
     const promoBtn = el("button", "btn-primary", "Attiva l'offerta e continua →");
     promoBtn.addEventListener("click", () => {
       state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
@@ -1082,7 +1091,7 @@ function ResultScreen() {
     optFull.innerHTML = `
       <div class="price-option-lbl">Prezzo pieno</div>
       <div class="price-option-total">€${q.full.toFixed(2)}</div>
-      <div class="price-option-note">Fee €${FULL_FEE} + corriere €${q.shipping.toFixed(2)} — nessun impegno</div>`;
+      <div class="price-option-note">Fee €${FULL_FEE} + spedizione €${q.shipping.toFixed(2)} — nessun impegno</div>`;
     const fullBtn = el("button", "btn-secondary", "Continua a prezzo pieno");
     fullBtn.addEventListener("click", () => {
       state.price = { grandTotal: q.full, eta: q.eta, quotes: q };
@@ -1096,7 +1105,7 @@ function ResultScreen() {
     optSub.innerHTML = `
       <div class="price-option-lbl">Con abbonamento</div>
       <div class="price-option-total">€${q.subscribed.toFixed(2)}</div>
-      <div class="price-option-note">Fee scontata €${SUBSCRIBED_FEE} + corriere €${q.shipping.toFixed(2)} — su questa e le prossime spedizioni</div>`;
+      <div class="price-option-note">Fee scontata €${SUBSCRIBED_FEE} + spedizione €${q.shipping.toFixed(2)} — su questa e le prossime spedizioni</div>`;
     const subBtn = el("button", "btn-primary", "Abbonati e risparmia →");
     subBtn.addEventListener("click", () => {
       state.isSubscribed = true;
@@ -1116,7 +1125,7 @@ function ResultScreen() {
       <div class="tg-lbl" style="margin-bottom:10px">Preventivo trasparente ${state.priceConfirmedAsBreakeven ? "· offerta breakeven" : state.isSubscribed ? "· prezzo abbonato" : ""}</div>
       <div class="info-row"><span>Fee di servizio Touch&amp;Go</span><b>€${fee}</b></div>
       ${discount > 0 ? `<div class="info-row"><span>Sconto codice partner (${state.partnerDiscountCode})</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
-      <div class="info-row"><span>Corriere internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
+      <div class="info-row"><span>Servizio di spedizione internazionale</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="info-row total"><span>Totale</span><b id="res-total">€0</b></div>
       <div class="info-line" style="margin-top:8px">Consegna in ${q.eta} · tracciamento incluso · copertura standard inclusa</div>`;
     wrap.appendChild(priceCard);
