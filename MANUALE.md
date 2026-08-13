@@ -125,6 +125,22 @@ Sola lettura: fee di servizio, commissione partner, tariffe di spedizione per zo
 
 Tutta l'esperienza vive in `dist/assets/app.js`, un'unica applicazione a schermate (`state.screen`) senza router — ogni funzione tipo `HomeScreen()`, `ResultScreen()` ecc. costruisce il DOM della schermata corrente e viene richiamata da `render()`.
 
+### Onboarding animato al primo avvio
+
+Prima della schermata Cover, un nuovo turista vede **una sola volta** una sequenza animata a 4 slide che spiega come funziona il servizio (`OnboardingScreen()`), con lo stesso copy della sezione "Come funziona" del sito (`dist/site/index.html`):
+
+1. Fotografa l'oggetto (chip **3s** — secondi per la stima AI)
+2. Confermi ritiro e destinazione
+3. Lasci l'oggetto con un QR
+4. Concludi e consolidiamo (chip **1** — ordine unico di ritiro)
+
+- **Mostrata una sola volta**: al primo avvio, se `localStorage.tg_onboarding_seen` non è presente, `state.screen` parte su `"onboarding"` invece che `"cover"`. Alla fine della sequenza (ultima slide, sia per timeout automatico che per tap a destra) o al tap su **"Salta"**, viene impostato il flag e si passa a `state.screen = "cover"`. A differenza del mockup di riferimento (pensato come demo a loop infinito), qui la sequenza ha quindi una vera fine.
+- **Schermata a sé stante, senza il chrome normale dell'app**: `render()` intercetta `state.screen === "onboarding"` prima di appendere `Header()`, quindi niente barra Turista/Partner, niente banner offline — solo lo "stage" scuro immersivo dedicato.
+- **Navigazione**: tap a sinistra/destra per tornare indietro o avanzare manualmente; barra di progresso a segmenti che si riempie da sola ogni ~4200ms (`ONBOARDING_SLIDE_MS`) per l'avanzamento automatico; dots in basso per la posizione corrente.
+- **Pulsante "Salta"**: a differenza del mockup (dove era discreto in basso), qui è in un angolo fisso in alto, accanto al selettore lingua, visibile fin dal primo istante su ogni slide.
+- **Multilingua**: usa lo stesso meccanismo `I18N`/`t()`/`state.lang` di tutto il resto dell'app (non un dizionario isolato) — cambiare lingua durante l'onboarding richiama `setLang()` (che fa un `render()` completo) ma la sequenza riprende dalla slide corrente invece di ripartire da capo, grazie a un indice di slide mantenuto a livello di modulo (`onboardingSlide`).
+- **Stile**: variabili CSS condivise con il resto dell'app (`--ink`, `--gold`, `--gold-soft`, `--gold-deep`, `--muted`, `--line`, `--display`, `--body`) più una nuova `--gold-hot` per l'accento dorato più acceso usato nel mockup.
+
 ### Flusso di acquisto end-to-end
 
 1. **Cover** — schermata di apertura, mostra il punto di ritiro rilevato (GPS o stima da rete).

@@ -390,6 +390,21 @@ const I18N = {
     docs_signature_fallback_name: "il turista",
     docs_id_on_file: "✓ Copia del documento associata a questo mittente, conservata sul dispositivo. Non riprodotta qui per riservatezza — disponibile al corriere tramite il codice di riferimento del QR.",
     docs_id_missing: "Nessun documento di riconoscimento associato a questo profilo.",
+
+    // ---- OnboardingScreen (prima apertura, stesso copy della sezione "Come funziona" del sito) ----
+    onboarding_live: "Prototipo reale",
+    onboarding_eyebrow: "Come funziona",
+    onboarding_stat0: "secondi per la stima AI",
+    onboarding_stat3: "ordine unico di ritiro",
+    onboarding_t0: "Fotografa l'oggetto",
+    onboarding_p0: "Nel negozio, subito dopo l'acquisto. L'AI stima peso, dimensioni e categoria doganale in 3 secondi.",
+    onboarding_t1: "Confermi ritiro e destinazione",
+    onboarding_p1: "Il punto di ritiro è rilevato automaticamente; la destinazione arriva dal tuo profilo, modificabile in ogni momento.",
+    onboarding_t2: "Lasci l'oggetto con un QR",
+    onboarding_p2: "Il QR resta in sospeso: puoi continuare a fare acquisti in altri negozi durante il soggiorno.",
+    onboarding_t3: "Concludi e consolidiamo",
+    onboarding_p3: "Fine vacanza: un solo ordine di ritiro per tutti gli acquisti verso la stessa destinazione, invece di tante spedizioni separate.",
+    onboarding_skip: "Salta",
   },
   en: {
     // ---- Header / global chrome (always visible) ----
@@ -587,6 +602,21 @@ const I18N = {
     docs_signature_fallback_name: "the tourist",
     docs_id_on_file: "✓ A copy of the document is linked to this sender and stored on the device. Not shown here for privacy — available to the courier via the QR reference code.",
     docs_id_missing: "No ID document linked to this profile.",
+
+    // ---- OnboardingScreen (first launch, same copy as the "How it works" section on the site) ----
+    onboarding_live: "Real prototype",
+    onboarding_eyebrow: "How it works",
+    onboarding_stat0: "seconds for the AI estimate",
+    onboarding_stat3: "single pickup order",
+    onboarding_t0: "Photograph the item",
+    onboarding_p0: "In the shop, right after buying. Our AI estimates weight, size and customs category in 3 seconds.",
+    onboarding_t1: "Confirm pickup and destination",
+    onboarding_p1: "The pickup point is detected automatically; the destination comes from your profile, editable anytime.",
+    onboarding_t2: "Leave it with a QR code",
+    onboarding_p2: "The QR stays pending: keep shopping at other stores for the rest of your stay.",
+    onboarding_t3: "Wrap up and we consolidate",
+    onboarding_p3: "End of trip: one single pickup order for everything going to the same destination, instead of many separate shipments.",
+    onboarding_skip: "Skip",
   },
 };
 
@@ -760,6 +790,10 @@ const app = document.getElementById("app");
 function render() {
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
+  if (state.screen === "onboarding") {
+    app.appendChild(OnboardingScreen());
+    return;
+  }
   app.appendChild(Header());
   if (state.mode === "partner") app.appendChild(PartnerScreen());
   else if (state.screen === "biometric-lock") app.appendChild(BiometricLockScreen());
@@ -1246,6 +1280,198 @@ function AssistantAvatar(screenKey) {
     render();
   });
   return wrap;
+}
+
+// ---------------- OnboardingScreen (prima apertura, prima della Cover) ----------------
+//
+// Sequenza animata a 4 slide mostrata una sola volta al primissimo avvio
+// (flag localStorage "tg_onboarding_seen"). A differenza del mockup di
+// riferimento — pensato come demo a loop infinito — qui la sequenza ha una
+// vera fine: l'ultima slide, sia per timeout automatico che per tap a
+// destra, completa l'onboarding invece di tornare alla prima slide.
+//
+// onboardingSlide/onboardingTimer sono a livello di modulo (non dentro la
+// funzione) apposta: quando l'utente cambia lingua, setLang() richiama il
+// render() globale che ricostruisce l'intera schermata da zero — tenendo
+// l'indice della slide corrente fuori dalla funzione, la sequenza riprende
+// esattamente da dove si trovava invece di ripartire dalla prima slide.
+let onboardingSlide = 0;
+let onboardingTimer = null;
+const ONBOARDING_SLIDE_MS = 4200;
+
+function finishOnboarding() {
+  clearTimeout(onboardingTimer);
+  try {
+    localStorage.setItem("tg_onboarding_seen", "1");
+  } catch (e) {}
+  onboardingSlide = 0;
+  state.screen = "cover";
+  render();
+}
+
+// Le 4 illustrazioni SVG, identiche al mockup di riferimento (stesso
+// viewBox, stessi path, stessi colori — #F0C877 = --gold-hot, #E8D5B0 =
+// --gold-soft già espressi come valori letterali negli attributi SVG).
+const ONBOARDING_ART = [
+  `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
+    <path d="M64 70C64 58 73 49 85 49C97 49 106 58 106 70V96H64V70Z" stroke="#F0C877" stroke-width="1.5"/>
+    <path d="M70 96V102C70 105 73 108 76 108H94C97 108 100 105 100 102V96" stroke="#F0C877" stroke-width="1.5"/>
+    <ellipse cx="85" cy="70" rx="14" ry="18" stroke="#F0C877" stroke-width="1.2" opacity=".7"/>
+    <rect x="24" y="30" width="34" height="52" rx="5" stroke="#E8D5B0" stroke-width="1.7" transform="rotate(-8 24 30)"/>
+    <circle cx="43" cy="65" r="7" stroke="#E8D5B0" stroke-width="1.3" transform="rotate(-8 24 30)"/>
+    <path d="M78 24L86 30L94 24M78 36L86 30L94 36" stroke="#F0C877" stroke-width="1.3" opacity=".9"/>
+  </svg>`,
+  `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
+    <path d="M40 90C55 78 62 62 62 52C62 39 51.5 30 40 30C28.5 30 18 39 18 52C18 62 25 78 40 90Z" stroke="#E8D5B0" stroke-width="1.6"/>
+    <circle cx="40" cy="52" r="7" stroke="#E8D5B0" stroke-width="1.4"/>
+    <path d="M50 78C68 68 84 68 100 74" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 4"/>
+    <circle cx="122" cy="60" r="26" stroke="#F0C877" stroke-width="1.5"/>
+    <path d="M96 60H148M122 34C130 42 134 51 134 60C134 69 130 78 122 86C114 78 110 69 110 60C110 51 114 42 122 34Z" stroke="#F0C877" stroke-width="1"/>
+  </svg>`,
+  `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
+    <rect x="58" y="52" width="52" height="44" rx="2" stroke="#F0C877" stroke-width="1.6"/>
+    <path d="M58 66H110M84 52V96" stroke="#F0C877" stroke-width="1"/>
+    <circle cx="120" cy="46" r="2" fill="#E8D5B0"/>
+    <path d="M120 48V56" stroke="#E8D5B0" stroke-width="1"/>
+    <rect x="112" y="56" width="18" height="18" rx="2" stroke="#E8D5B0" stroke-width="1.5"/>
+    <rect x="116" y="60" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="60" width="4" height="4" fill="#E8D5B0"/>
+    <rect x="116" y="66" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="66" width="4" height="4" fill="#E8D5B0"/>
+  </svg>`,
+  `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
+    <rect x="22" y="30" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
+    <rect x="124" y="24" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
+    <rect x="30" y="66" width="24" height="20" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
+    <path d="M46 50L74 66M140 44L104 62M50 76L74 70" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 3"/>
+    <rect x="66" y="62" width="42" height="34" rx="3" stroke="#F0C877" stroke-width="1.8"/>
+    <path d="M66 74H108M87 62V96" stroke="#F0C877" stroke-width="1"/>
+  </svg>`,
+];
+
+// Stat-chip mostrato solo sulla prima e sull'ultima slide (numeri reali:
+// 3 secondi per la stima AI, 1 solo ordine di ritiro consolidato).
+const ONBOARDING_STATS = {
+  0: { val: "3s", key: "onboarding_stat0" },
+  3: { val: "1", key: "onboarding_stat3" },
+};
+
+function OnboardingScreen() {
+  clearTimeout(onboardingTimer);
+  const total = ONBOARDING_ART.length;
+  let current = Math.min(Math.max(onboardingSlide, 0), total - 1);
+
+  const stage = el("div", "ob-stage");
+
+  const liveTag = el("div", "ob-live-tag");
+  liveTag.innerHTML = `<span class="ob-dot-pulse"></span><span>${t("onboarding_live")}</span>`;
+  stage.appendChild(liveTag);
+
+  const topRight = el("div", "ob-top-right");
+  const langGroup = el("div", "ob-lang-group");
+  langGroup.innerHTML = `
+    <button class="ob-lang-btn ${state.lang === "it" ? "on" : ""}" data-lang="it" aria-label="Italiano">IT</button>
+    <button class="ob-lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>`;
+  langGroup.querySelectorAll("[data-lang]").forEach((b) =>
+    b.addEventListener("click", () => setLang(b.dataset.lang))
+  );
+  topRight.appendChild(langGroup);
+  const skipBtn = el("button", "ob-skip-btn", t("onboarding_skip"));
+  skipBtn.addEventListener("click", finishOnboarding);
+  topRight.appendChild(skipBtn);
+  stage.appendChild(topRight);
+
+  const progressWrap = el("div", "ob-progress");
+  const segments = [];
+  for (let i = 0; i < total; i++) {
+    const seg = el("div", "ob-seg");
+    seg.innerHTML = `<div class="ob-fill"></div>`;
+    progressWrap.appendChild(seg);
+    segments.push(seg);
+  }
+  stage.appendChild(progressWrap);
+
+  const tapLeft = el("div", "ob-tap-zone ob-left");
+  const tapRight = el("div", "ob-tap-zone ob-right");
+  stage.appendChild(tapLeft);
+  stage.appendChild(tapRight);
+
+  const slides = [];
+  for (let i = 0; i < total; i++) {
+    const slide = el("div", "ob-slide");
+    const stepLabel = String(i + 1).padStart(2, "0") + " / 0" + total;
+    const stat = ONBOARDING_STATS[i];
+    slide.innerHTML = `
+      <div class="ob-step-num">${stepLabel}</div>
+      <div class="ob-art-wrap"><div class="ob-art-glow"></div>${ONBOARDING_ART[i]}</div>
+      ${stat ? `<div class="ob-stat-chip"><span class="ob-n">${stat.val}</span><span class="ob-l">${t(stat.key)}</span></div>` : ""}
+      <div class="ob-eyebrow">${t("onboarding_eyebrow")}</div>
+      <h2>${t("onboarding_t" + i)}</h2>
+      <p>${t("onboarding_p" + i)}</p>`;
+    stage.appendChild(slide);
+    slides.push(slide);
+  }
+
+  const dotsWrap = el("div", "ob-dots");
+  for (let i = 0; i < total; i++) {
+    dotsWrap.appendChild(el("div", "ob-d"));
+  }
+  stage.appendChild(dotsWrap);
+  const dots = dotsWrap.querySelectorAll(".ob-d");
+
+  function renderSlideState() {
+    onboardingSlide = current;
+    slides.forEach((s, i) => s.classList.toggle("active", i === current));
+    dots.forEach((d, i) => d.classList.toggle("active", i === current));
+    segments.forEach((seg, i) => {
+      const fill = seg.querySelector(".ob-fill");
+      if (i < current) {
+        fill.style.transition = "none";
+        fill.style.width = "100%";
+      } else if (i === current) {
+        fill.style.transition = "none";
+        fill.style.width = "0%";
+        requestAnimationFrame(() => {
+          fill.style.transition = `width ${ONBOARDING_SLIDE_MS}ms linear`;
+          fill.style.width = "100%";
+        });
+      } else {
+        fill.style.transition = "none";
+        fill.style.width = "0%";
+      }
+    });
+  }
+
+  function scheduleNext() {
+    clearTimeout(onboardingTimer);
+    onboardingTimer = setTimeout(nextSlide, ONBOARDING_SLIDE_MS);
+  }
+
+  function nextSlide() {
+    if (current >= total - 1) {
+      finishOnboarding();
+      return;
+    }
+    current += 1;
+    renderSlideState();
+    scheduleNext();
+  }
+
+  function prevSlide() {
+    if (current <= 0) {
+      scheduleNext();
+      return;
+    }
+    current -= 1;
+    renderSlideState();
+    scheduleNext();
+  }
+
+  tapLeft.addEventListener("click", prevSlide);
+  tapRight.addEventListener("click", nextSlide);
+
+  renderSlideState();
+  scheduleNext();
+
+  return stage;
 }
 
 function CoverScreen() {
@@ -3242,7 +3468,13 @@ function handleDescribe(label) {
 
 loadProfile();
 loadPending();
-if (state.biometricCredentialId && isBiometricSupported()) {
+let onboardingSeen = true;
+try {
+  onboardingSeen = !!localStorage.getItem("tg_onboarding_seen");
+} catch (e) {}
+if (!onboardingSeen) {
+  state.screen = "onboarding";
+} else if (state.biometricCredentialId && isBiometricSupported()) {
   state.screen = "biometric-lock";
 }
 function capturePartnerCode() {
