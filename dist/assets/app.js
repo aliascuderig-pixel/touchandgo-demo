@@ -17,7 +17,7 @@ const STEPS = [
   "Tracking live fino alla consegna a casa",
 ];
 
-const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note":"..."}`;
+const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
 
 // L'imballo non è un margine fisso: più l'oggetto è grande, più materiale
 // serve in termini assoluti (stessa percentuale); se è fragile, il
@@ -51,15 +51,15 @@ const FULL_FEE = 39;
 const SUBSCRIBED_FEE = 19;
 
 const DESTINATIONS = [
-  { name: "Italia", zone: "domestico" },
-  { name: "Unione Europea", zone: "transfrontaliero" },
-  { name: "Regno Unito", zone: "transfrontaliero" },
-  { name: "Svizzera", zone: "transfrontaliero" },
-  { name: "Stati Uniti", zone: "worldwide" },
-  { name: "Emirati Arabi Uniti", zone: "worldwide" },
-  { name: "Cina", zone: "worldwide" },
-  { name: "Giappone", zone: "worldwide" },
-  { name: "Altro / non specificata", zone: "worldwide" },
+  { name: "Italia", name_en: "Italy", zone: "domestico" },
+  { name: "Unione Europea", name_en: "European Union", zone: "transfrontaliero" },
+  { name: "Regno Unito", name_en: "United Kingdom", zone: "transfrontaliero" },
+  { name: "Svizzera", name_en: "Switzerland", zone: "transfrontaliero" },
+  { name: "Stati Uniti", name_en: "United States", zone: "worldwide" },
+  { name: "Emirati Arabi Uniti", name_en: "United Arab Emirates", zone: "worldwide" },
+  { name: "Cina", name_en: "China", zone: "worldwide" },
+  { name: "Giappone", name_en: "Japan", zone: "worldwide" },
+  { name: "Altro / non specificata", name_en: "Other / not specified", zone: "worldwide" },
 ];
 
 // Tariffe a fasce di peso per zona — costo GREZZO del corriere, prima del
@@ -290,6 +290,7 @@ const I18N = {
     result_lbl_pickup_from: "Ritiro da",
     result_lbl_destination: "Destinazione",
     result_lbl_hs_code: "Codice doganale HS",
+    result_obj_fallback: "Oggetto",
     result_secure_note: "🛡️ Valore dichiarato elevato: copertura assicurativa estesa consigliata — richiedibile senza costi aggiuntivi prima del ritiro.",
     result_promo_badge_breakeven: "Una tantum · invito {code}",
     result_promo_headline_breakeven: "La tua prima spedizione,<br><em>al prezzo che costa a noi.</em>",
@@ -486,6 +487,7 @@ const I18N = {
     result_lbl_pickup_from: "Pickup from",
     result_lbl_destination: "Destination",
     result_lbl_hs_code: "HS customs code",
+    result_obj_fallback: "Item",
     result_secure_note: "🛡️ High declared value: extended insurance coverage is recommended — you can request it at no extra cost before pickup.",
     result_promo_badge_breakeven: "One-time · invite {code}",
     result_promo_headline_breakeven: "Your first shipment,<br><em>at the price it costs us.</em>",
@@ -611,6 +613,57 @@ function t(key, params) {
     });
   }
   return str;
+}
+
+// Sceglie object_it/object_en (coppia bilingue restituita dall'AI di
+// classificazione) in base alla lingua corrente, con fallback incrociato
+// se una delle due manca, e infine un testo generico localizzato.
+function localizeObjectName(r) {
+  if (!r) return t("result_obj_fallback");
+  if (state.lang === "en") return r.object_en || r.object_it || t("result_obj_fallback");
+  return r.object_it || r.object_en || t("result_obj_fallback");
+}
+
+// Traduce i 9 valori fissi di categoria restituiti dall'AI di
+// classificazione (dato fisso, stesso pattern di ETA_TRANSLATIONS sopra).
+const CATEGORY_TRANSLATIONS = {
+  Ceramica: "Ceramics",
+  Abbigliamento: "Clothing",
+  Alimentari: "Food",
+  "Vino & Spirits": "Wine & Spirits",
+  "Accessori Moda": "Fashion Accessories",
+  "Arte & Antiquariato": "Art & Antiques",
+  Gioielleria: "Jewelry",
+  Artigianato: "Handicraft",
+  Altro: "Other",
+};
+function localizeCategory(category) {
+  return state.lang === "en" && CATEGORY_TRANSLATIONS[category] ? CATEGORY_TRANSLATIONS[category] : category;
+}
+
+// Sceglie hs_description_it/hs_description_en in base alla lingua corrente,
+// con fallback incrociato se l'AI non ha valorizzato una delle due lingue.
+function localizeHsDescription(r) {
+  if (!r) return "";
+  if (state.lang === "en") return r.hs_description_en || r.hs_description_it || "";
+  return r.hs_description_it || r.hs_description_en || "";
+}
+
+// Sceglie shipping_note_it/shipping_note_en in base alla lingua corrente,
+// stesso pattern di localizeHsDescription.
+function localizeShippingNote(r) {
+  if (!r) return "";
+  if (state.lang === "en") return r.shipping_note_en || r.shipping_note_it || "";
+  return r.shipping_note_it || r.shipping_note_en || "";
+}
+
+// Sceglie il nome visualizzato di una destinazione (DESTINATIONS[].name_en)
+// in base alla lingua corrente; `name` resta invariato per la logica interna
+// (corrispondenza con le zone di spedizione, valore delle <option>, ecc.).
+function destinationDisplayName(name) {
+  if (!name) return name;
+  const dest = DESTINATIONS.find((d) => d.name === name);
+  return state.lang === "en" && dest && dest.name_en ? dest.name_en : name;
 }
 
 // Rilevamento lingua al primo avvio: preferenza salvata, altrimenti lingua
@@ -1478,7 +1531,7 @@ function ResultScreen() {
     <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
     <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${state.pickupPoint}</div></div>
     <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
-      getSelectedAddress() ? formatAddress(getSelectedAddress()) : state.guestDestinationCountry || "—"
+      getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—"
     }</div></div>`;
   card.appendChild(grid);
 
@@ -1489,8 +1542,9 @@ function ResultScreen() {
   card.appendChild(hs);
   wrap.appendChild(card);
 
-  if (r.shipping_note) {
-    const tip = el("div", "tip", `💡 ${r.shipping_note}`);
+  const shippingNote = localizeShippingNote(r);
+  if (shippingNote) {
+    const tip = el("div", "tip", `💡 ${shippingNote}`);
     wrap.appendChild(tip);
   }
 
@@ -1754,10 +1808,10 @@ async function animateResult(r, p) {
   const desc = document.getElementById("res-desc");
   const total = document.getElementById("res-total");
   if (!title) return;
-  await typewriter(title, r.object_it || "Oggetto", 16);
-  await typewriter(sub, `${r.object_en || ""} · ${r.category || ""}`, 8);
+  await typewriter(title, localizeObjectName(r), 16);
+  await typewriter(sub, `${r.object_en || ""} · ${localizeCategory(r.category) || ""}`, 8);
   await typewriter(hscode, r.hs_code || "——", 60);
-  await typewriter(desc, r.hs_description || "", 8);
+  await typewriter(desc, localizeHsDescription(r), 8);
   if (total) await countUp(total, p.grandTotal, 700);
 }
 
@@ -2437,7 +2491,7 @@ function AddressFormFields(prefix) {
       <input class="addr-input addr-cap" id="${prefix}-cap" placeholder="${t("addr_cap_placeholder")}" />
     </div>
     <select class="dest-select addr-country" id="${prefix}-country">
-      ${DESTINATIONS.map((d) => `<option value="${d.name}">${d.name}</option>`).join("")}
+      ${DESTINATIONS.map((d) => `<option value="${d.name}">${destinationDisplayName(d.name)}</option>`).join("")}
     </select>`;
   addVoiceButton(wrap.querySelector(`#${prefix}-street`));
   addVoiceButton(wrap.querySelector(`#${prefix}-city`));
@@ -2460,7 +2514,7 @@ function readAddressForm(prefix) {
 
 function formatAddress(a) {
   if (!a) return "—";
-  const parts = [a.street, [a.cap, a.city].filter(Boolean).join(" "), a.country].filter(Boolean);
+  const parts = [a.street, [a.cap, a.city].filter(Boolean).join(" "), destinationDisplayName(a.country)].filter(Boolean);
   return parts.join(", ");
 }
 
@@ -2483,7 +2537,10 @@ function GuestDestinationField() {
   field.innerHTML = `<div class="dest-lbl">${t("guest_dest_lbl")}</div>
     <select class="dest-select" id="guest-country-input">
       ${DESTINATIONS.map(
-        (d) => `<option value="${d.name}" ${d.name === state.guestDestinationCountry ? "selected" : ""}>${d.name}</option>`
+        (d) =>
+          `<option value="${d.name}" ${d.name === state.guestDestinationCountry ? "selected" : ""}>${destinationDisplayName(
+            d.name
+          )}</option>`
       ).join("")}
     </select>`;
   field.querySelector("#guest-country-input").addEventListener("change", (e) => {
@@ -2573,7 +2630,7 @@ function ChooseAddressScreen() {
 
   wrap.appendChild(el("div", "step-lbl", "A quale indirizzo destiniamo questo acquisto?"));
   wrap.appendChild(
-    el("div", "identify-intro", `${state.result ? state.result.object_it : "Oggetto"} — scegli l'indirizzo per questa spedizione.`)
+    el("div", "identify-intro", `${localizeObjectName(state.result)} — scegli l'indirizzo per questa spedizione.`)
   );
 
   if (state.addresses.length === 0) {
@@ -2581,7 +2638,7 @@ function ChooseAddressScreen() {
       el(
         "div",
         "identify-intro",
-        `Destinazione indicata finora: ${state.guestDestinationCountry || "—"}. L'indirizzo completo verrà chiesto al passo successivo, quando confermi davvero la spedizione.`
+        `Destinazione indicata finora: ${destinationDisplayName(state.guestDestinationCountry) || "—"}. L'indirizzo completo verrà chiesto al passo successivo, quando confermi davvero la spedizione.`
       )
     );
   } else {
@@ -2645,7 +2702,7 @@ function ChooseAddressScreen() {
     setTimeout(() => {
       const item = {
         id: generateBookingCode(),
-        objectName: (state.result && state.result.object_it) || "Oggetto",
+        objectName: localizeObjectName(state.result),
         hsCode: (state.result && state.result.hs_code) || "—",
         weightKg: state.result ? state.result.weight_kg : 1,
         dims: state.result
