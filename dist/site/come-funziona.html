@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Touch&Go — Come funziona (energico, bilingue)</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0F0F0F; --ink-soft:#161616; --cream:#F4EFE6; --paper:#FAF8F4;
+  --gold:#C9A96E; --gold-soft:#E8D5B0; --gold-deep:#8B6914; --gold-hot:#F0C877;
+  --muted:#9A9488; --line:#2A2924; --good:#5FAE6E;
+  --display:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --body:'Montserrat',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-smoothing:antialiased;display:flex;justify-content:center;align-items:center;min-height:100dvh}
+#stage{width:100%;max-width:420px;height:100dvh;max-height:840px;background:radial-gradient(circle at 50% -10%,#1a1710 0%,var(--ink) 55%);position:relative;overflow:hidden}
+@media (min-width:460px){#stage{border-radius:6px;box-shadow:0 30px 90px rgba(0,0,0,.65)}}
+
+#langToggle{position:absolute;top:16px;right:16px;z-index:6;display:flex;gap:4px;background:rgba(0,0,0,.45);border-radius:20px;padding:3px}
+#langToggle button{background:transparent;border:none;color:var(--muted);font-family:var(--body);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:16px;cursor:pointer}
+#langToggle button.on{background:var(--gold-hot);color:var(--ink)}
+
+.live-tag{position:absolute;top:18px;left:16px;z-index:6;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.45);padding:5px 11px 5px 8px;border-radius:20px}
+.live-tag .dot{width:5px;height:5px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 rgba(95,174,110,.7);animation:pulse 1.8s infinite}
+.live-tag span{font-size:9.5px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(95,174,110,.6)}70%{box-shadow:0 0 0 7px rgba(95,174,110,0)}100%{box-shadow:0 0 0 0 rgba(95,174,110,0)}}
+
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 32px 120px;opacity:0;transform:translateX(26px) scale(.97);transition:opacity .55s ease,transform .65s cubic-bezier(.22,.9,.3,1);pointer-events:none;text-align:center}
+.slide.active{opacity:1;transform:translateX(0) scale(1);pointer-events:auto}
+
+.step-num{font-family:var(--display);font-size:14px;color:var(--gold-hot);letter-spacing:.08em;margin-bottom:10px;opacity:.9;font-weight:600}
+
+.art-wrap{width:150px;height:112px;margin-bottom:14px;position:relative;display:flex;align-items:center;justify-content:center}
+.art-glow{position:absolute;inset:-14px;background:radial-gradient(circle,rgba(240,200,119,.22) 0%,transparent 68%);opacity:0;transition:opacity .5s ease .15s}
+.slide.active .art-glow{opacity:1}
+.art{width:150px;height:112px;transform:scale(.86);opacity:0;transition:transform .55s cubic-bezier(.2,1.4,.4,1) .1s, opacity .4s ease .1s}
+.slide.active .art{transform:scale(1);opacity:1}
+
+.stat-chip{
+  display:inline-flex;align-items:baseline;gap:5px;
+  background:rgba(240,200,119,.1);
+  border:1px solid rgba(240,200,119,.35);
+  border-radius:22px;
+  padding:6px 14px 6px 12px;
+  margin-bottom:14px;
+  transform:translateY(6px);opacity:0;
+  transition:transform .5s ease .25s, opacity .5s ease .25s;
+}
+.slide.active .stat-chip{transform:translateY(0);opacity:1}
+.stat-chip .n{font-family:var(--display);font-size:22px;font-weight:700;color:var(--gold-hot);line-height:1}
+.stat-chip .l{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--gold-soft)}
+
+.eyebrow{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-hot);font-weight:700;margin-bottom:8px}
+.slide h2{font-family:var(--display);font-size:26px;font-weight:700;line-height:1.12;color:var(--cream);margin:0 0 10px;min-height:64px;display:flex;align-items:center}
+.slide p{font-size:13px;line-height:1.55;color:var(--muted);margin:0;max-width:290px;min-height:56px}
+
+#progress{position:absolute;top:52px;left:16px;right:16px;display:flex;gap:5px;z-index:5}
+.seg{flex:1;height:3px;background:rgba(244,239,230,.14);border-radius:2px;overflow:hidden}
+.seg .fill{height:100%;width:0%;background:linear-gradient(90deg,var(--gold-deep),var(--gold-hot));border-radius:2px}
+#dots{position:absolute;bottom:64px;left:0;right:0;display:flex;justify-content:center;gap:7px;z-index:5}
+#dots .d{width:5px;height:5px;border-radius:50%;background:var(--line)}
+#dots .d.active{background:var(--gold-hot)}
+#skip{position:absolute;bottom:22px;left:0;right:0;display:flex;justify-content:center;z-index:5}
+#skip button{background:transparent;border:1px solid var(--line);color:var(--muted);font-family:var(--body);font-size:11.5px;font-weight:700;padding:10px 22px;border-radius:24px;cursor:pointer}
+.tap-zone{position:absolute;top:0;bottom:0;width:38%;z-index:4}
+.tap-zone.left{left:0}
+.tap-zone.right{right:0}
+
+#appCta{
+  position:absolute;bottom:70px;left:24px;right:24px;z-index:7;
+  display:none;justify-content:center;
+}
+#appCta.show{display:flex}
+#appCta a{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--gold-hot);color:var(--ink);
+  font-family:var(--body);font-weight:700;font-size:13.5px;
+  padding:13px 20px;border-radius:4px;width:100%;
+  text-decoration:none;letter-spacing:.01em;
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="live-tag"><span class="dot"></span><span data-key="live">Prototipo reale</span></div>
+  <div id="langToggle">
+    <button data-lang="it" class="on" onclick="setLang('it')">IT</button>
+    <button data-lang="en" onclick="setLang('en')">EN</button>
+  </div>
+  <div id="progress"></div>
+  <div class="tap-zone left" onclick="prevSlide()"></div>
+  <div class="tap-zone right" onclick="nextSlide()"></div>
+
+  <div class="slide" data-i="0">
+    <div class="step-num">01 / 04</div>
+    <div class="art-wrap"><div class="art-glow"></div>
+      <svg class="art" viewBox="0 0 172 130" fill="none">
+        <path d="M64 70C64 58 73 49 85 49C97 49 106 58 106 70V96H64V70Z" stroke="#F0C877" stroke-width="1.5"/>
+        <path d="M70 96V102C70 105 73 108 76 108H94C97 108 100 105 100 102V96" stroke="#F0C877" stroke-width="1.5"/>
+        <ellipse cx="85" cy="70" rx="14" ry="18" stroke="#F0C877" stroke-width="1.2" opacity=".7"/>
+        <rect x="24" y="30" width="34" height="52" rx="5" stroke="#E8D5B0" stroke-width="1.7" transform="rotate(-8 24 30)"/>
+        <circle cx="43" cy="65" r="7" stroke="#E8D5B0" stroke-width="1.3" transform="rotate(-8 24 30)"/>
+        <path d="M78 24L86 30L94 24M78 36L86 30L94 36" stroke="#F0C877" stroke-width="1.3" opacity=".9"/>
+      </svg>
+    </div>
+    <div class="stat-chip"><span class="n">3s</span><span class="l" data-key="stat0"></span></div>
+    <div class="eyebrow" data-key="eyebrow">Come funziona</div>
+    <h2 data-key="t0"></h2>
+    <p data-key="p0"></p>
+  </div>
+
+  <div class="slide" data-i="1">
+    <div class="step-num">02 / 04</div>
+    <div class="art-wrap"><div class="art-glow"></div>
+      <svg class="art" viewBox="0 0 172 130" fill="none">
+        <path d="M40 90C55 78 62 62 62 52C62 39 51.5 30 40 30C28.5 30 18 39 18 52C18 62 25 78 40 90Z" stroke="#E8D5B0" stroke-width="1.6"/>
+        <circle cx="40" cy="52" r="7" stroke="#E8D5B0" stroke-width="1.4"/>
+        <path d="M50 78C68 68 84 68 100 74" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 4"/>
+        <circle cx="122" cy="60" r="26" stroke="#F0C877" stroke-width="1.5"/>
+        <path d="M96 60H148M122 34C130 42 134 51 134 60C134 69 130 78 122 86C114 78 110 69 110 60C110 51 114 42 122 34Z" stroke="#F0C877" stroke-width="1"/>
+      </svg>
+    </div>
+    <div class="eyebrow" data-key="eyebrow">Come funziona</div>
+    <h2 data-key="t1"></h2>
+    <p data-key="p1"></p>
+  </div>
+
+  <div class="slide" data-i="2">
+    <div class="step-num">03 / 04</div>
+    <div class="art-wrap"><div class="art-glow"></div>
+      <svg class="art" viewBox="0 0 172 130" fill="none">
+        <rect x="58" y="52" width="52" height="44" rx="2" stroke="#F0C877" stroke-width="1.6"/>
+        <path d="M58 66H110M84 52V96" stroke="#F0C877" stroke-width="1"/>
+        <circle cx="120" cy="46" r="2" fill="#E8D5B0"/>
+        <path d="M120 48V56" stroke="#E8D5B0" stroke-width="1"/>
+        <rect x="112" y="56" width="18" height="18" rx="2" stroke="#E8D5B0" stroke-width="1.5"/>
+        <rect x="116" y="60" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="60" width="4" height="4" fill="#E8D5B0"/>
+        <rect x="116" y="66" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="66" width="4" height="4" fill="#E8D5B0"/>
+      </svg>
+    </div>
+    <div class="eyebrow" data-key="eyebrow">Come funziona</div>
+    <h2 data-key="t2"></h2>
+    <p data-key="p2"></p>
+  </div>
+
+  <div class="slide" data-i="3">
+    <div class="step-num">04 / 04</div>
+    <div class="art-wrap"><div class="art-glow"></div>
+      <svg class="art" viewBox="0 0 172 130" fill="none">
+        <rect x="22" y="30" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
+        <rect x="124" y="24" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
+        <rect x="30" y="66" width="24" height="20" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
+        <path d="M46 50L74 66M140 44L104 62M50 76L74 70" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 3"/>
+        <rect x="66" y="62" width="42" height="34" rx="3" stroke="#F0C877" stroke-width="1.8"/>
+        <path d="M66 74H108M87 62V96" stroke="#F0C877" stroke-width="1"/>
+      </svg>
+    </div>
+    <div class="stat-chip"><span class="n">1</span><span class="l" data-key="stat3"></span></div>
+    <div class="eyebrow" data-key="eyebrow">Come funziona</div>
+    <h2 data-key="t3"></h2>
+    <p data-key="p3"></p>
+  </div>
+
+  <div id="dots"></div>
+  <div id="appCta">
+    <a href="#" id="app-link-cta" data-key="ctaApp">Apri l'app →</a>
+  </div>
+  <div id="skip"><button data-key="skip" onclick="restart()"></button></div>
+</div>
+
+<script>
+const I18N = {
+  it: {
+    live: "Prototipo reale", eyebrow: "Come funziona",
+    stat0: "secondi per la stima AI", stat3: "ordine unico di ritiro",
+    t0: "Fotografa l'oggetto", p0: "Nel negozio, subito dopo l'acquisto. L'AI stima peso, dimensioni e categoria doganale in 3 secondi.",
+    t1: "Confermi ritiro e destinazione", p1: "Il punto di ritiro è rilevato automaticamente; la destinazione arriva dal tuo profilo, modificabile in ogni momento.",
+    t2: "Lasci l'oggetto con un QR", p2: "Il QR resta in sospeso: puoi continuare a fare acquisti in altri negozi durante il soggiorno.",
+    t3: "Concludi e consolidiamo", p3: "Fine vacanza: un solo ordine di ritiro per tutti gli acquisti verso la stessa destinazione, invece di tante spedizioni separate.",
+    skip: "Rivedi da capo", ctaApp: "Apri l'app →"
+  },
+  en: {
+    live: "Real prototype", eyebrow: "How it works",
+    stat0: "seconds for the AI estimate", stat3: "single pickup order",
+    t0: "Photograph the item", p0: "In the shop, right after buying. Our AI estimates weight, size and customs category in 3 seconds.",
+    t1: "Confirm pickup and destination", p1: "The pickup point is detected automatically; the destination comes from your profile, editable anytime.",
+    t2: "Leave it with a QR code", p2: "The QR stays pending: keep shopping at other stores for the rest of your stay.",
+    t3: "Wrap up and we consolidate", p3: "End of trip: one single pickup order for everything going to the same destination, instead of many separate shipments.",
+    skip: "Watch again", ctaApp: "Open the app →"
+  }
+};
+let lang = "it";
+function applyLang() {
+  document.querySelectorAll("[data-key]").forEach(el => { el.textContent = I18N[lang][el.dataset.key]; });
+  document.querySelectorAll("#langToggle button").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
+}
+function setLang(l) { lang = l; applyLang(); }
+
+const SLIDE_MS = 4200;
+const total = document.querySelectorAll(".slide").length;
+let current = 0, timer = null;
+const progressWrap = document.getElementById("progress");
+const dotsWrap = document.getElementById("dots");
+for (let i = 0; i < total; i++) {
+  const seg = document.createElement("div"); seg.className = "seg"; seg.innerHTML = '<div class="fill"></div>'; progressWrap.appendChild(seg);
+  const d = document.createElement("div"); d.className = "d"; dotsWrap.appendChild(d);
+}
+function render() {
+  document.querySelectorAll(".slide").forEach((s, i) => s.classList.toggle("active", i === current));
+  document.querySelectorAll("#dots .d").forEach((d, i) => d.classList.toggle("active", i === current));
+  document.querySelectorAll(".seg").forEach((seg, i) => {
+    const fill = seg.querySelector(".fill");
+    if (i < current) { fill.style.transition = "none"; fill.style.width = "100%"; }
+    else if (i === current) { fill.style.transition = "none"; fill.style.width = "0%"; requestAnimationFrame(() => { fill.style.transition = `width ${SLIDE_MS}ms linear`; fill.style.width = "100%"; }); }
+    else { fill.style.transition = "none"; fill.style.width = "0%"; }
+  });
+}
+const appCta = document.getElementById("appCta");
+function scheduleNext() {
+  clearTimeout(timer);
+  if (current === total - 1) { appCta.classList.add("show"); return; }
+  appCta.classList.remove("show");
+  timer = setTimeout(() => nextSlide(), SLIDE_MS);
+}
+function nextSlide() { current = (current + 1) % total; render(); scheduleNext(); }
+function prevSlide() { current = (current - 1 + total) % total; render(); scheduleNext(); }
+function restart() { current = 0; appCta.classList.remove("show"); render(); scheduleNext(); }
+
+applyLang(); render(); scheduleNext();
+</script>
+<script>
+  // Punta tutti i pulsanti "Apri l'app" allo stesso indirizzo dell'app reale.
+  var APP_URL = "/";
+  document.querySelectorAll("#app-link-top, #app-link-hero, #app-link-cta").forEach(function(a){
+    a.setAttribute("href", APP_URL);
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener");
+  });
+</script>
+</body>
+</html>
