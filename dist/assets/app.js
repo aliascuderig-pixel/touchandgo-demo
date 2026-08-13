@@ -405,6 +405,7 @@ const I18N = {
     onboarding_t3: "Concludi e consolidiamo",
     onboarding_p3: "Fine vacanza: un solo ordine di ritiro per tutti gli acquisti verso la stessa destinazione, invece di tante spedizioni separate.",
     onboarding_skip: "Salta",
+    onboarding_replay: "Rivedi come funziona",
   },
   en: {
     // ---- Header / global chrome (always visible) ----
@@ -617,6 +618,7 @@ const I18N = {
     onboarding_t3: "Wrap up and we consolidate",
     onboarding_p3: "End of trip: one single pickup order for everything going to the same destination, instead of many separate shipments.",
     onboarding_skip: "Skip",
+    onboarding_replay: "See how it works again",
   },
 };
 
@@ -1284,11 +1286,17 @@ function AssistantAvatar(screenKey) {
 
 // ---------------- OnboardingScreen (prima apertura, prima della Cover) ----------------
 //
-// Sequenza animata a 4 slide mostrata una sola volta al primissimo avvio
-// (flag localStorage "tg_onboarding_seen"). A differenza del mockup di
-// riferimento — pensato come demo a loop infinito — qui la sequenza ha una
-// vera fine: l'ultima slide, sia per timeout automatico che per tap a
-// destra, completa l'onboarding invece di tornare alla prima slide.
+// Sequenza animata a 4 slide. Precede sempre l'app finché non esiste un
+// profilo salvato (state.touristEmail non valorizzato — turista mai
+// registrato su questo dispositivo); una volta registrato, l'onboarding
+// non riparte più in automatico ai successivi avvii (vedi il controllo
+// vicino a loadProfile() più in basso). Rilanciabile in ogni momento da
+// "Rivedi come funziona" in DashboardScreen(), per loggati e non.
+//
+// A differenza del mockup di riferimento — pensato come demo a loop
+// infinito — qui la sequenza ha una vera fine: l'ultima slide, sia per
+// timeout automatico che per tap a destra, completa l'onboarding invece
+// di tornare alla prima slide.
 //
 // onboardingSlide/onboardingTimer sono a livello di modulo (non dentro la
 // funzione) apposta: quando l'utente cambia lingua, setLang() richiama il
@@ -1301,11 +1309,18 @@ const ONBOARDING_SLIDE_MS = 4200;
 
 function finishOnboarding() {
   clearTimeout(onboardingTimer);
-  try {
-    localStorage.setItem("tg_onboarding_seen", "1");
-  } catch (e) {}
   onboardingSlide = 0;
   state.screen = "cover";
+  render();
+}
+
+// Richiamabile da qualunque schermata (es. "Rivedi come funziona" nella
+// Dashboard) per rivedere l'onboarding su richiesta, sia da loggati che
+// da non registrati.
+function restartOnboarding() {
+  clearTimeout(onboardingTimer);
+  onboardingSlide = 0;
+  state.screen = "onboarding";
   render();
 }
 
@@ -3136,6 +3151,10 @@ function DashboardScreen() {
   }
   wrap.appendChild(list);
 
+  const replayBtn = el("button", "reset-link", t("onboarding_replay"));
+  replayBtn.addEventListener("click", restartOnboarding);
+  wrap.appendChild(replayBtn);
+
   return wrap;
 }
 
@@ -3468,11 +3487,11 @@ function handleDescribe(label) {
 
 loadProfile();
 loadPending();
-let onboardingSeen = true;
-try {
-  onboardingSeen = !!localStorage.getItem("tg_onboarding_seen");
-} catch (e) {}
-if (!onboardingSeen) {
+// L'onboarding precede sempre l'app finché il turista non ha un profilo
+// salvato (mai registrato su questo dispositivo) — non più una sequenza
+// "vista una sola volta": chi non è ancora registrato la rivede a ogni
+// avvio, chi è già cliente la salta direttamente.
+if (!state.touristEmail) {
   state.screen = "onboarding";
 } else if (state.biometricCredentialId && isBiometricSupported()) {
   state.screen = "biometric-lock";
