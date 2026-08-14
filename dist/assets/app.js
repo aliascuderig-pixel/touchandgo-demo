@@ -789,6 +789,44 @@ const state = {
 };
 const app = document.getElementById("app");
 
+// Filtro SVG "schizzo architettonico" per lo sfondo della Cover quando è
+// disponibile una foto reale del punto di ritiro (state.locationPhoto),
+// al posto della foto fotorealistica — desatura, rileva i bordi, inverte
+// (bordi scuri su sfondo chiaro) e tinge con i colori del brand.
+// Iniettato una sola volta in <body>, non dentro #app: render() svuota
+// #app a ogni chiamata (app.innerHTML = ""), quindi il filtro deve vivere
+// fuori da lì per restare referenziabile da CSS (filter:url(#sketchFilter))
+// per tutta la vita della pagina.
+function injectSketchFilter() {
+  if (document.getElementById("sketchFilter")) return;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("style", "position:absolute;width:0;height:0");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = `
+    <filter id="sketchFilter" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0" result="gray"/>
+      <feConvolveMatrix order="3" kernelMatrix="-1 -1 -1 -1 8 -1 -1 -1 -1" divisor="2.4" bias="0" preserveAlpha="true" result="edges" in="gray"/>
+      <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0" in="edges" result="inverted"/>
+      <feComponentTransfer in="inverted" result="contrast">
+        <feFuncR type="gamma" amplitude="1" exponent="1.8" offset="0"/>
+        <feFuncG type="gamma" amplitude="1" exponent="1.8" offset="0"/>
+        <feFuncB type="gamma" amplitude="1" exponent="1.8" offset="0"/>
+      </feComponentTransfer>
+      <!-- Tinge: interpola linearmente per canale tra il colore delle
+           linee (oro brand, ai bordi rilevati) e il colore di sfondo
+           (bruno scuro caldo, nelle zone piatte) in base alla luminanza
+           del passaggio precedente — non una tinta piatta: qui il colore
+           dipende davvero da dov'è un bordo. -->
+      <feColorMatrix type="matrix" values="
+        -0.2227 -0.2227 -0.2227 0 0.788
+        -0.1877 -0.1877 -0.1877 0 0.663
+        -0.1203 -0.1203 -0.1203 0 0.431
+        0 0 0 1 0" in="contrast" result="tinted"/>
+    </filter>`;
+  document.body.appendChild(svg);
+}
+injectSketchFilter();
+
 function render() {
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
@@ -1493,13 +1531,18 @@ function CoverScreen() {
   const wrap = el("div", "cover-screen");
   if (state.locationPhoto) {
     wrap.classList.add("has-photo");
-    wrap.style.backgroundImage = `linear-gradient(180deg, rgba(15,15,15,.15) 0%, rgba(15,15,15,.35) 55%, rgba(15,15,15,.85) 100%), url('${state.locationPhoto}')`;
+    // Layer di sfondo separato dal testo apposta: il filtro SVG
+    // "schizzo architettonico" (filter:url(#sketchFilter), vedi CSS) si
+    // applica solo a questo div, mai alla didascalia sopra — altrimenti
+    // il testo verrebbe distorto dal rilevamento bordi insieme alla foto.
+    const bgPhoto = el("div", "cover-bg-photo");
+    bgPhoto.style.backgroundImage = `url('${state.locationPhoto}')`;
+    wrap.appendChild(bgPhoto);
   } else {
     wrap.classList.add("no-photo");
   }
-  wrap.innerHTML = `
-    <div class="cover-caption">${t("cover_pickup_detected")}<br><span>${state.pickupPoint}</span></div>
-    <div class="cover-tap">${t("cover_tap")}</div>`;
+  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${state.pickupPoint}</span>`));
+  wrap.appendChild(el("div", "cover-tap", t("cover_tap")));
   wrap.addEventListener("click", () => {
     state.screen = "home";
     render();

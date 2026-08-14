@@ -316,11 +316,17 @@ button{font-family:inherit;cursor:pointer}
 .identify-intro{font-size:12.5px;color:#444;line-height:1.65;margin-bottom:18px}
 .greeting{font-family:var(--display);font-style:italic;font-size:15px;color:var(--clay);margin-bottom:6px}
 
-.cover-screen{position:relative;min-height:calc(100dvh - 60px);background-size:cover;background-position:center;background-color:var(--ink);display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer}
+.cover-screen{position:relative;min-height:calc(100dvh - 60px);background-size:cover;background-position:center;background-color:var(--ink);display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer;overflow:hidden}
 .cover-screen.no-photo{background-image:radial-gradient(circle at 50% 35%, #241d12, var(--ink) 75%)}
-.cover-caption{padding:0 24px;text-align:center;font-family:var(--display);font-style:italic;font-size:17px;color:#F4EFE6;line-height:1.4}
+/* Foto del punto di ritiro resa come "schizzo architettonico" (bordi, non
+   colori pieni) tramite il filtro SVG #sketchFilter iniettato in app.js —
+   su un layer separato dal testo così la didascalia sopra non è mai
+   toccata dal filtro (vedi CoverScreen() in app.js). */
+.cover-bg-photo{position:absolute;inset:0;background-size:cover;background-position:center;filter:url(#sketchFilter)}
+.cover-screen.has-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg, rgba(15,15,15,.15) 0%, rgba(15,15,15,.35) 55%, rgba(15,15,15,.88) 100%)}
+.cover-caption{position:relative;z-index:1;padding:0 24px;text-align:center;font-family:var(--display);font-style:italic;font-size:17px;color:#F4EFE6;line-height:1.4}
 .cover-caption span{font-style:normal;font-weight:600;color:var(--gold)}
-.cover-tap{margin:18px 24px 34px;text-align:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);border-top:1px solid rgba(201,169,110,.35);padding-top:14px}
+.cover-tap{position:relative;z-index:1;margin:18px 24px 34px;text-align:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);border-top:1px solid rgba(201,169,110,.35);padding-top:14px}
 
 /* ---------- Cascading steps ---------- */
 .step-lbl{font-family:var(--body);font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
