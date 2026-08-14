@@ -142,6 +142,18 @@ Prima della schermata Cover, il turista vede una sequenza animata a 4 slide che 
 - **Multilingua**: usa lo stesso meccanismo `I18N`/`t()`/`state.lang` di tutto il resto dell'app (non un dizionario isolato) — cambiare lingua durante l'onboarding richiama `setLang()` (che fa un `render()` completo) ma la sequenza riprende dalla slide corrente invece di ripartire da capo, grazie a un indice di slide mantenuto a livello di modulo (`onboardingSlide`).
 - **Stile**: variabili CSS condivise con il resto dell'app (`--ink`, `--gold`, `--gold-soft`, `--gold-deep`, `--muted`, `--line`, `--display`, `--body`) più una nuova `--gold-hot` per l'accento dorato più acceso usato nel mockup.
 
+### Assistente conversazionale "Chiedi a Touch&Go"
+
+**Fase 1**: il pitch deck (`TOUCHandGO_Allin_One.html`) promette già un "assistente in 4 lingue" come parte del piano "Touch&Go Black" (€199/soggiorno, UHNWI) — ma quel piano non esiste ancora come piano reale nell'app (oggi esistono solo tariffa piena/abbonamento base, `FULL_FEE`/`SUBSCRIBED_FEE`). Questa Fase 1 costruisce l'assistente vero **disponibile a tutti i turisti**, senza vincolarlo a nessun piano o abbonamento — la segmentazione per piano, se mai arriverà, sarà una fase successiva.
+
+- **Sempre raggiungibile**: pulsante "💬 Chiedi a Touch&Go" dentro `Header()`, quindi visibile su ogni schermata del percorso turista (Home, Destination, Result, Identify, Documents, Dashboard, PackageCheck, ecc.) — non in modalità Partner. Stesso meccanismo già usato per rendere sempre visibile il selettore lingua IT/EN.
+- **Overlay, non una schermata**: al tap si apre `AssistantChatModal()` sopra la schermata corrente (bottom sheet su mobile, card centrata da tablet in su) — chiudendola si ritorna esattamente dove ci si trovava, senza perdere l'input in corso su altre schermate.
+- **Due modalità** (`netlify/functions/assistant.js`, stesso pattern di `classify.js`: stessa `ANTHROPIC_API_KEY`, stesso rate limiting):
+  - **"Fai una domanda"** (`mode: "domanda"`) — il system prompt è costruito lato server con i fatti reali del servizio (fee €39/€19, fasce di spedizione a 3 zone con relativi tempi di consegna, esenzione IVA export Art. 8 DPR 633/72, i 4 stati di un acquisto, l'offerta prima spedizione senza fee) **presi dal codice reale** (`FULL_FEE`, `SUBSCRIBED_FEE`, `SHIPPING_RATES` in `dist/assets/app.js`), non inventati — se quei valori cambiano, vanno aggiornati anche in `assistant.js`.
+  - **"Comunica col negozio"** (`mode: "traduci_per_negoziante"`) — traduzione bidirezionale: un messaggio del turista in qualunque lingua diventa una frase chiara in italiano per il negoziante; un messaggio già in italiano viene tradotto verso la lingua del turista (`state.lang` come indicazione, ma il contenuto del messaggio ha sempre l'ultima parola).
+  - Il system prompt **non arriva mai dal client** — è costruito interamente in `assistant.js`, per non essere manipolabile da chi chiama l'endpoint.
+- **Interfaccia**: campo di testo con lo stesso `addVoiceButton()` già usato altrove per la dettatura vocale, selettore di modalità, risposta mostrata in una bolla di chat. Etichette tradotte nello stesso dizionario `I18N`/`t()` di tutta l'app — le risposte dell'AI restano nella lingua rilevata dal messaggio, non tradotte lato client (sono già multilingua per natura).
+
 ### Flusso di acquisto end-to-end
 
 1. **Cover** — schermata di apertura, mostra il punto di ritiro rilevato (GPS o stima da rete).
@@ -306,6 +318,7 @@ Nel CRM, la tab Partner & Commissioni mostra credito disponibile e conteggio cod
 
 | Function | Cosa fa |
 |---|---|
+| `assistant.js` | Assistente conversazionale "Chiedi a Touch&Go" (vedi sezione dedicata sotto in "App turista") — stessa `ANTHROPIC_API_KEY` di `classify.js`, system prompt con i fatti reali del servizio costruito lato server. |
 | `classify.js` | Proxy verso l'API Claude (Anthropic) per la classificazione doganale delle foto/descrizioni — nasconde `ANTHROPIC_API_KEY` dal browser. |
 | `crm.js` | Backend centrale del CRM: elenco/aggiornamento acquisti, anagrafica partner, crediti, codici sconto partner, documenti legali, blocklist, contenuti Documenti/Pitch Deck/Manuale. Nessuna password propria (solo alcuni contenuti restituiti richiedono che il client li mostri dietro `KIT_VAULT_PASSWORD` verificata altrove). |
 | `investor-content.js` | Contenuto riservato per investitori, mostrato su `investitori.html` (sito pubblico, non CRM) dietro `INVESTOR_PASSWORD`. |
@@ -317,7 +330,7 @@ Nel CRM, la tab Partner & Commissioni mostra credito disponibile e conteggio cod
 
 ### Rate limiting
 
-Le funzioni esposte al pubblico (`classify.js`, `kit-vault.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`) applicano tutte lo stesso schema: **massimo 20 richieste ogni 60 minuti per indirizzo IP**, tracciato nello store Blobs `rate-limits`. Oltre il limite, l'endpoint risponde `429`.
+Le funzioni esposte al pubblico (`classify.js`, `kit-vault.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`, `assistant.js`) applicano tutte lo stesso schema: **massimo 20 richieste ogni 60 minuti per indirizzo IP**, tracciato nello store Blobs `rate-limits`. Oltre il limite, l'endpoint risponde `429`.
 
 `crm.js` non ha un rate limit generale (le sue azioni richiedono id di record già noti al chiamante), tranne l'azione `get-purchases-by-email` (vedi "Sincronizzazione dello storico acquisti tra dispositivi" più sopra), che accetta un'email libera e applica lo stesso schema 20/60 minuti per IP.
 

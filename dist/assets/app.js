@@ -202,6 +202,18 @@ const I18N = {
     offline_banner: "📡 Sei offline — la classificazione AI e le foto delle città non sono disponibili finché non torni online. I tuoi acquisti, indirizzi e dashboard restano comunque consultabili.",
     mode_tourist: "Turista",
     mode_partner: "Partner",
+    header_assistant_btn: "💬 Chiedi a Touch&Go",
+
+    // ---- Assistente conversazionale (AssistantChatModal, netlify/functions/assistant.js) ----
+    assistant_chat_title: "Chiedi a Touch&Go",
+    assistant_chat_close_aria: "Chiudi",
+    assistant_chat_mode_question: "Fai una domanda",
+    assistant_chat_mode_translate: "Comunica col negozio",
+    assistant_chat_placeholder_question: "Es. Quanto costa se non mi abbono?",
+    assistant_chat_placeholder_translate: "Scrivi qui cosa vuoi comunicare…",
+    assistant_chat_send: "Invia",
+    assistant_chat_sending: "Un attimo…",
+    assistant_chat_error: "Non sono riuscito a rispondere. Riprova.",
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Punto di ritiro rilevato",
@@ -418,6 +430,18 @@ const I18N = {
     offline_banner: "📡 You're offline — AI classification and city photos aren't available until you're back online. Your purchases, addresses and dashboard are still available.",
     mode_tourist: "Tourist",
     mode_partner: "Partner",
+    header_assistant_btn: "💬 Ask Touch&Go",
+
+    // ---- Conversational assistant (AssistantChatModal, netlify/functions/assistant.js) ----
+    assistant_chat_title: "Ask Touch&Go",
+    assistant_chat_close_aria: "Close",
+    assistant_chat_mode_question: "Ask a question",
+    assistant_chat_mode_translate: "Talk to the shop",
+    assistant_chat_placeholder_question: "E.g. How much does it cost if I don't subscribe?",
+    assistant_chat_placeholder_translate: "Write here what you want to say…",
+    assistant_chat_send: "Send",
+    assistant_chat_sending: "One moment…",
+    assistant_chat_error: "I couldn't get an answer. Please try again.",
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Pickup point detected",
@@ -792,6 +816,16 @@ const state = {
   partnerGeneratedDiscountCode: null,
   partnerDiscountGenerateError: null,
   assistantDismissed: {},
+  // Modale "Chiedi a Touch&Go" (assistente conversazionale, netlify/functions/assistant.js)
+  // — nomi con prefisso assistantChat* per non confondersi con
+  // assistantDismissed/AssistantAvatar sopra, che sono i piccoli
+  // suggerimenti contestuali per-schermata, una feature diversa.
+  assistantChatOpen: false,
+  assistantChatMode: "domanda",
+  assistantChatInput: "",
+  assistantChatReply: null,
+  assistantChatError: null,
+  assistantChatLoading: false,
 };
 const app = document.getElementById("app");
 
@@ -864,6 +898,10 @@ function render() {
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
   }
+  // Overlay sopra la schermata corrente, non una navigazione — l'utente
+  // non perde il contesto (es. può farsi una domanda da ResultScreen e
+  // ritrovarsi esattamente lì chiudendo la chat).
+  if (state.assistantChatOpen) app.appendChild(AssistantChatModal());
 }
 
 function el(tag, cls, html) {
@@ -883,6 +921,7 @@ function Header() {
         <button class="lang-btn ${state.lang === "it" ? "on" : ""}" data-lang="it" aria-label="Italiano">IT</button>
         <button class="lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>
       </div>
+      ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
       <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">${t("header_site_link")}</a>
       <button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
     </div>`;
@@ -891,6 +930,13 @@ function Header() {
   header.querySelectorAll("[data-lang]").forEach((b) =>
     b.addEventListener("click", () => setLang(b.dataset.lang))
   );
+  const assistantBtn = header.querySelector("#header-assistant-btn");
+  if (assistantBtn) {
+    assistantBtn.addEventListener("click", () => {
+      state.assistantChatOpen = true;
+      render();
+    });
+  }
 
   if (state.isOffline) {
     wrap.appendChild(el("div", "offline-banner", t("offline_banner")));
@@ -908,6 +954,109 @@ function Header() {
   );
   wrap.appendChild(toggle);
   return wrap;
+}
+
+// ---------------- Assistente conversazionale "Chiedi a Touch&Go" ----------------
+//
+// Overlay sempre raggiungibile dal pulsante in Header() (solo modalità
+// turista) — non una schermata a sé, così l'utente non perde il contesto
+// di dove si trovava. Due modalità, gestite da netlify/functions/assistant.js:
+// "domanda" (risposta informata sui fatti reali del servizio) e
+// "traduci_per_negoziante" (traduzione turista↔negoziante nelle due
+// direzioni). Fase 1: disponibile a tutti i turisti, non vincolata a
+// nessun piano/abbonamento specifico.
+function AssistantChatModal() {
+  const overlay = el("div", "assistant-chat-overlay");
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeAssistantChat();
+  });
+
+  const modal = el("div", "assistant-chat-modal");
+  modal.addEventListener("click", (e) => e.stopPropagation());
+
+  const header = el("div", "assistant-chat-header");
+  header.innerHTML = `<div class="assistant-chat-title">${t("assistant_chat_title")}</div>`;
+  const closeBtn = el("button", "assistant-chat-close", "✕");
+  closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", t("assistant_chat_close_aria"));
+  closeBtn.addEventListener("click", closeAssistantChat);
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  const modeRow = el("div", "assistant-chat-mode-row");
+  modeRow.innerHTML = `
+    <button type="button" class="assistant-chat-mode-btn ${state.assistantChatMode === "domanda" ? "on" : ""}" data-mode="domanda">${t("assistant_chat_mode_question")}</button>
+    <button type="button" class="assistant-chat-mode-btn ${state.assistantChatMode === "traduci_per_negoziante" ? "on" : ""}" data-mode="traduci_per_negoziante">${t("assistant_chat_mode_translate")}</button>`;
+  modeRow.querySelectorAll("[data-mode]").forEach((b) =>
+    b.addEventListener("click", () => {
+      state.assistantChatMode = b.dataset.mode;
+      render();
+    })
+  );
+  modal.appendChild(modeRow);
+
+  const field = el("div", "assistant-chat-field");
+  field.innerHTML = `<input class="addr-input assistant-chat-input" id="assistant-chat-input" placeholder="${
+    state.assistantChatMode === "domanda" ? t("assistant_chat_placeholder_question") : t("assistant_chat_placeholder_translate")
+  }" />`;
+  const input = field.querySelector("#assistant-chat-input");
+  input.value = state.assistantChatInput;
+  input.addEventListener("input", (e) => {
+    state.assistantChatInput = e.target.value;
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendAssistantChatMessage();
+  });
+  modal.appendChild(field);
+  addVoiceButton(input);
+
+  const sendBtn = el("button", "btn-primary assistant-chat-send", state.assistantChatLoading ? t("assistant_chat_sending") : t("assistant_chat_send"));
+  sendBtn.type = "button";
+  sendBtn.disabled = state.assistantChatLoading;
+  sendBtn.addEventListener("click", sendAssistantChatMessage);
+  modal.appendChild(sendBtn);
+
+  if (state.assistantChatError) {
+    modal.appendChild(el("div", "alert", `⚠️ ${state.assistantChatError}`));
+  }
+
+  if (state.assistantChatReply) {
+    const bubble = el("div", "assistant-chat-reply");
+    bubble.textContent = state.assistantChatReply;
+    modal.appendChild(bubble);
+  }
+
+  overlay.appendChild(modal);
+  return overlay;
+}
+
+function closeAssistantChat() {
+  state.assistantChatOpen = false;
+  render();
+}
+
+async function sendAssistantChatMessage() {
+  const message = state.assistantChatInput.trim();
+  if (!message || state.assistantChatLoading) return;
+  state.assistantChatLoading = true;
+  state.assistantChatError = null;
+  state.assistantChatReply = null;
+  state.assistantChatInput = "";
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: state.assistantChatMode, message, lang: state.lang }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error((data.error && data.error.message) || "Errore AI");
+    state.assistantChatReply = data.reply;
+  } catch (e) {
+    state.assistantChatError = t("assistant_chat_error");
+  }
+  state.assistantChatLoading = false;
+  render();
 }
 
 function PartnerScreen() {
