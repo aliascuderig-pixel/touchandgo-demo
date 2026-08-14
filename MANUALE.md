@@ -13,7 +13,7 @@ Il progetto è composto da tre parti, tutte servite dallo stesso sito:
 | Parte | Percorso | Cos'è |
 |---|---|---|
 | **App turista + partner** | `dist/index.html` + `dist/assets/app.js` | L'app vera e propria (una sola pagina, un solo file JS). Ha due modalità selezionabili in alto: "Turista" e "Partner". |
-| **Sito marketing** | `dist/site/index.html`, `investitori.html`, `privacy.html`, `termini.html` | Sito pubblico: presentazione prodotto, registrazione partner self-service, pagina investitori protetta da password, termini e privacy. |
+| **Sito marketing** | `dist/site/index.html`, `come-funziona.html`, `investitori.html`, `privacy.html`, `termini.html` | Sito pubblico: presentazione prodotto, demo animata "Come funziona", registrazione partner self-service, pagina investitori protetta da password, termini e privacy. |
 | **CRM interno** | `dist/site/admin.html` | Gestionale per lo staff: acquisti, partner, documenti, legale, ecc. Non indicizzato dai motori di ricerca (`noindex`), ma raggiungibile da chiunque conosca l'URL — le sezioni davvero sensibili restano dietro password (vedi sotto). |
 
 **Stack tecnico**, in breve:
@@ -23,7 +23,18 @@ Il progetto è composto da tre parti, tutte servite dallo stesso sito:
 - **Database**: [Netlify Blobs](https://docs.netlify.com/blobs/overview/) — uno storage chiave/valore gestito da Netlify, niente database tradizionale da amministrare. Ogni "store" (`purchases`, `partners`, `legal`, `blocklist`, `promo`, `partner-discount-codes`, `rate-limits`) è una collezione separata di record JSON.
 - **AI**: Claude (Anthropic) per la classificazione doganale delle foto, la stima delle dimensioni dell'imballo e il rilevamento firma sui documenti d'identità. La chiave `ANTHROPIC_API_KEY` resta solo sul server (funzione `classify.js`), mai esposta al browser.
 - **QR code**: generati al volo tramite il servizio esterno `api.qrserver.com` (nessuna libreria QR interna).
-- **PWA minima**: `dist/sw.js` mette in cache la shell dell'app (schermate, non i dati) così l'app resta consultabile offline; le chiamate AI/QR/geolocalizzazione richiedono sempre connessione.
+- **PWA minima**: `dist/sw.js` mette in cache la shell dell'app (schermate, non i dati) così l'app resta consultabile offline; le chiamate AI/QR/geolocalizzazione richiedono sempre connessione. La app shell (`/`, `/index.html`, `/assets/app.js`, `/assets/style.css`) usa strategia **network-first**: prova sempre prima la rete e aggiorna la cache, usando la cache solo come fallback offline — così un turista vede subito l'ultima versione deployata al primo caricamento dopo un deploy, senza dover ricaricare due volte. Tutte le altre risorse restano invece **cache-first con aggiornamento in background** (risposta immediata dalla cache se presente, rete in parallelo per aggiornarla).
+
+---
+
+## Sito marketing (`dist/site/`)
+
+### Pagina "Come funziona" (`dist/site/come-funziona.html`)
+
+Pagina pubblica standalone, separata da `index.html`: una demo animata a slide del percorso d'acquisto (stesso copy/contenuto dell'onboarding in-app, vedi "Onboarding animato" più sotto), pensata per essere guardata anche da chi non ha ancora aperto l'app.
+
+- **Collegata dal sito**: dentro la sezione `#come-funziona` di `dist/site/index.html`, il bottone "Guarda la demo animata →" apre `come-funziona.html` in una nuova scheda (`target="_blank"`).
+- **CTA finale**: l'ultima slide ha un link "Apri l'app →" (`#app-link-cta`). Come il resto del sito, punta alla radice dell'app tramite lo stesso script `APP_URL` copiato in ogni pagina (`var APP_URL = "/"`, applicato a `#app-link-top`, `#app-link-hero`, `#app-link-cta`) — nessun dominio Netlify scritto a mano, così il link resta corretto qualunque sia il dominio effettivo del sito.
 
 ---
 
@@ -166,6 +177,14 @@ Prima della schermata Cover, il turista vede una sequenza animata a 4 slide che 
 8. **Documenti** (`DocumentsScreen`) — lettera di vettura e fattura proforma generate automaticamente per ogni acquisto, consultabili in ogni momento.
 9. **Conclusione soggiorno** (`ConcludeScreen`) — quando il turista ha finito di fare acquisti, consolida tutti gli acquisti "in sospeso" per destinazione in un unico ordine di ritiro (`ShippedScreen`) — qui gli acquisti passano storicamente a "ritirato" in un colpo solo (percorso legacy, oggi affiancato dal flusso più granulare a 4 stati descritto sotto).
 
+### Effetto "schizzo architettonico" sulla foto di copertina
+
+La schermata Cover (`CoverScreen()`, `dist/assets/app.js`), quando è disponibile una foto reale del punto di ritiro (`state.locationPhoto`), non la mostra fotorealistica: la rende come uno schizzo a linee (bordi, non colori pieni — come un software di render d'interni), tinto nei colori del brand.
+
+- **Filtro SVG `#sketchFilter`**: definito ed iniettato una sola volta in `document.body` da `injectSketchFilter()` (in cima ad `app.js`, chiamata subito dopo la definizione) — **non** dentro `#app`, perché `render()` svuota `#app` a ogni chiamata (`app.innerHTML = ""`) e distruggerebbe il filtro ad ogni cambio schermata. La catena di filtri: desatura l'immagine (`feColorMatrix` in scala di grigi) → rileva i bordi (`feConvolveMatrix`, kernel di sharpening/edge-detection) → inverte (bordi scuri su sfondo chiaro diventano bordi chiari su sfondo scuro) → aumenta il contrasto (`feComponentTransfer` con correzione gamma) → tinge (`feColorMatrix` finale, che interpola per canale tra il colore delle linee — oro brand, dove il bordo è marcato — e il colore di sfondo — bruno scuro caldo, nelle zone piatte — in base alla luminanza: non una tinta piatta, il colore dipende davvero da dov'è un bordo).
+- **Su cosa si applica**: solo su `.cover-bg-photo`, un layer `<div>` separato dedicato allo sfondo (con `filter:url(#sketchFilter)` in `dist/assets/style.css`) — mai sulla didascalia della città sopra, che resta su un elemento diverso e quindi sempre leggibile senza distorsioni da rilevamento bordi.
+- Se non c'è una foto disponibile (`state.locationPhoto` assente), la Cover mostra invece un semplice sfondo a gradiente (classe `.no-photo`) — il filtro non entra in gioco.
+
 ### Punto di ritiro: rilevamento automatico vs scelta manuale
 
 Il punto di ritiro (`state.pickupPoint`) viene rilevato all'avvio da GPS o, in mancanza di permesso, da stima di rete (`loadLocation()`) — ma **solo se il turista non ne ha già scelto uno a mano** in una sessione precedente:
@@ -183,7 +202,7 @@ Per i turisti di fretta o con difficoltà a digitare, alcuni campi testuali poss
 - il testo trascritto viene accodato al contenuto già presente nel campo (utile per dettare in più riprese), non lo sostituisce;
 - se il permesso microfono viene negato, mostra un avviso breve e non bloccante sotto il campo — la digitazione manuale resta sempre disponibile.
 
-È applicata a: nome del turista (`name-input`), etichetta indirizzo (`newaddr-label`) e ai campi via/città/CAP generati da `AddressFormFields()` (quindi automaticamente su ogni indirizzo, non solo uno). **Non** è applicata al campo email — dettare un indirizzo email a voce è troppo impreciso.
+È applicata a: nome del turista (`name-input`), etichetta indirizzo (`newaddr-label`), codice partner in `PartnerLoginAndHistory()` (`partner-code-input`) e ai campi via/città/CAP generati da `AddressFormFields()` (quindi automaticamente su ogni indirizzo, non solo uno). **Non** è applicata al campo email — dettare un indirizzo email a voce è troppo impreciso.
 
 ### Multilingua italiano/inglese (in corso — FASE 1 + FASE 2 contenuti dinamici)
 
