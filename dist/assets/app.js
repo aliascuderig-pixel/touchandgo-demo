@@ -2174,6 +2174,41 @@ async function syncPurchaseUpdatesFromCRM() {
   }
 }
 
+// A differenza di syncPurchaseUpdatesFromCRM() sopra — che aggiorna solo
+// lo STATO di acquisti già noti localmente, cercandoli per id — questa
+// funzione scopre acquisti che esistono già nel database ma non sono mai
+// stati salvati su QUESTO dispositivo (cambio telefono, dati del browser
+// puliti, acquisto creato/associato da un altro dispositivo con la
+// stessa email). Chiamata all'avvio, dopo che loadProfile()/loadHistory()
+// hanno già popolato state.touristEmail/state.purchaseHistory.
+async function discoverPurchasesByEmail() {
+  if (!state.touristEmail) return;
+  try {
+    const res = await fetch("/.netlify/functions/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get-purchases-by-email", email: state.touristEmail }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const knownIds = new Set(state.purchaseHistory.map((it) => it.id));
+    let added = false;
+    (data.items || []).forEach((it) => {
+      if (it && it.id && !knownIds.has(it.id)) {
+        state.purchaseHistory.push(it);
+        knownIds.add(it.id);
+        added = true;
+      }
+    });
+    if (added) {
+      saveHistory();
+      render();
+    }
+  } catch (e) {
+    // Offline o server irraggiungibile — si riproverà al prossimo avvio.
+  }
+}
+
 function markPickupPointSeen(item) {
   item.pickupPointChanged = false;
   saveHistory();
@@ -3613,6 +3648,7 @@ loadHistory();
 render();
 loadLocation();
 syncPurchaseUpdatesFromCRM();
+discoverPurchasesByEmail();
 
 window.addEventListener("online", () => {
   state.isOffline = false;

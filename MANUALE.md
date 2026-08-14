@@ -201,6 +201,15 @@ in sospeso → in confezionamento → ritiro richiesto → ritirato
 
 Se lo staff cambia il punto di ritiro mentre l'acquisto è "in confezionamento" (perché il confezionamento avviene altrove), il turista vede un banner ben visibile nel proprio storico ("📍 Punto di ritiro aggiornato: ...") finché non lo conferma con un tap — a quel punto sparisce (flag `pickupPointChanged` azzerato lato server tramite l'azione `ack-pickup-point`).
 
+### Sincronizzazione dello storico acquisti tra dispositivi
+
+Lo storico (`state.purchaseHistory`) vive innanzitutto in `localStorage` (`tg_history`) — per questo, all'avvio, servono **due** sincronizzazioni distinte con `crm.js`, non una sola:
+
+- **`syncPurchaseUpdatesFromCRM()`** — aggiorna lo *stato* degli acquisti **già noti** al dispositivo, cercandoli per id (azione `get-purchases`, richiede esplicitamente la lista di id: non espone mai l'intero elenco acquisti). È così che compare il banner "punto di ritiro aggiornato" quando lo stato cambia da un altro dispositivo o dal CRM.
+- **`discoverPurchasesByEmail()`** — risolve un bug distinto: uno storico sincronizzato solo per id **non scopre mai** un acquisto che esiste già nel database ma non è mai stato salvato su *quel* dispositivo specifico (cambio telefono, dati del browser puliti, o un acquisto creato/associato da un altro dispositivo con la stessa email). Chiamata all'avvio, dopo che `loadProfile()`/`loadHistory()` hanno popolato `state.touristEmail`/`state.purchaseHistory`: interroga `crm.js` con l'azione `get-purchases-by-email` (email normalizzata minuscolo/trim), e per ogni acquisto restituito il cui id **non** è già presente in `state.purchaseHistory` lo aggiunge (non si limita ad aggiornare quelli già noti). Il risultato unito viene salvato in `tg_history` con lo stesso `saveHistory()` di sempre.
+
+Lato server, `get-purchases-by-email` scansiona l'intero store `purchases` (`purchases.list()`) filtrando per `touristEmail` — a differenza delle altre azioni di `crm.js`, che non hanno rate limiting perché operano su id già noti al chiamante, questa accetta un'email libera: **rate limit 20 richieste/60 minuti per IP** (stesso schema di `classify.js`, `kit-vault.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`), altrimenti risponderebbe 429 solo dopo, per evitare che l'endpoint diventi un modo per enumerare gli acquisti di indirizzi email arbitrari.
+
 ### Dashboard "La tua spesa" (`DashboardScreen`)
 
 Riepilogo di tutti gli acquisti del turista: numero totale, quanti in sospeso/ritirati, valore stimato degli oggetti acquistati, quanto speso in servizi Touch&Go, e — se applicabile — una riga di **risparmio legato all'abbonamento**:
@@ -301,6 +310,8 @@ Nel CRM, la tab Partner & Commissioni mostra credito disponibile e conteggio cod
 ### Rate limiting
 
 Le funzioni esposte al pubblico (`classify.js`, `kit-vault.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`) applicano tutte lo stesso schema: **massimo 20 richieste ogni 60 minuti per indirizzo IP**, tracciato nello store Blobs `rate-limits`. Oltre il limite, l'endpoint risponde `429`.
+
+`crm.js` non ha un rate limit generale (le sue azioni richiedono id di record già noti al chiamante), tranne l'azione `get-purchases-by-email` (vedi "Sincronizzazione dello storico acquisti tra dispositivi" più sopra), che accetta un'email libera e applica lo stesso schema 20/60 minuti per IP.
 
 ### Variabili d'ambiente (impostate su Netlify, mai in questo repository)
 
