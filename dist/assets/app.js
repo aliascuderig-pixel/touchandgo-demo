@@ -264,6 +264,9 @@ const I18N = {
     pickup_lbl_ip: "Punto di ritiro (rete)",
     pickup_lbl_default: "Punto di ritiro",
     pickup_note: "Modificabile se il ritiro avviene altrove (es. un servizio di imballaggio esterno), non solo presso il punto vendita.",
+    pickup_use_location: "📍 Usa la mia posizione attuale",
+    pickup_locating: "Rilevo…",
+    pickup_recent_lbl: "Città recenti",
     guest_dest_lbl: "Paese di destinazione",
     guest_dest_note: "Basta il paese per calcolare subito il prezzo — l'indirizzo completo verrà chiesto solo quando confermi davvero la spedizione.",
     dest_field_from_profile: "Dal tuo profilo",
@@ -477,6 +480,9 @@ const I18N = {
     pickup_lbl_ip: "Pickup point (network)",
     pickup_lbl_default: "Pickup point",
     pickup_note: "You can change this if pickup happens elsewhere (e.g. an external packing service), not only at the store.",
+    pickup_use_location: "📍 Use my current location",
+    pickup_locating: "Locating…",
+    pickup_recent_lbl: "Recent cities",
     guest_dest_lbl: "Destination country",
     guest_dest_note: "Just the country is enough to get an instant price — we'll ask for the full address only when you actually confirm the shipment.",
     dest_field_from_profile: "From your profile",
@@ -1278,6 +1284,41 @@ async function loadLocation() {
   if ((state.screen === "cover" || state.screen === "home") && state.mode === "turista") render();
 }
 
+// Punto di ritiro scelto a mano dal turista (PickupField) — ha priorità
+// sulla rilevazione automatica GPS/rete al prossimo avvio (vedi il
+// bootstrap in fondo al file), così chi aggiunge acquisti da una città
+// diversa da dove si trova ora non se la vede sovrascrivere ad ogni
+// riapertura dell'app. null/assente = nessuna scelta manuale salvata,
+// via libera alla rilevazione automatica.
+function saveManualPickup(city) {
+  try {
+    if (city) localStorage.setItem("tg_manual_pickup", city);
+    else localStorage.removeItem("tg_manual_pickup");
+  } catch (e) {}
+}
+
+// Ultime città distinte usate come pickupPoint (manuale o rilevato), più
+// recente per prima, max 5 — mostrate come chip rapidi in PickupField.
+function getRecentPickups() {
+  try {
+    const raw = localStorage.getItem("tg_recent_pickups");
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((c) => typeof c === "string" && c) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function addRecentPickup(city) {
+  const trimmed = (city || "").trim();
+  if (!trimmed) return;
+  try {
+    const recent = getRecentPickups().filter((c) => c.toLowerCase() !== trimmed.toLowerCase());
+    recent.unshift(trimmed);
+    localStorage.setItem("tg_recent_pickups", JSON.stringify(recent.slice(0, 5)));
+  } catch (e) {}
+}
+
 function TrustRow() {
   const row = el("div", "trust-row");
   row.innerHTML = `
@@ -1737,11 +1778,57 @@ function PickupField() {
   field.innerHTML = `
     <div class="dest-lbl">${label}</div>
     <input class="dest-input" id="pickup-input" value="${state.pickupPoint}" />`;
-  field.querySelector("#pickup-input").addEventListener("input", (e) => {
+  const input = field.querySelector("#pickup-input");
+  input.addEventListener("input", (e) => {
     state.pickupPoint = e.target.value;
     state.pickupSource = null;
+    saveManualPickup(state.pickupPoint);
+  });
+  // Al blur (non ad ogni tasto, per non riempire l'elenco di città a
+  // metà digitate) il valore commesso entra tra le città recenti — e si
+  // ri-renderizza per aggiornare i chip, sicuro solo ora che il campo ha
+  // perso il focus.
+  input.addEventListener("blur", () => {
+    addRecentPickup(state.pickupPoint);
+    render();
   });
   wrap.appendChild(field);
+
+  const useLocBtn = el("button", "pickup-use-location", t("pickup_use_location"));
+  useLocBtn.type = "button";
+  useLocBtn.addEventListener("click", async () => {
+    saveManualPickup(null);
+    useLocBtn.disabled = true;
+    useLocBtn.textContent = t("pickup_locating");
+    await loadLocation();
+    addRecentPickup(state.pickupPoint);
+    render();
+  });
+  wrap.appendChild(useLocBtn);
+
+  const recent = getRecentPickups().filter(
+    (c) => c.trim().toLowerCase() !== (state.pickupPoint || "").trim().toLowerCase()
+  );
+  if (recent.length) {
+    const chipsWrap = el("div", "pickup-chips");
+    chipsWrap.appendChild(el("div", "pickup-chips-lbl", t("pickup_recent_lbl")));
+    const chipsRow = el("div", "pickup-chips-row");
+    recent.forEach((city) => {
+      const chip = el("button", "pickup-chip", city);
+      chip.type = "button";
+      chip.addEventListener("click", () => {
+        state.pickupPoint = city;
+        state.pickupSource = null;
+        saveManualPickup(city);
+        addRecentPickup(city);
+        render();
+      });
+      chipsRow.appendChild(chip);
+    });
+    chipsWrap.appendChild(chipsRow);
+    wrap.appendChild(chipsWrap);
+  }
+
   wrap.appendChild(el("div", "pickup-note", t("pickup_note")));
   return wrap;
 }
@@ -3645,8 +3732,23 @@ function redeemPromoCode() {
 capturePromoCode();
 if (state.promoCode) checkPromoCode(state.promoCode);
 loadHistory();
+
+// Un punto di ritiro scelto a mano in una sessione precedente ha priorità
+// sulla rilevazione automatica GPS/rete al prossimo avvio — altrimenti
+// loadLocation() lo sovrascriverebbe sempre, impedendo di continuare ad
+// aggiungere acquisti da una città diversa da dove ci si trova ora. Il
+// turista può tornare al rilevamento automatico in qualsiasi momento dal
+// pulsante "Usa la mia posizione attuale" in PickupField().
+let manualPickupAtStartup = null;
+try {
+  manualPickupAtStartup = localStorage.getItem("tg_manual_pickup");
+} catch (e) {}
+if (manualPickupAtStartup) {
+  state.pickupPoint = manualPickupAtStartup;
+  state.pickupSource = null;
+}
 render();
-loadLocation();
+if (!manualPickupAtStartup) loadLocation();
 syncPurchaseUpdatesFromCRM();
 discoverPurchasesByEmail();
 

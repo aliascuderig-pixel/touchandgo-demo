@@ -154,6 +154,14 @@ Prima della schermata Cover, il turista vede una sequenza animata a 4 slide che 
 8. **Documenti** (`DocumentsScreen`) — lettera di vettura e fattura proforma generate automaticamente per ogni acquisto, consultabili in ogni momento.
 9. **Conclusione soggiorno** (`ConcludeScreen`) — quando il turista ha finito di fare acquisti, consolida tutti gli acquisti "in sospeso" per destinazione in un unico ordine di ritiro (`ShippedScreen`) — qui gli acquisti passano storicamente a "ritirato" in un colpo solo (percorso legacy, oggi affiancato dal flusso più granulare a 4 stati descritto sotto).
 
+### Punto di ritiro: rilevamento automatico vs scelta manuale
+
+Il punto di ritiro (`state.pickupPoint`) viene rilevato all'avvio da GPS o, in mancanza di permesso, da stima di rete (`loadLocation()`) — ma **solo se il turista non ne ha già scelto uno a mano** in una sessione precedente:
+
+- **Persistenza della scelta manuale**: modificando il campo in `PickupField()` (usato in `DestinationScreen`), ogni valore digitato viene salvato subito in `localStorage` (`tg_manual_pickup`). All'avvio successivo, se questo valore esiste, diventa il `pickupPoint` iniziale e `loadLocation()` **non viene richiamata automaticamente** — altrimenti sovrascriverebbe sempre la scelta manuale, impedendo di continuare ad aggiungere acquisti da una città diversa da dove ci si trova in quel momento (es. il turista ha già lasciato la città ma vuole ancora registrare acquisti fatti lì).
+- **Tornare al rilevamento automatico**: pulsante "📍 Usa la mia posizione attuale" accanto al campo — cancella `tg_manual_pickup` e richiama `loadLocation()` su richiesta esplicita. Necessario chiamare `render()` esplicitamente al termine (a differenza della chiamata di avvio, `loadLocation()` da sola non ri-renderizza quando ci si trova sulla schermata Destination — il suo render automatico interno è limitato a Cover/Home).
+- **Città recenti**: le ultime 5 città distinte usate come punto di ritiro (manuali o rilevate, tramite `addRecentPickup()`) restano in `localStorage` (`tg_recent_pickups`) e compaiono come chip cliccabili sotto il campo, per non dover ridigitare una città già usata. Aggiunte all'elenco solo al blur del campo (non ad ogni tasto premuto, per non riempirlo di città a metà digitate) o al click su un chip/su "Usa la mia posizione attuale" una volta risolta.
+
 ### Dettatura vocale nei campi del form
 
 Per i turisti di fretta o con difficoltà a digitare, alcuni campi testuali possono essere compilati parlando invece di scrivere, tramite la Web Speech API nativa del browser (`SpeechRecognition`/`webkitSpeechRecognition` — nessun servizio esterno, nessun costo per chiamata). La funzione riutilizzabile `addVoiceButton(inputElement)` in `dist/assets/app.js`:

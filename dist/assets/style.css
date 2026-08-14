@@ -311,6 +311,16 @@ button{font-family:inherit;cursor:pointer}
 .pickup-update-banner:active{background:var(--gold-soft)}
 .pickup-update-note{font-size:9.5px;font-weight:400;text-transform:none;letter-spacing:0;margin-top:3px;opacity:.85}
 
+/* ---------- Punto di ritiro: rilevamento manuale/automatico, città recenti ---------- */
+.pickup-use-location{display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid var(--line);color:var(--clay);font-family:var(--body);font-size:11px;font-weight:600;padding:8px 12px;margin:8px 0 0;border-radius:var(--radius-sm);cursor:pointer}
+.pickup-use-location:active{background:var(--warn-bg)}
+.pickup-use-location:disabled{opacity:.6;cursor:default}
+.pickup-chips{margin-top:12px}
+.pickup-chips-lbl{font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.pickup-chips-row{display:flex;flex-wrap:wrap;gap:6px}
+.pickup-chip{background:#fff;border:1px solid var(--line);color:var(--ink);font-family:var(--body);font-size:11.5px;padding:6px 12px;border-radius:14px;cursor:pointer}
+.pickup-chip:active{background:var(--warn-bg);border-color:var(--gold)}
+
 /* ---------- Reset ---------- */
 .reset-link{display:inline-block;margin:0;background:none;border:none;font-size:10px;color:var(--muted);text-decoration:underline;padding:6px}
 .identify-intro{font-size:12.5px;color:#444;line-height:1.65;margin-bottom:18px}
