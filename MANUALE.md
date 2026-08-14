@@ -35,6 +35,7 @@ Pagina pubblica standalone, separata da `index.html`: una demo animata a slide d
 
 - **Collegata dal sito**: dentro la sezione `#come-funziona` di `dist/site/index.html`, il bottone "Guarda la demo animata →" apre `come-funziona.html` in una nuova scheda (`target="_blank"`).
 - **CTA finale**: l'ultima slide ha un link "Apri l'app →" (`#app-link-cta`). Come il resto del sito, punta alla radice dell'app tramite lo stesso script `APP_URL` copiato in ogni pagina (`var APP_URL = "/"`, applicato a `#app-link-top`, `#app-link-hero`, `#app-link-cta`) — nessun dominio Netlify scritto a mano, così il link resta corretto qualunque sia il dominio effettivo del sito.
+- **Wordmark del brand**: stessa identica soluzione visiva dell'onboarding in-app (vedi "Onboarding animato" più sotto) — "Touch&Go" (`#wordmark`) centrato in alto, persistente su tutte e 4 le slide, non tradotto.
 
 ---
 
@@ -150,6 +151,7 @@ Prima della schermata Cover, il turista vede una sequenza animata a 4 slide che 
 - **Schermata a sé stante, senza il chrome normale dell'app**: `render()` intercetta `state.screen === "onboarding"` prima di appendere `Header()`, quindi niente barra Turista/Partner, niente banner offline — solo lo "stage" scuro immersivo dedicato.
 - **Navigazione**: tap a sinistra/destra per tornare indietro o avanzare manualmente; barra di progresso a segmenti che si riempie da sola ogni ~4200ms (`ONBOARDING_SLIDE_MS`) per l'avanzamento automatico; dots in basso per la posizione corrente.
 - **Pulsante "Salta"**: a differenza del mockup (dove era discreto in basso), qui è in un angolo fisso in alto, accanto al selettore lingua, visibile fin dal primo istante su ogni slide.
+- **Wordmark del brand**: "Touch&Go" (`.ob-wordmark`) è sempre visibile, centrato in alto, su una riga propria tra la fila live-tag/selettore lingua e la barra di progresso — persistente su tutte e 4 le slide (fuori dal ciclo di `slides`, stesso principio della barra di progresso). Prima di questa modifica il nome del brand non compariva mai a schermo nella sequenza, solo nel `<title>` della pagina. Non tradotto: resta "Touch&Go" identico in italiano e in inglese.
 - **Multilingua**: usa lo stesso meccanismo `I18N`/`t()`/`state.lang` di tutto il resto dell'app (non un dizionario isolato) — cambiare lingua durante l'onboarding richiama `setLang()` (che fa un `render()` completo) ma la sequenza riprende dalla slide corrente invece di ripartire da capo, grazie a un indice di slide mantenuto a livello di modulo (`onboardingSlide`).
 - **Stile**: variabili CSS condivise con il resto dell'app (`--ink`, `--gold`, `--gold-soft`, `--gold-deep`, `--muted`, `--line`, `--display`, `--body`) più una nuova `--gold-hot` per l'accento dorato più acceso usato nel mockup.
 

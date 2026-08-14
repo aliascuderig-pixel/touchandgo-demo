@@ -1622,6 +1622,15 @@ function OnboardingScreen() {
   topRight.appendChild(skipBtn);
   stage.appendChild(topRight);
 
+  // Wordmark del brand, persistente su tutte le slide (fuori dal ciclo delle
+  // singole slide, stesso principio della barra di progresso e del toggle
+  // lingua): oggi "Touch&Go" non compariva mai a schermo in questa sequenza,
+  // solo nel <title> della pagina. Riga propria sotto live-tag/lingua e sopra
+  // la barra di progresso per non contendersi lo spazio orizzontale con loro
+  // su viewport stretti.
+  const wordmark = el("div", "ob-wordmark", "Touch&Go");
+  stage.appendChild(wordmark);
+
   const progressWrap = el("div", "ob-progress");
   const segments = [];
   for (let i = 0; i < total; i++) {
