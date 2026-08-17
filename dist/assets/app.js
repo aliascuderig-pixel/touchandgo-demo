@@ -1215,7 +1215,7 @@ function PartnerCreditSection(stats) {
       state.partnerCreditRedeemResult = null;
       render();
       try {
-        const res = await fetch("/.netlify/functions/crm", {
+        const res = await fetch("/.netlify/functions/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "redeem-credit-for-invoice", code: state.partnerLoggedCode }),
@@ -1256,7 +1256,7 @@ function PartnerCreditSection(stats) {
     state.partnerDiscountGenerateError = null;
     render();
     try {
-      const res = await fetch("/.netlify/functions/crm", {
+      const res = await fetch("/.netlify/functions/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "generate-partner-discount-code", code: state.partnerLoggedCode }),
@@ -2388,7 +2388,7 @@ async function syncPurchaseUpdatesFromCRM() {
   const ids = state.purchaseHistory.map((it) => it.id).filter(Boolean);
   if (!ids.length) return;
   try {
-    const res = await fetch("/.netlify/functions/crm", {
+    const res = await fetch("/.netlify/functions/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "get-purchases", ids }),
@@ -2429,7 +2429,7 @@ async function syncPurchaseUpdatesFromCRM() {
 async function discoverPurchasesByEmail() {
   if (!state.touristEmail) return;
   try {
-    const res = await fetch("/.netlify/functions/crm", {
+    const res = await fetch("/.netlify/functions/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "get-purchases-by-email", email: state.touristEmail }),
@@ -2458,7 +2458,7 @@ function markPickupPointSeen(item) {
   item.pickupPointChanged = false;
   saveHistory();
   savePending();
-  fetch("/.netlify/functions/crm", {
+  fetch("/.netlify/functions/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "ack-pickup-point", id: item.id }),

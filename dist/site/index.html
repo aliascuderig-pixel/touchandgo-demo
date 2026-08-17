@@ -445,7 +445,6 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <div class="footer-col">
         <h5>Azienda</h5>
         <a href="#chi-siamo">Chi siamo</a>
-        <a href="investitori.html">Investitori</a>
         <a href="admin.html">Area riservata</a>
         <a href="#">Contatti</a>
       </div>
@@ -472,8 +471,8 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
   });
 
   // Registrazione self-service partner — chiama l'action "register-partner"
-  // in netlify/functions/crm.js, che crea il codice, salva il piano e
-  // genera subito la prima fattura del canone (via generate-partner-invoice).
+  // in netlify/functions/sync.js, che crea il codice, salva il piano e
+  // genera subito la prima fattura del canone.
   var partnerForm = document.getElementById("partner-signup-form");
   if (partnerForm) {
     partnerForm.addEventListener("submit", async function (e) {
@@ -489,7 +488,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       submitBtn.disabled = true;
       submitBtn.textContent = "Registrazione in corso…";
       try {
-        var res = await fetch("/.netlify/functions/crm", {
+        var res = await fetch("/.netlify/functions/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "register-partner", name: name, email: email, plan: plan }),
