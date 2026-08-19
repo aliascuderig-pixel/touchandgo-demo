@@ -79,7 +79,7 @@ const SHIPPING_RATES = {
 // una sola volta, dentro shippingCost() — ogni preventivo, riepilogo e
 // salvataggio a save-purchase.js legge sempre e solo il valore già
 // comprensivo di margine, mai il grezzo.
-const SHIPPING_MARGIN = 0.2;
+const SHIPPING_MARGIN = 0.25;
 
 // I corrieri espresso reali fatturano sul maggiore tra peso reale e peso
 // volumetrico (L×W×H in cm / 5000) — un pacco grande ma leggero occupa

@@ -45,14 +45,14 @@ const FULL_FEE = 39;
 const SUBSCRIBED_FEE = 19;
 
 // Specchio di SHIPPING_RATES in dist/assets/app.js — prezzi già
-// comprensivi del margine Touch&Go del 20% (SHIPPING_MARGIN), come
+// comprensivi del margine Touch&Go del 25% (SHIPPING_MARGIN), come
 // mostrato al turista in ogni preventivo. Qui espressi come range
 // arrotondati per una risposta discorsiva, non come tabella a fasce.
 const QUESTION_MODE_FACTS = `Sei l'assistente virtuale di Touch&Go, un servizio che permette a un turista in Italia di fotografare un acquisto in negozio, farlo classificare da un'AI (dogana, peso, dimensioni), lasciarlo in negozio con un QR e riceverlo spedito a casa — con esenzione IVA export gestita in automatico.
 
 FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
 - Fee di servizio Touch&Go: €${FULL_FEE} a tariffa piena, €${SUBSCRIBED_FEE} con abbonamento, per ogni spedizione — separata dal costo del corriere.
-- Costo del corriere (già comprensivo del margine Touch&Go del 20%, nessun costo nascosto aggiuntivo), a fasce di peso/volume, tre zone:
+- Costo del corriere (già comprensivo del margine Touch&Go del 25%, nessun costo nascosto aggiuntivo), a fasce di peso/volume, tre zone:
   · Italia (spedizione domestica): da €9 (fino a 1kg) a €33 (fino a 30kg), +€1,10/kg oltre; consegna in 24–48 ore.
   · Unione Europea, Regno Unito, Svizzera (transfrontaliero): da €15 a €55, +€2,20/kg oltre; consegna in 2–4 giorni lavorativi.
   · Resto del mondo (worldwide): da €50 a €165, +€5,50/kg oltre; consegna in 4–8 giorni lavorativi.
