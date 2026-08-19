@@ -26,6 +26,7 @@ const PARTNER_PLANS = {
   enoteche: { label: "Enoteche & Cantine", monthlyFee: 59 },
   sport: { label: "Sport & Attrezzatura", monthlyFee: 69 },
   hotel: { label: "Hotel", monthlyFee: 99 },
+  agenzie: { label: "Agenzie di Viaggio", monthlyFee: 149 },
   touroperator: { label: "Tour Operator", monthlyFee: 199 },
   free: { label: "Gratuito (solo commissione)", monthlyFee: 0 },
 };

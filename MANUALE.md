@@ -232,6 +232,7 @@ Dal sito marketing (`dist/site/index.html`, sezione `#partner`): nome, email, sc
 | Enoteche & Cantine | €59 |
 | Sport & Attrezzatura | €69 |
 | Hotel | €99 |
+| Agenzie di Viaggio | €149 |
 | Tour Operator | €199 |
 | Gratuito (solo commissione) | €0 |
 
