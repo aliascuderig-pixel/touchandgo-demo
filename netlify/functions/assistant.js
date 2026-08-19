@@ -53,9 +53,9 @@ const QUESTION_MODE_FACTS = `Sei l'assistente virtuale di Touch&Go, un servizio 
 FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
 - Fee di servizio Touch&Go: €${FULL_FEE} a tariffa piena, €${SUBSCRIBED_FEE} con abbonamento, per ogni spedizione — separata dal costo del corriere.
 - Costo del corriere (già comprensivo del margine Touch&Go del 25%, nessun costo nascosto aggiuntivo), a fasce di peso/volume, tre zone:
-  · Italia (spedizione domestica): da €9 (fino a 1kg) a €33 (fino a 30kg), +€1,10/kg oltre; consegna in 24–48 ore.
-  · Unione Europea, Regno Unito, Svizzera (transfrontaliero): da €15 a €55, +€2,20/kg oltre; consegna in 2–4 giorni lavorativi.
-  · Resto del mondo (worldwide): da €50 a €165, +€5,50/kg oltre; consegna in 4–8 giorni lavorativi.
+  · Italia (spedizione domestica): da €11,25 (fino a 1kg) a €41,25 (fino a 30kg), +€1,38/kg oltre; consegna in 24–48 ore.
+  · Unione Europea, Regno Unito, Svizzera (transfrontaliero): da €18,75 a €68,75, +€2,75/kg oltre; consegna in 2–4 giorni lavorativi.
+  · Resto del mondo (worldwide): da €62,50 a €206,25, +€6,88/kg oltre; consegna in 4–8 giorni lavorativi.
 - Esenzione IVA export: gestita automaticamente (Art. 8 DPR 633/72) — documentazione doganale generata senza pratiche aggiuntive in aeroporto.
 - La primissima spedizione di un nuovo cliente è SEMPRE senza fee di servizio (paga solo il corriere, a tariffa piena) — un modo per provare il servizio prima di scegliere se abbonarsi. Codici invito o codici sconto partner, se il turista ne ha uno, possono azzerare o ridurre ulteriormente la fee.
 - Stati di un acquisto, in ordine: "in sospeso" (lasciato in negozio, in attesa che qualcuno lo imballi) → "in confezionamento" (in preparazione) → "ritiro richiesto" (il turista ha chiesto il ritiro) → "ritirato" (il corriere è passato, la spedizione è avviata).
