@@ -74,6 +74,55 @@ exports.handler = async (event) => {
     const totalSalesValue = Math.round(rawSalesValue * 100) / 100;
     const totalCommission = Math.round(rawSalesValue * COMMISSION_RATE * 100) / 100;
 
+    // Andamento nel tempo (TOU-17): a differenza di totalCommission sopra
+    // (stima al 10% su TUTTE le vendite, indipendentemente dallo stato),
+    // qui uso creditIssuedAmount — la commissione REALMENTE accreditata da
+    // save-purchase.js al passaggio a "ritirato", coerente con quanto
+    // effettivamente disponibile come credito. Un ordine "in sospeso" da
+    // ieri conta quindi in salesCount/totalSalesValue ma non ancora nel
+    // suo mese per la commissione, finché non viene ritirato.
+    const monthKey = (dateStr) => {
+      const d = new Date(dateStr);
+      return isNaN(d) ? null : `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    };
+    const monthLabel = (key) => {
+      const [y, m] = key.split("-").map(Number);
+      return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("it-IT", { month: "long", year: "numeric", timeZone: "UTC" });
+    };
+    const byMonth = {};
+    myItems.forEach((it) => {
+      const key = monthKey(it.date);
+      if (!key) return;
+      if (!byMonth[key]) byMonth[key] = { orders: 0, serviceValue: 0, commission: 0 };
+      byMonth[key].orders += 1;
+      byMonth[key].serviceValue += it.price || 0;
+      byMonth[key].commission += it.creditIssuedAmount || 0;
+    });
+    const monthlyBreakdown = Object.keys(byMonth)
+      .sort()
+      .reverse()
+      .slice(0, 12)
+      .map((key) => ({
+        month: key,
+        label: monthLabel(key),
+        orders: byMonth[key].orders,
+        serviceValue: Math.round(byMonth[key].serviceValue * 100) / 100,
+        commission: Math.round(byMonth[key].commission * 100) / 100,
+      }));
+
+    const recentOrders = myItems
+      .slice()
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 20)
+      .map((it) => ({
+        id: it.id,
+        date: it.date,
+        objectName: it.objectName || null,
+        price: Math.round((it.price || 0) * 100) / 100,
+        commission: Math.round((it.creditIssuedAmount || 0) * 100) / 100,
+        status: it.status || null,
+      }));
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
@@ -84,6 +133,8 @@ exports.handler = async (event) => {
         totalSalesValue,
         totalCommission,
         creditBalance: Math.round((record.creditBalance || 0) * 100) / 100,
+        monthlyBreakdown,
+        recentOrders,
       }),
     };
   } catch (err) {

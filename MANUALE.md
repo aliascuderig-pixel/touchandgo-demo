@@ -247,6 +247,8 @@ Il partner accede inserendo solo il proprio codice (nessuna password separata �
 - Commissione maturata (10% del valore generato).
 - **Credito disponibile** (vedi sotto).
 
+**Andamento nel tempo** (TOU-17): sotto i totali cumulativi, il confronto tra il mese corrente e quello precedente (ordini e commissione, con la differenza evidenziata), l'andamento degli ultimi 12 mesi, e gli ultimi 20 ordini con la commissione generata da ciascuno. A differenza del totale cumulativo sopra (stima al 10% su tutte le vendite indipendentemente dallo stato), qui la commissione è sempre `creditIssuedAmount` — quella realmente accreditata da `save-purchase.js` al passaggio a "ritirato": un ordine "in sospeso" del mese corrente compare con commissione €0 finché non viene ritirato.
+
 ### QR promozionale
 
 Un bottone genera un QR che incorpora l'URL dell'app con `?partner=CODICE` già impostato — chi lo scansiona apre l'app con il codice partner già collegato in automatico a qualunque acquisto farà.

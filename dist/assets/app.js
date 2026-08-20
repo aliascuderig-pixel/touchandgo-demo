@@ -1128,6 +1128,8 @@ function PartnerLoginAndHistory() {
             totalSalesValue: data.totalSalesValue || 0,
             totalCommission: data.totalCommission || 0,
             creditBalance: data.creditBalance || 0,
+            monthlyBreakdown: data.monthlyBreakdown || [],
+            recentOrders: data.recentOrders || [],
           };
         } else {
           state.partnerLoginError = "Codice partner non riconosciuto.";
@@ -1142,7 +1144,7 @@ function PartnerLoginAndHistory() {
     return wrap;
   }
 
-  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalSalesValue: 0, totalCommission: 0, creditBalance: 0 };
+  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalSalesValue: 0, totalCommission: 0, creditBalance: 0, monthlyBreakdown: [], recentOrders: [] };
   const summary = el("div", "info-card");
   summary.innerHTML = `
     <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
@@ -1152,6 +1154,8 @@ function PartnerLoginAndHistory() {
     <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
     <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
+
+  wrap.appendChild(PartnerTrendSection(stats));
 
   wrap.appendChild(PartnerCreditSection(stats));
 
@@ -1193,12 +1197,69 @@ async function refreshPartnerStats() {
         totalSalesValue: data.totalSalesValue || 0,
         totalCommission: data.totalCommission || 0,
         creditBalance: data.creditBalance || 0,
+        monthlyBreakdown: data.monthlyBreakdown || [],
+        recentOrders: data.recentOrders || [],
       };
     }
   } catch (e) {
     // Aggiornamento saldo non riuscito — resta il valore già mostrato,
     // il riscatto stesso ha comunque avuto successo lato server.
   }
+}
+
+// Andamento nel tempo (TOU-17) — a differenza dei totali cumulativi sopra
+// (sempre esistiti), qui il partner vede mese per mese: confronto con il
+// mese precedente, l'andamento degli ultimi mesi e gli ultimi ordini che
+// hanno generato commissione. commission qui è sempre creditIssuedAmount
+// (commissione realmente accreditata, non una stima) — un ordine "in
+// sospeso" del mese corrente compare quindi con commissione €0 finché non
+// viene ritirato.
+function PartnerTrendSection(stats) {
+  const wrap = el("div");
+  const months = stats.monthlyBreakdown || [];
+
+  if (months.length) {
+    const current = months[0];
+    const previous = months[1] || null;
+    const compare = el("div", "info-card");
+    const commissionDelta = previous ? current.commission - previous.commission : null;
+    const deltaStr =
+      previous == null
+        ? ""
+        : commissionDelta >= 0
+        ? `<span style="color:var(--good)">▲ +€${commissionDelta.toFixed(2)} vs mese precedente</span>`
+        : `<span style="color:#B3261E">▼ €${commissionDelta.toFixed(2)} vs mese precedente</span>`;
+    compare.innerHTML = `
+      <div class="info-row"><span>Questo mese (${current.label})</span><b>${current.orders} ordini · €${current.commission.toFixed(2)} commissioni</b></div>
+      ${previous ? `<div class="info-row"><span>Mese precedente (${previous.label})</span><b>${previous.orders} ordini · €${previous.commission.toFixed(2)} commissioni</b></div>` : ""}
+      ${deltaStr ? `<div class="info-row">${deltaStr}</div>` : ""}`;
+    wrap.appendChild(compare);
+
+    const trendTitle = el("div", "tg-lbl", "Andamento mensile");
+    wrap.appendChild(trendTitle);
+    const trendList = el("div", "info-card");
+    trendList.innerHTML = months
+      .map((m) => `<div class="info-row"><span>${m.label}</span><b>${m.orders} ordini · €${m.serviceValue.toFixed(2)} · €${m.commission.toFixed(2)} comm.</b></div>`)
+      .join("");
+    wrap.appendChild(trendList);
+  }
+
+  const orders = stats.recentOrders || [];
+  if (orders.length) {
+    const ordersTitle = el("div", "tg-lbl", "Ultimi ordini");
+    wrap.appendChild(ordersTitle);
+    const ordersList = el("div", "info-card");
+    ordersList.innerHTML = orders
+      .map((o) => {
+        const d = new Date(o.date);
+        const dateStr = isNaN(d) ? "—" : d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
+        return `<div class="info-row"><span>${dateStr} · ${o.objectName || "—"}</span><b>€${o.commission.toFixed(2)}</b></div>`;
+      })
+      .join("");
+    wrap.appendChild(ordersList);
+  }
+
+  return wrap;
 }
 
 // Riscatto del credito partner: pagare il canone (fino a coprirlo) o
