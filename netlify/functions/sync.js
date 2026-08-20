@@ -28,7 +28,7 @@ const PARTNER_PLANS = {
   hotel: { label: "Hotel", monthlyFee: 99 },
   agenzie: { label: "Agenzie di Viaggio", monthlyFee: 149 },
   touroperator: { label: "Tour Operator", monthlyFee: 199 },
-  free: { label: "Gratuito (solo commissione)", monthlyFee: 0 },
+  free: { label: "Gratuito (nessuna commissione)", monthlyFee: 0 },
 };
 
 function generatePartnerCode(name) {
