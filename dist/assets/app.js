@@ -1008,7 +1008,12 @@ function AssistantChatModal() {
     if (e.key === "Enter") sendAssistantChatMessage();
   });
   modal.appendChild(field);
-  addVoiceButton(input);
+  // A differenza degli altri campi con dettatura vocale (nome, indirizzo),
+  // qui la voce È l'interazione: dopo la trascrizione invia subito il
+  // messaggio, come in un vero assistente vocale — altrimenti il turista
+  // parla, non vede alcuna risposta e non capisce che dovrebbe comunque
+  // premere "Invia" a mano.
+  addVoiceButton(input, () => sendAssistantChatMessage());
 
   const sendBtn = el("button", "btn-primary assistant-chat-send", state.assistantChatLoading ? t("assistant_chat_sending") : t("assistant_chat_send"));
   sendBtn.type = "button";
@@ -2843,10 +2848,14 @@ function ShippedScreen() {
 
 // Aggiunge un pulsante microfono accanto a un campo di testo per dettare a
 // voce invece di scrivere (turisti di fretta o con difficoltà con la
-// tastiera). Usa la Web Speech API nativa del browser — nessun servizio
-// esterno. Se il browser non la supporta, non aggiunge nulla: il campo
-// resta scrivibile normalmente, senza errori.
-function addVoiceButton(input) {
+// tastiera). Usa la Web Speech API nativa del browser (su Chrome/Chromium
+// la trascrizione passa comunque dai server di Google, non è on-device —
+// serve quindi connessione dati attiva). Se il browser non la supporta,
+// non aggiunge nulla: il campo resta scrivibile normalmente, senza errori.
+// onResult(transcript), opzionale, viene chiamato dopo che il testo
+// dettato è già stato scritto nel campo — usato dal chat dell'assistente
+// per inviare subito il messaggio dopo la dettatura.
+function addVoiceButton(input, onResult) {
   if (!input) return;
   if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) return;
   const parent = input.parentElement;
@@ -2896,12 +2905,15 @@ function addVoiceButton(input) {
       const existing = input.value.trim();
       input.value = existing ? `${existing} ${transcript}` : transcript;
       input.dispatchEvent(new Event("input", { bubbles: true }));
+      if (typeof onResult === "function") onResult(transcript);
     });
 
     recognition.addEventListener("error", (ev) => {
       if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
         showToast("🎤 Microfono non autorizzato — puoi comunque scrivere qui a mano.");
-      } else if (ev.error !== "aborted" && ev.error !== "no-speech") {
+      } else if (ev.error === "no-speech") {
+        showToast("Non ho sentito nulla — riprova o scrivi a mano.");
+      } else if (ev.error !== "aborted") {
         showToast("Non ho capito bene — riprova o scrivi a mano.");
       }
     });
