@@ -3810,13 +3810,12 @@ function handleDescribe(label) {
 
 loadProfile();
 loadPending();
-// L'onboarding precede sempre l'app finché il turista non ha un profilo
-// salvato (mai registrato su questo dispositivo) — non più una sequenza
-// "vista una sola volta": chi non è ancora registrato la rivede a ogni
-// avvio, chi è già cliente la salta direttamente.
-if (!state.touristEmail) {
-  state.screen = "onboarding";
-} else if (state.biometricCredentialId && isBiometricSupported()) {
+// L'onboarding NON parte mai in automatico, né al primo avvio né dopo un
+// reset (resetEverything() azzera touristEmail, quindi al ricaricamento
+// successivo questo stesso blocco lo ritroverebbe non impostato) — va
+// mostrato solo su richiesta esplicita, da "Rivedi come funziona" nella
+// Dashboard (vedi restartOnboarding()).
+if (state.biometricCredentialId && isBiometricSupported()) {
   state.screen = "biometric-lock";
 }
 function capturePartnerCode() {
