@@ -77,7 +77,11 @@ function getClientIp(event) {
 }
 
 async function checkRateLimit(key) {
-  const store = getStore({ name: "rate-limits" });
+  const store = getStore({
+    name: "rate-limits",
+    siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+    token: process.env.NETLIFY_BLOBS_TOKEN,
+  });
   const now = Date.now();
   const record = (await store.get(key, { type: "json" })) || { count: 0, windowStart: now };
   if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -97,9 +101,13 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || "{}");
     const { action } = body;
 
-    const purchases = getStore({ name: "purchases" });
-    const partners = getStore({ name: "partners" });
-    const discountCodes = getStore({ name: "partner-discount-codes" });
+    const blobsAuth = {
+      siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    };
+    const purchases = getStore({ name: "purchases", ...blobsAuth });
+    const partners = getStore({ name: "partners", ...blobsAuth });
+    const discountCodes = getStore({ name: "partner-discount-codes", ...blobsAuth });
 
     // Usata dall'app turista per allineare localmente lo stato degli
     // acquisti già noti (status, pickupPoint, ecc.) con quanto aggiornato

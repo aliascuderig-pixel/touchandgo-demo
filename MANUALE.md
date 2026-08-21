@@ -332,6 +332,8 @@ Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-dis
 | `ANTHROPIC_API_KEY` | Chiave per le chiamate a Claude (classificazione, packaging check, rilevamento firma). |
 | `NETLIFY_BLOBS_SITE_ID` / `NETLIFY_BLOBS_TOKEN` | Credenziali di accesso a Netlify Blobs, usate da tutte le funzioni che leggono/scrivono dati — le stesse configurate anche sul deploy del repository privato, così i due siti condividono gli stessi dati (vedi "Due repository" in Panoramica). |
 
+> **Importante — non rimuovere l'auth Blobs esplicita da `getStore()`.** In questo ambiente di deploy il provisioning automatico di Netlify Blobs (che in teoria non richiederebbe alcuna configurazione) **non funziona** — un tentativo di farne a meno (TOU-13) ha causato in produzione l'errore `The environment has not been configured to use Netlify Blobs`, bloccando la registrazione partner. Ogni `getStore()` in questo repository (`sync.js`, `save-purchase.js`, `classify.js`, `promo.js`, `partner-discount.js`, `partner-stats.js`, `assistant.js`) deve continuare a passare esplicitamente `siteID`/`token` da `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN` (pattern `blobsAuth` ripetuto identico in ogni file) — non è codice ridondante da "pulire".
+
 `KIT_VAULT_PASSWORD` e `INVESTOR_PASSWORD` non servono più in questo repository — sono configurate solo sul deploy Netlify di `touchandgo-internal`, che ospita le function che le verificano.
 
 Nessun valore reale di queste variabili è mai scritto in questo file o nel codice del repository — sono configurate solo nel pannello Netlify del sito.
