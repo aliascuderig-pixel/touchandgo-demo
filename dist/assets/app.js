@@ -1519,12 +1519,14 @@ function AssistantAvatar(screenKey) {
 
 // ---------------- OnboardingScreen (prima apertura, prima della Cover) ----------------
 //
-// Sequenza animata a 4 slide. Precede sempre l'app finché non esiste un
-// profilo salvato (state.touristEmail non valorizzato — turista mai
-// registrato su questo dispositivo); una volta registrato, l'onboarding
-// non riparte più in automatico ai successivi avvii (vedi il controllo
-// vicino a loadProfile() più in basso). Rilanciabile in ogni momento da
-// "Rivedi come funziona" in DashboardScreen(), per loggati e non.
+// Sequenza animata a 4 slide. Parte in automatico al lancio dell'app per
+// chi non ha ancora effettuato l'accesso (registrazione) su questo
+// dispositivo (vedi il controllo vicino a loadProfile() più in basso, che
+// usa sia state.touristEmail che il flag persistente "tg_onboarded"); una
+// volta effettuato l'accesso una prima volta, non riparte più in
+// automatico, nemmeno dopo un reset (resetEverything() non tocca
+// "tg_onboarded"). Rilanciabile in ogni momento da "Rivedi come funziona"
+// in DashboardScreen(), per loggati e non.
 //
 // A differenza del mockup di riferimento — pensato come demo a loop
 // infinito — qui la sequenza ha una vera fine: l'ultima slide, sia per
@@ -3613,6 +3615,12 @@ function saveProfile() {
         isSubscribed: state.isSubscribed,
       })
     );
+    // TOU-14: marca il dispositivo come "ha già effettuato l'accesso" una
+    // volta per sempre — a differenza di "tg_profile", resetEverything() non
+    // rimuove mai questa chiave, cosi l'onboarding automatico (vedi vicino a
+    // loadProfile() più in basso) non riparte più dopo un reset per chi ha
+    // già completato la registrazione almeno una volta su questo dispositivo.
+    if (state.touristEmail) localStorage.setItem("tg_onboarded", "1");
   } catch (e) {}
 }
 
@@ -3822,13 +3830,23 @@ function handleDescribe(label) {
 
 loadProfile();
 loadPending();
-// L'onboarding precede sempre l'app finché il turista non ha un profilo
-// salvato (mai registrato su questo dispositivo) — non più una sequenza
-// "vista una sola volta": chi non è ancora registrato la rivede a ogni
-// avvio, chi è già cliente la salta direttamente.
-if (!state.touristEmail) {
+// TOU-14: l'onboarding parte in automatico al lancio SOLO per chi non ha
+// mai effettuato l'accesso (registrazione) su questo dispositivo — cioè
+// né un profilo salvato (state.touristEmail) né il flag "tg_onboarded"
+// (marcato da saveProfile(), e mai rimosso da resetEverything()). Senza
+// questo secondo flag, un reset azzererebbe touristEmail e questo stesso
+// blocco rilancerebbe l'onboarding ad ogni avvio successivo per chi si era
+// già registrato in passato — comportamento indesiderato. Resta comunque
+// disponibile su richiesta esplicita da "Rivedi come funziona" nella
+// Dashboard, per chiunque (vedi restartOnboarding()).
+let hasOnboardedBefore = false;
+try {
+  hasOnboardedBefore = localStorage.getItem("tg_onboarded") === "1";
+} catch (e) {}
+if (!hasOnboardedBefore && !state.touristEmail) {
   state.screen = "onboarding";
-} else if (state.biometricCredentialId && isBiometricSupported()) {
+}
+if (state.biometricCredentialId && isBiometricSupported()) {
   state.screen = "biometric-lock";
 }
 function capturePartnerCode() {
