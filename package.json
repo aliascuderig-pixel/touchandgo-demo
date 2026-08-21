@@ -1,6 +1,9 @@
 {
   "name": "touchandgo-functions",
   "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
   "dependencies": {
     "@netlify/blobs": "^8.1.0"
   }

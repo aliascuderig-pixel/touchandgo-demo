@@ -286,6 +286,12 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 | `save-purchase.js` | Salva/aggiorna un acquisto nello store centrale `purchases`; applica il blocco automatico anti-abuso; accredita il partner quando lo stato diventa "ritirato" tramite questo percorso (conferma del turista). |
 | `sync.js` | Le azioni sui dati condivisi che l'app/sito pubblico usano senza passare dal CRM interno: `get-purchases`, `get-purchases-by-email`, `ack-pickup-point`, `redeem-credit-for-invoice`, `generate-partner-discount-code`, `register-partner` — stessa identica logica che vivrebbe in `crm.js`, estratta qui perché questo repository non ha accesso a quello privato. Vedi "CRM interno, area investitori e kit riservato" in Panoramica. |
 
+### Test automatici (TOU-12)
+
+`netlify/functions/__tests__/` — test diretti delle Netlify Functions, con uno store Blobs finto in memoria al posto delle credenziali reali (nessuna rete necessaria). Usano il test runner integrato di Node (`node:test`/`node:assert`), senza dipendenze aggiuntive: `npm test` (= `node --test`) li esegue tutti.
+
+- `save-purchase.commission.test.js` — copre esplicitamente il comportamento condizionato al piano introdotto da TOU-12: piano gratuito → nessuna commissione accreditata (`creditBalance` invariato, `creditIssuedAmount: 0` esplicito); piano a pagamento → commissione del 10% come sempre; doppio resync dello stesso ordine → nessun doppio accredito; partner storico senza campo `plan` → trattato come a pagamento (nessun cambio retroattivo di comportamento).
+
 ### Rate limiting
 
 Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`, `assistant.js`) applicano tutte lo stesso schema: **massimo 20 richieste ogni 60 minuti per indirizzo IP**, tracciato nello store Blobs `rate-limits`. Oltre il limite, l'endpoint risponde `429`.
