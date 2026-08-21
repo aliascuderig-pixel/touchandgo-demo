@@ -14,6 +14,36 @@ const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
 const COMMISSION_RATE = 0.1;
 
+// TOU-19: scadenza piano gratuito a 12 mesi dalla registrazione — dopo,
+// il partner deve passare a un piano a pagamento per continuare ad
+// accedere alla propria area (non solo per vendere). Per i piani a
+// pagamento non esiste nel prodotto una fatturazione ricorrente reale
+// (il canone è confermato manualmente dallo staff nel CRM, campo
+// `paid`): trattiamo quindi come "scaduto" un piano a pagamento non
+// confermato pagato oltre un periodo di grazia ragionevole per lasciare
+// il tempo allo staff di confermare — non è nella specifica originale,
+// è una scelta per evitare di bloccare un abbonamento appena attivato
+// prima ancora che lo staff possa confermarlo.
+const FREE_PLAN_DAYS = 365;
+const PAID_PLAN_GRACE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function computeAccessStatus(partner, now) {
+  const startedAt = partner.planStartedAt ? new Date(partner.planStartedAt).getTime() : now;
+  const daysSinceStart = (now - startedAt) / DAY_MS;
+  const isFree = !partner.plan || partner.plan === "free";
+  if (isFree) {
+    if (daysSinceStart > FREE_PLAN_DAYS) {
+      return { blocked: true, reason: "free-expired" };
+    }
+    return { blocked: false, daysRemaining: Math.max(0, Math.ceil(FREE_PLAN_DAYS - daysSinceStart)) };
+  }
+  if (partner.paid !== true && daysSinceStart > PAID_PLAN_GRACE_DAYS) {
+    return { blocked: true, reason: "paid-unpaid" };
+  }
+  return { blocked: false };
+}
+
 function getClientIp(event) {
   return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
 }
@@ -60,6 +90,17 @@ exports.handler = async (event) => {
     if (!record) {
       return { statusCode: 200, body: JSON.stringify({ valid: false }) };
     }
+
+    // Backfill: partner registrati prima di TOU-19 non hanno planStartedAt.
+    // Anziché considerarli scaduti da subito (non sappiamo la vera data di
+    // registrazione), diamo a ognuno una finestra piena a partire da ORA,
+    // la prima volta che le sue statistiche vengono lette.
+    if (!record.planStartedAt) {
+      record.planStartedAt = new Date().toISOString();
+      record.updatedAt = new Date().toISOString();
+      await partners.setJSON(normalized, record);
+    }
+    const access = computeAccessStatus(record, Date.now());
 
     const purchases = getStore({
       name: "purchases",
@@ -129,6 +170,10 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         valid: true,
         partnerName: record.name || "",
+        plan: record.plan || "free",
+        paid: record.paid === true,
+        planStartedAt: record.planStartedAt,
+        access,
         salesCount,
         totalSalesValue,
         totalCommission,

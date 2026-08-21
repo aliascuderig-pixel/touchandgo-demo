@@ -236,7 +236,7 @@ Dal sito marketing (`dist/site/index.html`, sezione `#partner`): nome, email, sc
 | Tour Operator | €199 |
 | Gratuito (solo commissione) | €0 |
 
-Su ogni vendita generata tramite il codice partner, indipendentemente dal piano, il partner matura una **commissione del 10%** sul prezzo del servizio.
+Su ogni vendita generata tramite il codice partner **che sia su un piano a pagamento**, il partner matura una **commissione del 10%** sul prezzo del servizio, accreditata al passaggio dell'ordine a "ritirato". **Il piano Gratuito non matura mai commissione** (`creditIssuedAmount` resta a 0) — è il compromesso del piano: nessun canone mensile, ma nemmeno guadagno sulle vendite (vedi `save-purchase.js`).
 
 ### Login e statistiche (`partner-stats.js`)
 
@@ -248,6 +248,22 @@ Il partner accede inserendo solo il proprio codice (nessuna password separata �
 - **Credito disponibile** (vedi sotto).
 
 **Andamento nel tempo** (TOU-17): sotto i totali cumulativi, il confronto tra il mese corrente e quello precedente (ordini e commissione, con la differenza evidenziata), l'andamento degli ultimi 12 mesi, e gli ultimi 20 ordini con la commissione generata da ciascuno. A differenza del totale cumulativo sopra (stima al 10% su tutte le vendite indipendentemente dallo stato), qui la commissione è sempre `creditIssuedAmount` — quella realmente accreditata da `save-purchase.js` al passaggio a "ritirato": un ordine "in sospeso" del mese corrente compare con commissione €0 finché non viene ritirato.
+
+### Scadenza piano e accesso alla dashboard (TOU-19)
+
+Ogni partner ha un campo `planStartedAt` (data di inizio del piano corrente), impostato alla registrazione (`register-partner`) e aggiornato ad ogni cambio piano (`upgrade-partner-plan`, vedi sotto). Partner registrati prima dell'introduzione di questo campo non ne hanno uno salvato: la prima volta che le loro statistiche vengono lette, `partner-stats.js` lo imposta a quel momento (non conoscendo la vera data di registrazione, gli viene concessa una finestra piena a partire da ora, invece di considerarli scaduti da subito).
+
+**Regole di accesso** (`computeAccessStatus` in `partner-stats.js`), verificate ad ogni login/refresh dell'area partner:
+
+- **Piano Gratuito**: valido per **12 mesi** da `planStartedAt`. Superato il termine, l'accesso all'area partner viene **negato completamente** (non solo il maturare commissione) — il partner vede una schermata di blocco con un messaggio che invita ad abbonarsi, invece della dashboard.
+- **Piano a pagamento**: stessa logica alla scadenza — se il canone non risulta confermato dallo staff nel CRM (`paid !== true`) per più di **30 giorni** da `planStartedAt`, l'accesso viene negato allo stesso modo. I 30 giorni sono un periodo di grazia (non specificato dal prodotto) per dare tempo allo staff di confermare il pagamento dopo un cambio piano, senza bloccare istantaneamente un abbonamento appena attivato.
+- **Commissioni già maturate**: il blocco riguarda solo l'accesso futuro alla dashboard — non tocca in alcun modo gli accrediti già avvenuti (`creditIssuedAmount`/`creditBalance` restano quelli maturati durante il periodo attivo, mai annullati retroattivamente).
+
+**Incentivo prima del blocco**: finché il piano Gratuito è ancora attivo, la dashboard mostra i giorni rimanenti e una stima di "quanto avresti guadagnato con un piano a pagamento" (volume venduto sul piano gratuito × 10% di commissione) — per invogliare il partner ad abbonarsi prima che scatti il blocco.
+
+**Passaggio a un piano a pagamento**: azione `upgrade-partner-plan` in `sync.js` — il partner sceglie uno dei piani a pagamento dalla propria area (anche da bloccato, se il piano gratuito è scaduto), il sistema aggiorna `plan`/`monthlyFee`/`planStartedAt` e genera la prima fattura del canone (riusa `issuePartnerInvoice`). Come alla registrazione, `paid` torna a `false`: il pagamento reale resta fuori da questo prototipo, quindi resta allo staff del CRM confermarlo prima che l'accesso si sblocchi davvero (periodo di grazia di 30 giorni sopra).
+
+> **Nota di scope**: il blocco riguarda solo l'accesso del partner alla propria dashboard. Il codice partner di un piano gratuito scaduto è **ancora accettato** da `save-purchase.js` sui nuovi acquisti dei turisti (che comunque non maturano mai commissione, essendo piano gratuito) — non è stato implementato un blocco lato checkout turista. Da valutare se serve anche quello.
 
 ### QR promozionale
 
