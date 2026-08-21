@@ -219,8 +219,36 @@ exports.handler = async (event) => {
         monthlyFee: planInfo.monthlyFee,
         invoices: [],
         creditBalance: 0,
+        // TOU-19: data di inizio del piano corrente, base per la scadenza
+        // a 12 mesi del piano gratuito (vedi computeAccessStatus in
+        // partner-stats.js). Aggiornata anche da "upgrade-partner-plan".
+        planStartedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      await partners.setJSON(code, partner);
+      const invoice = await issuePartnerInvoice(partners, code, partner);
+      return ok({ code, planLabel: planInfo.label, partner, invoice });
+    }
+
+    // TOU-19: passaggio da un piano all'altro (in pratica, dal gratuito a
+    // uno a pagamento — non ha senso self-service il percorso inverso,
+    // quindi qui si accettano solo piani PARTNER_PLANS diversi da "free").
+    // Come alla registrazione, il pagamento reale resta fuori da questo
+    // prototipo: paid torna a false, lo stesso staff del CRM che conferma
+    // i pagamenti oggi dovrà confermare anche questo, prima che l'accesso
+    // si sblocchi davvero (vedi computeAccessStatus in partner-stats.js).
+    if (action === "upgrade-partner-plan") {
+      const { code, plan } = body;
+      if (!code) return bad("Missing partner code");
+      if (!PARTNER_PLANS[plan] || plan === "free") return bad("Piano non valido");
+      const partner = await partners.get(code, { type: "json" });
+      if (!partner) return bad("Partner non trovato", 404);
+      const planInfo = PARTNER_PLANS[plan];
+      partner.plan = plan;
+      partner.monthlyFee = planInfo.monthlyFee;
+      partner.paid = false;
+      partner.planStartedAt = new Date().toISOString();
+      partner.updatedAt = new Date().toISOString();
       await partners.setJSON(code, partner);
       const invoice = await issuePartnerInvoice(partners, code, partner);
       return ok({ code, planLabel: planInfo.label, partner, invoice });

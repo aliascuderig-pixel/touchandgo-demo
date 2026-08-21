@@ -779,6 +779,9 @@ const state = {
   partnerLoginLoading: false,
   partnerLoginError: null,
   partnerStats: null,
+  partnerUpgradePlan: null,
+  partnerUpgradeLoading: false,
+  partnerUpgradeError: null,
   showPartnerQr: false,
   editingItemId: null,
   viewingItemId: null,
@@ -1129,6 +1132,9 @@ function PartnerLoginAndHistory() {
           state.partnerLoggedCode = code;
           state.partnerStats = {
             partnerName: data.partnerName || "",
+            plan: data.plan || "free",
+            paid: !!data.paid,
+            access: data.access || { blocked: false },
             salesCount: data.salesCount || 0,
             totalSalesValue: data.totalSalesValue || 0,
             totalCommission: data.totalCommission || 0,
@@ -1149,22 +1155,18 @@ function PartnerLoginAndHistory() {
     return wrap;
   }
 
-  const stats = state.partnerStats || { partnerName: "", salesCount: 0, totalSalesValue: 0, totalCommission: 0, creditBalance: 0, monthlyBreakdown: [], recentOrders: [] };
-  const summary = el("div", "info-card");
-  summary.innerHTML = `
-    <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
-    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
-    <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
-    <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
-    <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
-    <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
-  wrap.appendChild(summary);
-
-  wrap.appendChild(PartnerTrendSection(stats));
-
-  wrap.appendChild(PartnerCreditSection(stats));
-
-  wrap.appendChild(PartnerQRSection(state.partnerLoggedCode));
+  const stats = state.partnerStats || {
+    partnerName: "",
+    plan: "free",
+    paid: false,
+    access: { blocked: false },
+    salesCount: 0,
+    totalSalesValue: 0,
+    totalCommission: 0,
+    creditBalance: 0,
+    monthlyBreakdown: [],
+    recentOrders: [],
+  };
 
   const logoutBtn = el("button", "reset-link", "Esci dall'area partner");
   logoutBtn.addEventListener("click", () => {
@@ -1176,9 +1178,132 @@ function PartnerLoginAndHistory() {
     state.partnerCreditRedeemError = null;
     state.partnerGeneratedDiscountCode = null;
     state.partnerDiscountGenerateError = null;
+    state.partnerUpgradePlan = null;
+    state.partnerUpgradeLoading = false;
+    state.partnerUpgradeError = null;
     render();
   });
+
+  // TOU-19: piano gratuito scaduto (12 mesi) o piano a pagamento scaduto/
+  // non confermato dallo staff — accesso alla propria area negato finché
+  // non si passa a un piano a pagamento (o lo staff non conferma il
+  // canone dal CRM). Le vendite/commissioni già maturate restano intatte
+  // (vedi save-purchase.js) — qui si nega solo l'accesso alla dashboard.
+  if (stats.access && stats.access.blocked) {
+    const blockCard = el("div", "info-card");
+    const isFreeExpired = stats.access.reason === "free-expired";
+    blockCard.innerHTML = `
+      <div class="alert">⚠️ ${
+        isFreeExpired
+          ? "Il tuo piano gratuito è scaduto dopo 12 mesi. Per continuare a vendere servizi Touch&amp;Go e accedere alla tua area, passa a un piano a pagamento."
+          : "Il canone del tuo piano non risulta confermato. Contatta Touch&amp;Go o attendi la conferma dello staff per riottenere l'accesso."
+      }</div>
+      ${stats.creditBalance > 0 ? `<div class="info-row"><span>Credito già maturato (resta disponibile)</span><b>€${stats.creditBalance.toFixed(2)}</b></div>` : ""}`;
+    wrap.appendChild(blockCard);
+    if (isFreeExpired) wrap.appendChild(PartnerUpgradeSection(stats));
+    wrap.appendChild(logoutBtn);
+    return wrap;
+  }
+
+  const summary = el("div", "info-card");
+  summary.innerHTML = `
+    <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
+    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
+    <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
+    <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
+    <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
+    <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
+  wrap.appendChild(summary);
+
+  // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a
+  // pagamento — quanto avrebbe già generato di commissione se fosse stato
+  // abbonato (stesso 10% di totalCommission sopra, qui riletto come
+  // occasione persa). Il countdown avvisa prima che scatti il blocco.
+  if (stats.plan === "free" || !stats.plan) {
+    const daysLeft = stats.access && typeof stats.access.daysRemaining === "number" ? stats.access.daysRemaining : null;
+    const incentive = el("div", "info-card");
+    incentive.innerHTML = `
+      ${
+        stats.totalCommission > 0
+          ? `<div class="info-row"><span>Se fossi abbonato, avresti già maturato</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`
+          : ""
+      }
+      ${
+        daysLeft != null
+          ? `<div class="info-row"><span>Piano gratuito</span><b>${
+              daysLeft > 30 ? `${Math.ceil(daysLeft / 30)} mesi rimasti` : `${daysLeft} giorni rimasti`
+            }</b></div>`
+          : ""
+      }`;
+    wrap.appendChild(incentive);
+    wrap.appendChild(PartnerUpgradeSection(stats));
+  }
+
+  wrap.appendChild(PartnerTrendSection(stats));
+
+  wrap.appendChild(PartnerCreditSection(stats));
+
+  wrap.appendChild(PartnerQRSection(state.partnerLoggedCode));
+
   wrap.appendChild(logoutBtn);
+
+  return wrap;
+}
+
+// TOU-19: passaggio self-service dal piano gratuito a uno a pagamento —
+// prima di questa feature non esisteva alcun modo per un partner già
+// registrato di cambiare piano. Il pagamento reale resta fuori da questo
+// prototipo (come alla registrazione): dopo l'upgrade lo staff deve
+// comunque confermare il canone dal CRM prima che l'accesso si sblocchi
+// davvero (vedi computeAccessStatus in partner-stats.js).
+function PartnerUpgradeSection(stats) {
+  const wrap = el("div", "info-card");
+  const plans = [
+    ["boutique", "Boutique — €49/mese"],
+    ["enoteche", "Enoteche & Cantine — €59/mese"],
+    ["sport", "Sport & Attrezzatura — €69/mese"],
+    ["hotel", "Hotel — €99/mese"],
+    ["agenzie", "Agenzie di Viaggio — €149/mese"],
+    ["touroperator", "Tour Operator — €199/mese"],
+  ];
+  const field = el("div", "dest-field");
+  const options = plans.map(([value, label]) => `<option value="${value}" ${state.partnerUpgradePlan === value ? "selected" : ""}>${label}</option>`).join("");
+  field.innerHTML = `<div class="dest-lbl">Passa a un piano a pagamento</div><select class="dest-input" id="partner-upgrade-plan"><option value="">Scegli un piano…</option>${options}</select>`;
+  wrap.appendChild(field);
+
+  if (state.partnerUpgradeError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerUpgradeError}`));
+  }
+
+  const upgradeBtn = el("button", "btn-primary", state.partnerUpgradeLoading ? "Attivo il piano…" : "Attiva piano a pagamento");
+  upgradeBtn.disabled = state.partnerUpgradeLoading;
+  upgradeBtn.addEventListener("click", async () => {
+    const plan = document.getElementById("partner-upgrade-plan").value;
+    if (!plan) {
+      state.partnerUpgradeError = "Scegli un piano prima di continuare.";
+      render();
+      return;
+    }
+    state.partnerUpgradeLoading = true;
+    state.partnerUpgradeError = null;
+    render();
+    try {
+      const res = await fetch("/.netlify/functions/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upgrade-partner-plan", code: state.partnerLoggedCode, plan }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Errore durante l'attivazione del piano");
+      await refreshPartnerStats();
+    } catch (e) {
+      state.partnerUpgradeError = e.message || "Errore di connessione. Riprova.";
+    }
+    state.partnerUpgradeLoading = false;
+    render();
+  });
+  wrap.appendChild(upgradeBtn);
+  wrap.appendChild(el("div", "partner-result-sub", "Dopo l'attivazione, lo staff Touch&Go confermerà il canone e sbloccherà l'accesso."));
 
   return wrap;
 }
@@ -1198,6 +1323,9 @@ async function refreshPartnerStats() {
     if (data.valid) {
       state.partnerStats = {
         partnerName: data.partnerName || "",
+        plan: data.plan || "free",
+        paid: !!data.paid,
+        access: data.access || { blocked: false },
         salesCount: data.salesCount || 0,
         totalSalesValue: data.totalSalesValue || 0,
         totalCommission: data.totalCommission || 0,
