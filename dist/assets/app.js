@@ -4080,8 +4080,34 @@ function closeViewfinder(overlay) {
 // fotocamere è stata effettivamente usata. fallbackInput è l'<input
 // capture> nascosto già presente in pagina, riusato tale e quale se il
 // mirino custom non è disponibile.
+// Avviso discreto (stesso stile/comportamento del toast di dettatura
+// vocale non riconosciuta, vedi addVoiceButton) mostrato quando il mirino
+// custom non si apre e si ricade sulla fotocamera nativa — a differenza di
+// quel toast, che vive dentro il wrapper di un campo specifico, questo non
+// è legato a nessun campo: un solo elemento fisso, creato la prima volta
+// che serve e riusato. Permette a chi sta testando da telefono di
+// confermare che il fallback è scattato davvero senza dover aprire la
+// Console del browser.
+let cameraFallbackToastTimer = null;
+function showCameraFallbackToast() {
+  let toast = document.getElementById("camera-fallback-toast");
+  if (!toast) {
+    toast = el("div", "camera-fallback-toast");
+    toast.id = "camera-fallback-toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = "Fotocamera del dispositivo in uso";
+  toast.hidden = false;
+  clearTimeout(cameraFallbackToastTimer);
+  cameraFallbackToastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 4000);
+}
+
 function openCameraViewfinder(onCapture, fallbackInput) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.warn("Mirino fotocamera custom non disponibile, uso la fotocamera nativa:", "navigator.mediaDevices.getUserMedia non è supportato da questo browser/contesto");
+    showCameraFallbackToast();
     fallbackInput.click();
     return;
   }
@@ -4126,7 +4152,9 @@ function openCameraViewfinder(onCapture, fallbackInput) {
 
       document.body.appendChild(overlay);
     })
-    .catch(() => {
+    .catch((err) => {
+      console.warn("Mirino fotocamera custom non disponibile, uso la fotocamera nativa:", err);
+      showCameraFallbackToast();
       fallbackInput.click();
     });
 }

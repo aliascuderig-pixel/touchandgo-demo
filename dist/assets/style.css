@@ -282,6 +282,12 @@ button{font-family:inherit;cursor:pointer}
 @keyframes voice-pulse{0%,100%{box-shadow:0 0 0 0 rgba(201,169,110,.5)}50%{box-shadow:0 0 0 6px rgba(201,169,110,0)}}
 .voice-toast{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--warn-bg);border:1px solid var(--gold-soft);color:var(--clay);font-size:10px;line-height:1.4;padding:6px 8px;border-radius:2px;z-index:5}
 
+/* Avviso fallback fotocamera nativa (TOU-20) — stessa palette/forma del
+   voice-toast sopra, ma non legato a un campo: fisso in basso, sempre
+   sopra il resto dell'app (ma sotto .viewfinder-overlay, z-index 300,
+   con cui non compare mai insieme). */
+.camera-fallback-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:86%;background:var(--warn-bg);border:1px solid var(--gold-soft);color:var(--clay);font-size:12px;line-height:1.4;padding:9px 14px;border-radius:2px;z-index:250;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+
 /* ---------- Pending items / consolidation ---------- */
 .pending-banner{margin:0 20px 16px;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:14px 16px}
 .pending-count{font-family:var(--display);font-size:15px;font-weight:600;color:var(--ink)}
