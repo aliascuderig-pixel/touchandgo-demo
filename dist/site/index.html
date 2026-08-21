@@ -117,7 +117,11 @@ section{padding:80px 0}
 .doc-row:last-child{border-bottom:none}
 .doc-row span{color:var(--muted)}
 .doc-row b{font-family:var(--display);font-weight:600;color:var(--ink);text-align:right}
-.partner-result-code{text-align:center;font-family:var(--display);font-size:26px;font-weight:700;color:var(--gold-deep);margin:18px 0 4px}
+.partner-result-code{text-align:center;font-family:var(--display);font-size:26px;font-weight:700;color:var(--gold-deep);margin:0}
+.partner-result-code-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:18px 0 4px}
+.copy-code-btn{background:transparent;border:1px solid var(--gold-deep);color:var(--gold-deep);font-family:var(--body);font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:6px 14px;cursor:pointer;border-radius:2px;white-space:nowrap;transition:background .15s,color .15s}
+.copy-code-btn:hover{background:var(--gold-deep);color:#fff}
+.copy-code-btn.copied{background:var(--good);border-color:var(--good);color:#fff}
 .partner-result-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:0}
 
 /* IVA banner */
@@ -402,7 +406,10 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
     </form>
 
     <div id="partner-signup-result" style="display:none">
-      <div class="partner-result-code" id="ps-result-code"></div>
+      <div class="partner-result-code-row">
+        <div class="partner-result-code" id="ps-result-code"></div>
+        <button type="button" class="copy-code-btn" id="ps-copy-code">Copia</button>
+      </div>
       <p class="partner-result-sub">Il tuo codice partner — usalo nell'area partner dell'app per accedere alle vendite e generare il QR del tuo negozio.</p>
       <div class="doc-card" id="ps-result-invoice"></div>
     </div>
@@ -542,6 +549,66 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
         submitBtn.disabled = false;
         submitBtn.textContent = "Registrati come partner →";
       }
+    });
+  }
+
+  // Copia il codice partner appena generato — va reinserito nell'area
+  // partner dell'app per accedere, quindi evitare che l'utente debba
+  // selezionarlo a mano riduce gli errori di trascrizione.
+  var copyCodeBtn = document.getElementById("ps-copy-code");
+  if (copyCodeBtn) {
+    var copyCodeResetTimer = null;
+    copyCodeBtn.addEventListener("click", async function () {
+      var code = document.getElementById("ps-result-code").textContent.trim();
+      if (!code) return;
+
+      var copied = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(code);
+          copied = true;
+        } catch (err) {
+          copied = false;
+        }
+      }
+      if (!copied) {
+        // Fallback per contesti non sicuri o browser senza Clipboard API:
+        // stesso trucco classico della textarea temporanea + execCommand.
+        try {
+          var tmp = document.createElement("textarea");
+          tmp.value = code;
+          tmp.style.position = "fixed";
+          tmp.style.opacity = "0";
+          document.body.appendChild(tmp);
+          tmp.focus();
+          tmp.select();
+          copied = document.execCommand("copy");
+          document.body.removeChild(tmp);
+        } catch (err) {
+          copied = false;
+        }
+      }
+
+      clearTimeout(copyCodeResetTimer);
+      if (copied) {
+        copyCodeBtn.textContent = "Copiato ✓";
+        copyCodeBtn.classList.add("copied");
+      } else {
+        // Non è riuscito nemmeno il fallback via execCommand: seleziona
+        // almeno visivamente il codice, così l'utente può copiarlo da
+        // tastiera (Ctrl/Cmd+C) invece di doverlo ricopiare a mano.
+        var codeEl = document.getElementById("ps-result-code");
+        var range = document.createRange();
+        range.selectNodeContents(codeEl);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copyCodeBtn.textContent = "Selezionalo e copia";
+      }
+      copyCodeResetTimer = setTimeout(function () {
+        copyCodeBtn.textContent = "Copia";
+        copyCodeBtn.classList.remove("copied");
+      }, 2000);
     });
   }
 </script>

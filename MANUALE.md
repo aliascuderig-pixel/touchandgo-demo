@@ -242,6 +242,8 @@ Vive nella stessa app (`app.js`), selezionando "Partner" nel toggle in alto (`Pa
 
 Dal sito marketing (`dist/site/index.html`, sezione `#partner`): nome, email, scelta del piano. Chiama l'azione `register-partner` in `netlify/functions/sync.js`, che genera un codice partner univoco (iniziali del nome + numero casuale, es. `BR482`), salva il record e genera subito la prima fattura del canone.
 
+Accanto al codice mostrato dopo la registrazione, un bottone **"Copia"** (`#ps-copy-code`) lo copia negli appunti con un tap — va poi reinserito nell'area partner dell'app per accedere, quindi evita errori di trascrizione a mano. Tre livelli di fallback in cascata se `navigator.clipboard.writeText()` non è disponibile o fallisce (contesti non sicuri, permesso negato): prova `document.execCommand("copy")` su una textarea temporanea; se anche questo fallisce, seleziona visivamente il testo del codice così l'utente può copiarlo da tastiera. In ogni caso il bottone conferma con un feedback temporaneo (2 secondi) — "Copiato ✓" se la copia è riuscita per davvero, "Selezionalo e copia" nel caso limite in cui nemmeno il fallback abbia funzionato.
+
 **Piani disponibili** (`PARTNER_PLANS` in `sync.js`, canone mensile):
 
 | Piano | Canone/mese |
