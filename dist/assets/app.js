@@ -1803,7 +1803,7 @@ function HomeScreen() {
   cameraInput.style.display = "none";
   cameraInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
   captureCard.appendChild(cameraInput);
-  captureCard.addEventListener("click", () => cameraInput.click());
+  captureCard.addEventListener("click", () => openCameraViewfinder(handleImageDataUrl, cameraInput));
   section.appendChild(captureCard);
 
   const galleryCard = el("div", "gallery-card");
@@ -2518,32 +2518,33 @@ function PackageCheckScreen() {
   input.accept = "image/*";
   input.capture = "environment";
   input.style.display = "none";
-  input.addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const runPackageCheckFromDataUrl = async (dataUrl) => {
     if (state.isOffline) {
       alert(t("pkgcheck_offline_alert"));
       return;
     }
     resultBox.innerHTML = `<div class="pack-checking">${t("pkgcheck_checking")}</div>`;
+    try {
+      const photo = await compressImage(dataUrl, 500, 0.6);
+      const check = await checkPackage(photo, item.packageDims);
+      item.packageCheck = check;
+      savePending();
+      saveHistory();
+      resultBox.innerHTML = "";
+      resultBox.appendChild(renderPackageCheckResult(check));
+    } catch (err) {
+      resultBox.innerHTML = `<div class="alert">${t("pkgcheck_failed_alert")}</div>`;
+    }
+  };
+  input.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const photo = await compressImage(reader.result, 500, 0.6);
-        const check = await checkPackage(photo, item.packageDims);
-        item.packageCheck = check;
-        savePending();
-        saveHistory();
-        resultBox.innerHTML = "";
-        resultBox.appendChild(renderPackageCheckResult(check));
-      } catch (err) {
-        resultBox.innerHTML = `<div class="alert">${t("pkgcheck_failed_alert")}</div>`;
-      }
-    };
+    reader.onload = () => runPackageCheckFromDataUrl(reader.result);
     reader.readAsDataURL(file);
   });
   captureCard.appendChild(input);
-  captureCard.addEventListener("click", () => input.click());
+  captureCard.addEventListener("click", () => openCameraViewfinder(runPackageCheckFromDataUrl, input));
   wrap.appendChild(captureCard);
   wrap.appendChild(resultBox);
 
@@ -3793,13 +3794,132 @@ async function runClassification(promise) {
 function handleFile(file) {
   if (!file || !file.type.startsWith("image/")) return;
   const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = reader.result;
-    state.pendingInput = { type: "image", base64: dataUrl.split(",")[1], mediaType: file.type, dataUrl };
-    state.screen = "destination";
-    render();
-  };
+  reader.onload = () => handleImageDataUrl(reader.result, file.type);
   reader.readAsDataURL(file);
+}
+
+// Stesso esito di handleFile() sopra, ma a partire da un data URL già
+// pronto (es. lo scatto del mirino fotocamera custom in openCameraViewfinder,
+// che produce direttamente un data URL via canvas invece che un File).
+function handleImageDataUrl(dataUrl, mediaType) {
+  state.pendingInput = { type: "image", base64: dataUrl.split(",")[1], mediaType, dataUrl };
+  state.screen = "destination";
+  render();
+}
+
+// ---------------- Mirino fotocamera custom (TOU-20) ----------------
+//
+// L'app apriva finora sempre la fotocamera nativa del telefono tramite un
+// <input type="file" capture="environment"> nascosto: nessuna UI nostra,
+// nessun controllo sul momento esatto dello scatto (il sistema operativo
+// gestisce tutto). Qui costruiamo un vero mirino in pagina via
+// getUserMedia — anteprima live dentro una cornice ad angoli in stile
+// reflex, con un pulsante di scatto che riproduce un rumore di otturatore
+// esattamente nell'istante del tap.
+//
+// Se getUserMedia non è disponibile o l'utente nega il permesso (webview
+// datate, contesti senza fotocamera, permesso negato), si ricade sul
+// comportamento precedente passando il click all'<input capture> originale
+// — nessuna regressione per chi non può usare il mirino custom.
+let viewfinderStream = null;
+
+// Rumore di scatto sintetizzato via Web Audio (due brevi impulsi di
+// rumore filtrato, apertura+chiusura otturatore) invece di un file audio
+// esterno: nessun asset da scaricare, nessuna questione di licenza,
+// funziona anche offline nella PWA.
+function playShutterSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    [
+      { delay: 0, freq: 1800, gain: 0.5 },
+      { delay: 0.07, freq: 2800, gain: 0.35 },
+    ].forEach(({ delay, freq, gain }) => {
+      const bufferSize = Math.floor(ctx.sampleRate * 0.02);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "highpass";
+      filter.frequency.value = freq;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = gain;
+      noise.connect(filter).connect(gainNode).connect(ctx.destination);
+      noise.start(now + delay);
+      noise.stop(now + delay + 0.02);
+    });
+    setTimeout(() => ctx.close(), 300);
+  } catch (e) {}
+}
+
+function closeViewfinder(overlay) {
+  if (viewfinderStream) {
+    viewfinderStream.getTracks().forEach((track) => track.stop());
+    viewfinderStream = null;
+  }
+  overlay.remove();
+}
+
+// onCapture(dataUrl, mediaType) riceve lo scatto nello stesso formato che
+// i chiamanti già ricevevano da FileReader.readAsDataURL su un file
+// dell'input nativo — così il codice a valle (handleImageDataUrl,
+// runPackageCheck) resta identico indipendentemente da quale delle due
+// fotocamere è stata effettivamente usata. fallbackInput è l'<input
+// capture> nascosto già presente in pagina, riusato tale e quale se il
+// mirino custom non è disponibile.
+function openCameraViewfinder(onCapture, fallbackInput) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    fallbackInput.click();
+    return;
+  }
+  navigator.mediaDevices
+    .getUserMedia({ video: { facingMode: "environment" }, audio: false })
+    .then((stream) => {
+      viewfinderStream = stream;
+      const overlay = el("div", "viewfinder-overlay");
+
+      const video = document.createElement("video");
+      video.className = "viewfinder-video";
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      video.srcObject = stream;
+      overlay.appendChild(video);
+
+      const frame = el("div", "viewfinder-frame");
+      frame.innerHTML = `
+        <span class="vf-corner vf-tl"></span><span class="vf-corner vf-tr"></span>
+        <span class="vf-corner vf-bl"></span><span class="vf-corner vf-br"></span>`;
+      overlay.appendChild(frame);
+
+      const closeBtn = el("button", "vf-close", "✕");
+      closeBtn.setAttribute("aria-label", "Chiudi fotocamera");
+      closeBtn.addEventListener("click", () => closeViewfinder(overlay));
+      overlay.appendChild(closeBtn);
+
+      const shutterBtn = el("button", "vf-shutter");
+      shutterBtn.setAttribute("aria-label", "Scatta foto");
+      shutterBtn.addEventListener("click", () => {
+        playShutterSound();
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        closeViewfinder(overlay);
+        onCapture(dataUrl, "image/jpeg");
+      });
+      overlay.appendChild(shutterBtn);
+
+      document.body.appendChild(overlay);
+    })
+    .catch(() => {
+      fallbackInput.click();
+    });
 }
 
 function handleDescribe(label) {
