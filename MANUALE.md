@@ -259,7 +259,7 @@ Un bottone genera un QR che incorpora l'URL dell'app con `?partner=CODICE` già 
 
 Oltre alla commissione (un numero puramente informativo), ogni partner ha un **saldo credito reale e spendibile** (`creditBalance`, persistito sul record partner):
 
-- **Accredito**: scatta **solo quando un acquisto con quel `partnerCode` raggiunge lo stato "ritirato"** (mai prima) — il 10% del prezzo del servizio viene aggiunto al saldo. Un flag `creditIssued` sull'acquisto impedisce un doppio accredito se lo stato viene risincronizzato più volte, indipendentemente da quale dei due percorsi lo porta a "ritirato" (conferma del turista o azione manuale dello staff da CRM).
+- **Accredito**: scatta **solo quando un acquisto con quel `partnerCode` raggiunge lo stato "ritirato"** (mai prima), e **solo se il partner è su un piano a pagamento** — il piano gratuito non genera mai commissione (coerente col copy del sito, "Gratuito — nessuna commissione"): il 10% del prezzo del servizio viene aggiunto al saldo solo per `partner.plan !== "free"`. Un partner storico senza campo `plan` (creato prima che i piani distinguessero gratuito/a pagamento) è trattato come a pagamento, per non cambiare retroattivamente il comportamento per quei record. Un `partnerCode` che non corrisponde a nessun partner reale non genera commissione. In tutti i casi in cui la commissione non matura, l'acquisto passa comunque correttamente a "ritirato" e `creditIssuedAmount` viene scritto esplicitamente a **0** (mai lasciato non impostato). Un flag `creditIssued` sull'acquisto impedisce un doppio accredito se lo stato viene risincronizzato più volte, indipendentemente da quale dei due percorsi lo porta a "ritirato" (conferma del turista o azione manuale dello staff da CRM).
 - **Riscatto sul canone**: bottone "Usa credito per il canone" nell'area partner — genera la prossima fattura e applica il credito disponibile fino a coprirla per intero (mai un importo negativo); l'eventuale resto rimane sul saldo per la fattura successiva (azione `redeem-credit-for-invoice` in `sync.js`).
 - **Codici sconto per i clienti**: bottone "Genera codice sconto per un cliente" — crea un codice monouso (store Blobs `partner-discount-codes`, azione `generate-partner-discount-code` in `sync.js`) che il partner comunica direttamente al cliente. Generare il codice non consuma ancora credito: il costo si scala solo quando il codice viene realmente usato.
   - Il turista lo inserisce al checkout (campo "Hai un codice sconto partner?" nella schermata di conferma prezzo) — validato e consumato da `netlify/functions/partner-discount.js`.
@@ -285,6 +285,12 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 | `promo.js` | Valida e consuma i codici invito per l'offerta breakeven. |
 | `save-purchase.js` | Salva/aggiorna un acquisto nello store centrale `purchases`; applica il blocco automatico anti-abuso; accredita il partner quando lo stato diventa "ritirato" tramite questo percorso (conferma del turista). |
 | `sync.js` | Le azioni sui dati condivisi che l'app/sito pubblico usano senza passare dal CRM interno: `get-purchases`, `get-purchases-by-email`, `ack-pickup-point`, `redeem-credit-for-invoice`, `generate-partner-discount-code`, `register-partner` — stessa identica logica che vivrebbe in `crm.js`, estratta qui perché questo repository non ha accesso a quello privato. Vedi "CRM interno, area investitori e kit riservato" in Panoramica. |
+
+### Test automatici (TOU-12)
+
+`netlify/functions/__tests__/` — test diretti delle Netlify Functions, con uno store Blobs finto in memoria al posto delle credenziali reali (nessuna rete necessaria). Usano il test runner integrato di Node (`node:test`/`node:assert`), senza dipendenze aggiuntive: `npm test` (= `node --test`) li esegue tutti.
+
+- `save-purchase.commission.test.js` — copre esplicitamente il comportamento condizionato al piano introdotto da TOU-12: piano gratuito → nessuna commissione accreditata (`creditBalance` invariato, `creditIssuedAmount: 0` esplicito); piano a pagamento → commissione del 10% come sempre; doppio resync dello stesso ordine → nessun doppio accredito; partner storico senza campo `plan` → trattato come a pagamento (nessun cambio retroattivo di comportamento).
 
 ### Rate limiting
 

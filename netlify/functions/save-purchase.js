@@ -124,18 +124,26 @@ exports.handler = async (event) => {
         item.creditIssuedAmount = previousItem.creditIssuedAmount;
         item.creditIssuedAt = previousItem.creditIssuedAt;
       } else {
-        const commission = Math.round((item.price || 0) * COMMISSION_RATE * 100) / 100;
+        // Il partner va recuperato PRIMA di calcolare la commissione: il
+        // piano gratuito non genera commissione (coerente col sito —
+        // "Gratuito — nessuna commissione"), quindi l'aliquota del 10% si
+        // applica solo se il partner esiste ed è su un piano a pagamento.
+        // Un partner senza campo "plan" (record storico, creato prima
+        // della distinzione piani) è trattato come a pagamento —
+        // comportamento invariato per quei record. Un partnerCode che non
+        // corrisponde a nessun partner reale non genera commissione: non
+        // c'è nessuno a cui accreditarla.
+        const partners = getStore({ name: "partners", ...blobsAuth });
+        const partner = await partners.get(item.partnerCode, { type: "json" });
+        const commission =
+          partner && partner.plan !== "free" ? Math.round((item.price || 0) * COMMISSION_RATE * 100) / 100 : 0;
         item.creditIssued = true;
         item.creditIssuedAmount = commission;
         item.creditIssuedAt = new Date().toISOString();
-        if (commission > 0) {
-          const partners = getStore({ name: "partners", ...blobsAuth });
-          const partner = await partners.get(item.partnerCode, { type: "json" });
-          if (partner) {
-            partner.creditBalance = Math.round(((partner.creditBalance || 0) + commission) * 100) / 100;
-            partner.updatedAt = new Date().toISOString();
-            await partners.setJSON(item.partnerCode, partner);
-          }
+        if (commission > 0 && partner) {
+          partner.creditBalance = Math.round(((partner.creditBalance || 0) + commission) * 100) / 100;
+          partner.updatedAt = new Date().toISOString();
+          await partners.setJSON(item.partnerCode, partner);
         }
       }
     }
