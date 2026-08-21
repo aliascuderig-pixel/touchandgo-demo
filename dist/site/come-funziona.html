@@ -88,6 +88,23 @@ body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-
   padding:13px 20px;border-radius:4px;width:100%;
   text-decoration:none;letter-spacing:.01em;
 }
+
+/* Bottone Assistenza persistente (vedi MANUALE.md) */
+.support-fab{position:fixed;right:20px;bottom:20px;z-index:400;background:var(--ink);color:var(--gold-soft);border:1px solid var(--gold-deep);border-radius:999px;padding:12px 20px;font-family:var(--body);font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25);letter-spacing:.02em}
+.support-fab:hover{background:var(--gold-deep);color:#fff}
+.support-overlay{position:fixed;inset:0;background:rgba(15,15,15,.72);z-index:401;display:none;align-items:center;justify-content:center;padding:20px}
+.support-overlay.open{display:flex}
+.support-modal{background:var(--paper);color:var(--ink);max-width:420px;width:100%;padding:26px 24px;border-radius:4px;position:relative;font-family:var(--body)}
+.support-modal h3{font-family:var(--display);font-size:20px;font-weight:600;margin:0 0 14px}
+.support-modal label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:6px}
+.support-modal textarea,.support-modal input{width:100%;border:1px solid var(--line);padding:10px 12px;font-size:13.5px;font-family:var(--body);box-sizing:border-box;background:#fff;color:var(--ink);margin-bottom:14px}
+.support-modal textarea{min-height:100px;resize:vertical}
+.support-close-btn{position:absolute;top:14px;right:14px;background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;line-height:1}
+.support-submit-btn{width:100%;background:var(--gold);color:var(--ink);border:none;padding:13px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer}
+.support-submit-btn:disabled{opacity:.6;cursor:default}
+.support-status{font-size:12.5px;margin-top:10px;text-align:center}
+.support-status.error{color:#B3261E}
+.support-status.success{color:#2E7D32}
 </style>
 </head>
 <body>
@@ -248,5 +265,87 @@ applyLang(); render(); scheduleNext();
     a.setAttribute("rel", "noopener");
   });
 </script>
+
+<!-- Bottone Assistenza persistente (vedi MANUALE.md) -->
+<div class="support-overlay" id="support-overlay">
+  <div class="support-modal">
+    <button type="button" class="support-close-btn" id="support-close-btn" aria-label="Chiudi">✕</button>
+    <h3>Descrivi il problema</h3>
+    <form id="support-form">
+      <label for="support-message">Cosa è successo?</label>
+      <textarea id="support-message" required maxlength="2000" placeholder="Descrivi il problema che hai incontrato..."></textarea>
+      <label for="support-email">Email (opzionale, per ricontattarti)</label>
+      <input id="support-email" type="email" placeholder="nome@email.it" />
+      <button type="submit" class="support-submit-btn" id="support-submit-btn">Invia segnalazione</button>
+      <div class="support-status" id="support-status" style="display:none"></div>
+    </form>
+  </div>
+</div>
+<button type="button" class="support-fab" id="support-fab-btn">🆘 Assistenza</button>
+<script>
+(function () {
+  var SUPPORT_CONTEXT = "sito - come funziona";
+  var fab = document.getElementById("support-fab-btn");
+  var overlay = document.getElementById("support-overlay");
+  var closeBtn = document.getElementById("support-close-btn");
+  var form = document.getElementById("support-form");
+  var statusBox = document.getElementById("support-status");
+  var submitBtn = document.getElementById("support-submit-btn");
+  if (!fab || !overlay || !form) return;
+
+  function openModal() {
+    overlay.classList.add("open");
+    document.getElementById("support-message").focus();
+  }
+  function closeModal() {
+    overlay.classList.remove("open");
+  }
+  fab.addEventListener("click", openModal);
+  closeBtn.addEventListener("click", closeModal);
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) closeModal();
+  });
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var message = document.getElementById("support-message").value.trim();
+    var email = document.getElementById("support-email").value.trim();
+    if (!message) return;
+
+    statusBox.style.display = "none";
+    statusBox.className = "support-status";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Invio in corso…";
+    try {
+      var res = await fetch("/.netlify/functions/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "submit-support-request",
+          message: message,
+          contactEmail: email,
+          context: SUPPORT_CONTEXT,
+          userAgent: navigator.userAgent,
+        }),
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Errore nell'invio della segnalazione");
+      statusBox.textContent = "Segnalazione inviata, grazie! Ti risponderemo il prima possibile.";
+      statusBox.className = "support-status success";
+      statusBox.style.display = "block";
+      form.reset();
+      setTimeout(closeModal, 2200);
+    } catch (err) {
+      statusBox.textContent = err.message || "Errore nell'invio. Riprova.";
+      statusBox.className = "support-status error";
+      statusBox.style.display = "block";
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Invia segnalazione";
+    }
+  });
+})();
+</script>
+
 </body>
 </html>

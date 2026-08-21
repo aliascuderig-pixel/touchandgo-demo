@@ -3,8 +3,9 @@
 // registrazione partner self-service) per le azioni che non richiedono
 // l'accesso al CRM interno: sincronizzare lo storico acquisti, confermare
 // la lettura del banner "punto di ritiro aggiornato", riscattare il
-// credito partner sul canone, generare codici sconto partner e registrare
-// un nuovo partner. Stessa identica logica che viveva in
+// credito partner sul canone, generare codici sconto partner, registrare
+// un nuovo partner e inviare una richiesta di assistenza dal bottone
+// persistente su sito/app. Stessa identica logica che viveva in
 // netlify/functions/crm.js (repository interno, privato) — estratta qui
 // perché queste sono le uniche azioni che l'app/sito pubblico usano da
 // quella function. Tutto il resto di crm.js (elenco completo, gestione
@@ -108,6 +109,7 @@ exports.handler = async (event) => {
     const purchases = getStore({ name: "purchases", ...blobsAuth });
     const partners = getStore({ name: "partners", ...blobsAuth });
     const discountCodes = getStore({ name: "partner-discount-codes", ...blobsAuth });
+    const supportRequests = getStore({ name: "support-requests", ...blobsAuth });
 
     // Usata dall'app turista per allineare localmente lo stato degli
     // acquisti già noti (status, pickupPoint, ecc.) con quanto aggiornato
@@ -260,6 +262,33 @@ exports.handler = async (event) => {
       await partners.setJSON(code, partner);
       const invoice = await issuePartnerInvoice(partners, code, partner);
       return ok({ code, planLabel: planInfo.label, partner, invoice });
+    }
+
+    // Bottone "Assistenza" persistente su ogni pagina/schermata (sito e
+    // app): raccoglie una segnalazione libera del turista/partner, con il
+    // contesto (pagina o schermata da cui è stata inviata) per aiutare lo
+    // staff a orientarsi senza dover chiedere di nuovo dov'era l'utente.
+    // Stesso rate limit delle altre action pubbliche esposte a chiunque
+    // senza autenticazione.
+    if (action === "submit-support-request") {
+      const withinLimit = await checkRateLimit(`submit-support-request:${getClientIp(event)}`);
+      if (!withinLimit) return bad("Troppe richieste, riprova tra qualche minuto.", 429);
+
+      const message = (body.message || "").trim();
+      if (!message) return bad("Missing message");
+      if (message.length > 2000) return bad("Messaggio troppo lungo (massimo 2000 caratteri)");
+
+      const record = {
+        id: `SR-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        message,
+        contactEmail: (body.contactEmail || "").trim(),
+        context: (body.context || "").trim(),
+        userAgent: (body.userAgent || "").trim(),
+        status: "nuovo",
+        createdAt: new Date().toISOString(),
+      };
+      await supportRequests.setJSON(record.id, record);
+      return ok({ id: record.id });
     }
 
     return bad("Unknown action");
