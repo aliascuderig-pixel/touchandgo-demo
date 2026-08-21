@@ -575,3 +575,17 @@ button{font-family:inherit;cursor:pointer}
 .ob-tap-zone.ob-left{left:0}
 .ob-tap-zone.ob-right{right:0}
 .promo-card-inline .btn-primary{background:var(--gold-soft);color:var(--ink)}
+
+/* Mirino fotocamera custom (TOU-20) — vedi openCameraViewfinder() in app.js */
+.viewfinder-overlay{position:fixed;inset:0;background:#000;z-index:300;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.viewfinder-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.viewfinder-frame{position:relative;width:82vw;max-width:420px;aspect-ratio:3/4;pointer-events:none}
+.vf-corner{position:absolute;width:34px;height:34px;border-color:var(--gold-hot);border-style:solid;opacity:.95}
+.vf-tl{top:0;left:0;border-width:3px 0 0 3px}
+.vf-tr{top:0;right:0;border-width:3px 3px 0 0}
+.vf-bl{bottom:0;left:0;border-width:0 0 3px 3px}
+.vf-br{bottom:0;right:0;border-width:0 3px 3px 0}
+.vf-close{position:absolute;top:20px;right:18px;z-index:2;width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.vf-shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);z-index:2;width:70px;height:70px;border-radius:50%;background:transparent;border:3px solid #fff;cursor:pointer;padding:0}
+.vf-shutter::after{content:"";display:block;width:56px;height:56px;margin:4px auto;border-radius:50%;background:#fff}
+.vf-shutter:active::after{background:var(--gold-hot)}

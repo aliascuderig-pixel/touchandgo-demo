@@ -113,6 +113,15 @@ Prima della schermata Cover, il turista vede una sequenza animata a 4 slide che 
 8. **Documenti** (`DocumentsScreen`) — lettera di vettura e fattura proforma generate automaticamente per ogni acquisto, consultabili in ogni momento.
 9. **Conclusione soggiorno** (`ConcludeScreen`) — quando il turista ha finito di fare acquisti, consolida tutti gli acquisti "in sospeso" per destinazione in un unico ordine di ritiro (`ShippedScreen`) — qui gli acquisti passano storicamente a "ritirato" in un colpo solo (percorso legacy, oggi affiancato dal flusso più granulare a 4 stati descritto sotto).
 
+### Mirino fotocamera con rumore otturatore (TOU-20)
+
+Le due schermate che scattano una foto — **Home** (foto dell'oggetto, punto 2 sopra) e **verifica imballo** (`PackageCheckScreen`, punto 7 sopra) — non delegano più interamente alla fotocamera nativa del telefono: `openCameraViewfinder()` in `app.js` apre un vero mirino in-app via `getUserMedia`.
+
+- **UI a mirino**: overlay a schermo intero (`.viewfinder-overlay`) con anteprima video live, una cornice ad angoli in stile reflex (`.viewfinder-frame`, quattro `.vf-corner` dorati) invece di un semplice riquadro generico, pulsante di scatto circolare in basso (`.vf-shutter`) e chiusura in alto a destra (`.vf-close`).
+- **Rumore di scatto**: `playShutterSound()` sintetizza via Web Audio API due brevi impulsi di rumore filtrato (apertura/chiusura otturatore) — non un file audio esterno: nessun asset da scaricare né da licenziare, funziona anche offline nella PWA. Riprodotto esattamente al tap sul pulsante di scatto, non a un momento approssimato.
+- **Cattura**: al tap, il fotogramma corrente del video viene disegnato su un `<canvas>` e convertito in JPEG (`canvas.toDataURL`) — stesso formato (data URL) che l'app riceveva già da `FileReader` sui file dell'input nativo, quindi tutto il codice a valle (classificazione AI, verifica imballo) resta invariato.
+- **Fallback automatico**: se `getUserMedia` non è disponibile o il permesso fotocamera viene negato (webview datate, contesti senza fotocamera), si ricade sul precedente `<input type="file" capture="environment">` — l'input nativo resta comunque presente in pagina per questo — senza alcuna UI a mirino ma senza rompere il flusso di scatto.
+
 ### Effetto "schizzo architettonico" sulla foto di copertina
 
 La schermata Cover (`CoverScreen()`, `dist/assets/app.js`), quando è disponibile una foto reale del punto di ritiro (`state.locationPhoto`), non la mostra fotorealistica: la rende come uno schizzo a linee (bordi, non colori pieni — come un software di render d'interni), tinto nei colori del brand.
