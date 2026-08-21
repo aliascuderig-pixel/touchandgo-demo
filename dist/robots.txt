@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Le pagine private (CRM, area investitori) non vivono in questo deploy —
+# sono servite dal repository/sito separato touchandgo-internal — ma
+# escluderle esplicitamente anche qui è una protezione in più, nel caso
+# quei percorsi vengano mai serviti dalla stessa origine di questo sito.
+Disallow: /site/admin.html
+Disallow: /site/investitori.html
+
+Sitemap: https://benevolent-longma-57c78a.netlify.app/sitemap.xml

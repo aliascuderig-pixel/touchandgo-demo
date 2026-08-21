@@ -53,11 +53,20 @@ Pagina pubblica standalone, separata da `index.html`: una demo animata a slide d
 - **CTA finale**: l'ultima slide ha un link "Apri l'app →" (`#app-link-cta`). Come il resto del sito, punta alla radice dell'app tramite lo stesso script `APP_URL` copiato in ogni pagina (`var APP_URL = "/"`, applicato a `#app-link-top`, `#app-link-hero`, `#app-link-cta`) — nessun dominio Netlify scritto a mano, così il link resta corretto qualunque sia il dominio effettivo del sito.
 - **Wordmark del brand**: stessa identica soluzione visiva dell'onboarding in-app (vedi "Onboarding animato" più sotto) — "Touch&Go" (`#wordmark`) centrato in alto, persistente su tutte e 4 le slide, non tradotto.
 
+### SEO e indicizzazione
+
+- **`dist/robots.txt`**: permette tutto di default (`Allow: /`), esclude esplicitamente `/site/admin.html` e `/site/investitori.html` (percorsi che in realtà non vivono in questo deploy — vedi sotto — ma escluderli comunque qui è una protezione in più se mai finissero sulla stessa origine), e referenzia `dist/sitemap.xml`.
+- **`dist/sitemap.xml`**: elenca solo le pagine pubbliche reali servite da questo repository — l'app (`/`), `dist/site/index.html`, `come-funziona.html`, `termini.html`, `privacy.html`. Aggiornalo se si aggiungono o rimuovono pagine pubbliche.
+- **Open Graph**: `og:title`/`og:description`/`og:type`/`og:url`/`og:locale` presenti su `dist/index.html` (l'app), `dist/site/index.html` e `dist/site/come-funziona.html`. Nessun `og:image`: non esiste ancora un'immagine di anteprima dedicata — va aggiunto quando ce ne sarà una reale, mai un URL inventato.
+- **Dati strutturati**: `dist/site/index.html` include un blocco `<script type="application/ld+json">` (schema.org `Service`, con `provider` `Organization`) — nome, descrizione e area servita ripresi dal copy già pubblicato sul sito stesso (nessun dato inventato: niente indirizzo completo o telefono, mai pubblicati).
+
+**Nota importante sul CRM/investitori**: `dist/site/admin.html` e `dist/site/investitori.html` **non esistono in questo repository** — vivono nel repository/sito separato `touchandgo-internal` (vedi sotto e "Due repository" in Panoramica). Il `Disallow` in `robots.txt` qui sopra non ha quindi alcun effetto reale su quelle pagine (un `robots.txt` vale solo per l'origine che lo serve): un `<meta name="robots" content="noindex, nofollow">` nell'`<head>` di quei due file, più un proprio `robots.txt`/`sitemap.xml` coerenti, vanno aggiunti **nel repository `touchandgo-internal`**, non qui.
+
 ---
 
 ## CRM interno, area investitori e kit riservato
 
-Vivono nel repository privato `touchandgo-internal`, non in questo repository — vedi "Due repository" in Panoramica. Il CRM (`dist/site/admin.html`) è il gestionale per lo staff (acquisti, partner, documenti, legale, blocklist...); l'area investitori (`dist/site/investitori.html`) e il kit riservato (NDA, cap table, SAFE, modello economico, pitch deck) sono contenuti confidenziali dietro password. La documentazione tab-per-tab del CRM vive nella copia di `MANUALE.md` di quel repository, non qui.
+Vivono nel repository privato `touchandgo-internal`, non in questo repository — vedi "Due repository" in Panoramica. Il CRM (`dist/site/admin.html`) è il gestionale per lo staff (acquisti, partner, documenti, legale, blocklist...); l'area investitori (`dist/site/investitori.html`) e il kit riservato (NDA, cap table, SAFE, modello economico, pitch deck) sono contenuti confidenziali dietro password, e **vanno esclusi dall'indicizzazione direttamente in quel repository** (meta `noindex` + `robots.txt` propri del sito `touchandgo-internal` — non presenti in questo repository pubblico). La documentazione tab-per-tab del CRM vive nella copia di `MANUALE.md` di quel repository, non qui.
 
 Quello che resta rilevante da questo lato (repository pubblico):
 
