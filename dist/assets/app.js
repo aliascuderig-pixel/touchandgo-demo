@@ -203,6 +203,7 @@ const I18N = {
     mode_tourist: "Turista",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Chiedi a Touch&Go",
+    header_support_btn: "🆘 Assistenza",
 
     // ---- Assistente conversazionale (AssistantChatModal, netlify/functions/assistant.js) ----
     assistant_chat_title: "Chiedi a Touch&Go",
@@ -214,6 +215,18 @@ const I18N = {
     assistant_chat_send: "Invia",
     assistant_chat_sending: "Un attimo…",
     assistant_chat_error: "Non sono riuscito a rispondere. Riprova.",
+
+    // ---- Bottone Assistenza persistente (SupportRequestModal, sync.js action "submit-support-request") ----
+    support_modal_title: "Descrivi il problema",
+    support_modal_close_aria: "Chiudi",
+    support_modal_message_label: "Cosa è successo?",
+    support_modal_message_placeholder: "Descrivi il problema che hai incontrato...",
+    support_modal_email_label: "Email (opzionale, per ricontattarti)",
+    support_modal_email_placeholder: "nome@email.it",
+    support_modal_send: "Invia segnalazione",
+    support_modal_sending: "Invio in corso…",
+    support_modal_success: "Segnalazione inviata, grazie! Ti risponderemo il prima possibile.",
+    support_modal_error: "Errore nell'invio. Riprova.",
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Punto di ritiro rilevato",
@@ -431,6 +444,7 @@ const I18N = {
     mode_tourist: "Tourist",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Ask Touch&Go",
+    header_support_btn: "🆘 Support",
 
     // ---- Conversational assistant (AssistantChatModal, netlify/functions/assistant.js) ----
     assistant_chat_title: "Ask Touch&Go",
@@ -442,6 +456,18 @@ const I18N = {
     assistant_chat_send: "Send",
     assistant_chat_sending: "One moment…",
     assistant_chat_error: "I couldn't get an answer. Please try again.",
+
+    // ---- Persistent Support button (SupportRequestModal, sync.js action "submit-support-request") ----
+    support_modal_title: "Describe the problem",
+    support_modal_close_aria: "Close",
+    support_modal_message_label: "What happened?",
+    support_modal_message_placeholder: "Describe the problem you ran into...",
+    support_modal_email_label: "Email (optional, so we can get back to you)",
+    support_modal_email_placeholder: "name@email.com",
+    support_modal_send: "Send report",
+    support_modal_sending: "Sending…",
+    support_modal_success: "Report sent, thank you! We'll get back to you as soon as possible.",
+    support_modal_error: "Error sending. Please try again.",
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Pickup point detected",
@@ -829,6 +855,15 @@ const state = {
   assistantChatReply: null,
   assistantChatError: null,
   assistantChatLoading: false,
+  // Bottone "Assistenza" persistente in Header() (sync.js, action
+  // "submit-support-request") — presente su ogni schermata, a differenza
+  // del bottone assistente sopra che compare solo in modalità turista.
+  supportModalOpen: false,
+  supportMessage: "",
+  supportEmail: "",
+  supportSending: false,
+  supportError: null,
+  supportSuccess: false,
 };
 const app = document.getElementById("app");
 
@@ -905,6 +940,7 @@ function render() {
   // non perde il contesto (es. può farsi una domanda da ResultScreen e
   // ritrovarsi esattamente lì chiudendo la chat).
   if (state.assistantChatOpen) app.appendChild(AssistantChatModal());
+  if (state.supportModalOpen) app.appendChild(SupportRequestModal());
 }
 
 function el(tag, cls, html) {
@@ -925,6 +961,7 @@ function Header() {
         <button class="lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>
       </div>
       ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
+      <button class="header-support-btn" id="header-support-btn" type="button">${t("header_support_btn")}</button>
       <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">${t("header_site_link")}</a>
       <button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
     </div>`;
@@ -940,6 +977,12 @@ function Header() {
       render();
     });
   }
+  header.querySelector("#header-support-btn").addEventListener("click", () => {
+    state.supportModalOpen = true;
+    state.supportError = null;
+    state.supportSuccess = false;
+    render();
+  });
 
   if (state.isOffline) {
     wrap.appendChild(el("div", "offline-banner", t("offline_banner")));
@@ -1064,6 +1107,107 @@ async function sendAssistantChatMessage() {
     state.assistantChatError = t("assistant_chat_error");
   }
   state.assistantChatLoading = false;
+  render();
+}
+
+// Bottone "Assistenza" persistente (Header(), su ogni pagina/schermata) —
+// stesso meccanismo dell'assistente conversazionale sopra (overlay sopra
+// la schermata corrente, non una navigazione), ma per segnalazioni libere
+// verso lo staff invece che domande all'AI. Il context inviato combina
+// schermata e lingua correnti, così lo staff sa da dove arriva la
+// segnalazione senza doverlo chiedere di nuovo.
+function SupportRequestModal() {
+  const overlay = el("div", "assistant-chat-overlay");
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeSupportModal();
+  });
+
+  const modal = el("div", "assistant-chat-modal");
+  modal.addEventListener("click", (e) => e.stopPropagation());
+
+  const header = el("div", "assistant-chat-header");
+  header.innerHTML = `<div class="assistant-chat-title">${t("support_modal_title")}</div>`;
+  const closeBtn = el("button", "assistant-chat-close", "✕");
+  closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", t("support_modal_close_aria"));
+  closeBtn.addEventListener("click", closeSupportModal);
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  if (state.supportSuccess) {
+    modal.appendChild(el("div", "banner", `<div class="banner-title">✓</div><p>${t("support_modal_success")}</p>`));
+    overlay.appendChild(modal);
+    return overlay;
+  }
+
+  const messageField = el("div", "support-field");
+  messageField.innerHTML = `<div class="support-field-lbl">${t("support_modal_message_label")}</div>`;
+  const messageInput = document.createElement("textarea");
+  messageInput.className = "support-modal-textarea";
+  messageInput.maxLength = 2000;
+  messageInput.placeholder = t("support_modal_message_placeholder");
+  messageInput.value = state.supportMessage;
+  messageInput.addEventListener("input", (e) => {
+    state.supportMessage = e.target.value;
+  });
+  messageField.appendChild(messageInput);
+  addVoiceButton(messageInput);
+  modal.appendChild(messageField);
+
+  const emailField = el("div", "support-field");
+  emailField.innerHTML = `<div class="support-field-lbl">${t("support_modal_email_label")}</div><input class="support-modal-input" id="support-email-input" type="email" placeholder="${t("support_modal_email_placeholder")}" value="${state.supportEmail}" />`;
+  modal.appendChild(emailField);
+  emailField.querySelector("#support-email-input").addEventListener("input", (e) => {
+    state.supportEmail = e.target.value;
+  });
+
+  const sendBtn = el("button", "btn-primary assistant-chat-send", state.supportSending ? t("support_modal_sending") : t("support_modal_send"));
+  sendBtn.type = "button";
+  sendBtn.disabled = state.supportSending;
+  sendBtn.addEventListener("click", sendSupportRequest);
+  modal.appendChild(sendBtn);
+
+  if (state.supportError) {
+    modal.appendChild(el("div", "alert", `⚠️ ${state.supportError}`));
+  }
+
+  overlay.appendChild(modal);
+  return overlay;
+}
+
+function closeSupportModal() {
+  state.supportModalOpen = false;
+  state.supportSuccess = false;
+  render();
+}
+
+async function sendSupportRequest() {
+  const message = state.supportMessage.trim();
+  if (!message || state.supportSending) return;
+  state.supportSending = true;
+  state.supportError = null;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "submit-support-request",
+        message,
+        contactEmail: state.supportEmail.trim(),
+        context: `app - ${state.screen} (${state.lang})`,
+        userAgent: navigator.userAgent,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Errore nell'invio");
+    state.supportSuccess = true;
+    state.supportMessage = "";
+    state.supportEmail = "";
+  } catch (e) {
+    state.supportError = t("support_modal_error");
+  }
+  state.supportSending = false;
   render();
 }
 
