@@ -1749,40 +1749,40 @@ function restartOnboarding() {
 }
 
 // Le 4 illustrazioni SVG, identiche al mockup di riferimento (stesso
-// viewBox, stessi path, stessi colori — #F0C877 = --gold-hot, #E8D5B0 =
+// viewBox, stessi path, stessi colori — #ff9478 = --gold-hot, #f3c3b8 =
 // --gold-soft già espressi come valori letterali negli attributi SVG).
 const ONBOARDING_ART = [
   `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
-    <path d="M64 70C64 58 73 49 85 49C97 49 106 58 106 70V96H64V70Z" stroke="#F0C877" stroke-width="1.5"/>
-    <path d="M70 96V102C70 105 73 108 76 108H94C97 108 100 105 100 102V96" stroke="#F0C877" stroke-width="1.5"/>
-    <ellipse cx="85" cy="70" rx="14" ry="18" stroke="#F0C877" stroke-width="1.2" opacity=".7"/>
-    <rect x="24" y="30" width="34" height="52" rx="5" stroke="#E8D5B0" stroke-width="1.7" transform="rotate(-8 24 30)"/>
-    <circle cx="43" cy="65" r="7" stroke="#E8D5B0" stroke-width="1.3" transform="rotate(-8 24 30)"/>
-    <path d="M78 24L86 30L94 24M78 36L86 30L94 36" stroke="#F0C877" stroke-width="1.3" opacity=".9"/>
+    <path d="M64 70C64 58 73 49 85 49C97 49 106 58 106 70V96H64V70Z" stroke="#ff9478" stroke-width="1.5"/>
+    <path d="M70 96V102C70 105 73 108 76 108H94C97 108 100 105 100 102V96" stroke="#ff9478" stroke-width="1.5"/>
+    <ellipse cx="85" cy="70" rx="14" ry="18" stroke="#ff9478" stroke-width="1.2" opacity=".7"/>
+    <rect x="24" y="30" width="34" height="52" rx="5" stroke="#f3c3b8" stroke-width="1.7" transform="rotate(-8 24 30)"/>
+    <circle cx="43" cy="65" r="7" stroke="#f3c3b8" stroke-width="1.3" transform="rotate(-8 24 30)"/>
+    <path d="M78 24L86 30L94 24M78 36L86 30L94 36" stroke="#ff9478" stroke-width="1.3" opacity=".9"/>
   </svg>`,
   `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
-    <path d="M40 90C55 78 62 62 62 52C62 39 51.5 30 40 30C28.5 30 18 39 18 52C18 62 25 78 40 90Z" stroke="#E8D5B0" stroke-width="1.6"/>
-    <circle cx="40" cy="52" r="7" stroke="#E8D5B0" stroke-width="1.4"/>
-    <path d="M50 78C68 68 84 68 100 74" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 4"/>
-    <circle cx="122" cy="60" r="26" stroke="#F0C877" stroke-width="1.5"/>
-    <path d="M96 60H148M122 34C130 42 134 51 134 60C134 69 130 78 122 86C114 78 110 69 110 60C110 51 114 42 122 34Z" stroke="#F0C877" stroke-width="1"/>
+    <path d="M40 90C55 78 62 62 62 52C62 39 51.5 30 40 30C28.5 30 18 39 18 52C18 62 25 78 40 90Z" stroke="#f3c3b8" stroke-width="1.6"/>
+    <circle cx="40" cy="52" r="7" stroke="#f3c3b8" stroke-width="1.4"/>
+    <path d="M50 78C68 68 84 68 100 74" stroke="#ff9478" stroke-width="1.1" stroke-dasharray="2 4"/>
+    <circle cx="122" cy="60" r="26" stroke="#ff9478" stroke-width="1.5"/>
+    <path d="M96 60H148M122 34C130 42 134 51 134 60C134 69 130 78 122 86C114 78 110 69 110 60C110 51 114 42 122 34Z" stroke="#ff9478" stroke-width="1"/>
   </svg>`,
   `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
-    <rect x="58" y="52" width="52" height="44" rx="2" stroke="#F0C877" stroke-width="1.6"/>
-    <path d="M58 66H110M84 52V96" stroke="#F0C877" stroke-width="1"/>
-    <circle cx="120" cy="46" r="2" fill="#E8D5B0"/>
-    <path d="M120 48V56" stroke="#E8D5B0" stroke-width="1"/>
-    <rect x="112" y="56" width="18" height="18" rx="2" stroke="#E8D5B0" stroke-width="1.5"/>
-    <rect x="116" y="60" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="60" width="4" height="4" fill="#E8D5B0"/>
-    <rect x="116" y="66" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="66" width="4" height="4" fill="#E8D5B0"/>
+    <rect x="58" y="52" width="52" height="44" rx="2" stroke="#ff9478" stroke-width="1.6"/>
+    <path d="M58 66H110M84 52V96" stroke="#ff9478" stroke-width="1"/>
+    <circle cx="120" cy="46" r="2" fill="#f3c3b8"/>
+    <path d="M120 48V56" stroke="#f3c3b8" stroke-width="1"/>
+    <rect x="112" y="56" width="18" height="18" rx="2" stroke="#f3c3b8" stroke-width="1.5"/>
+    <rect x="116" y="60" width="4" height="4" fill="#f3c3b8"/><rect x="122" y="60" width="4" height="4" fill="#f3c3b8"/>
+    <rect x="116" y="66" width="4" height="4" fill="#f3c3b8"/><rect x="122" y="66" width="4" height="4" fill="#f3c3b8"/>
   </svg>`,
   `<svg class="ob-art" viewBox="0 0 172 130" fill="none">
-    <rect x="22" y="30" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
-    <rect x="124" y="24" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
-    <rect x="30" y="66" width="24" height="20" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
-    <path d="M46 50L74 66M140 44L104 62M50 76L74 70" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 3"/>
-    <rect x="66" y="62" width="42" height="34" rx="3" stroke="#F0C877" stroke-width="1.8"/>
-    <path d="M66 74H108M87 62V96" stroke="#F0C877" stroke-width="1"/>
+    <rect x="22" y="30" width="26" height="22" rx="2" stroke="#f3c3b8" stroke-width="1.3" opacity=".8"/>
+    <rect x="124" y="24" width="26" height="22" rx="2" stroke="#f3c3b8" stroke-width="1.3" opacity=".8"/>
+    <rect x="30" y="66" width="24" height="20" rx="2" stroke="#f3c3b8" stroke-width="1.3" opacity=".8"/>
+    <path d="M46 50L74 66M140 44L104 62M50 76L74 70" stroke="#ff9478" stroke-width="1.1" stroke-dasharray="2 3"/>
+    <rect x="66" y="62" width="42" height="34" rx="3" stroke="#ff9478" stroke-width="1.8"/>
+    <path d="M66 74H108M87 62V96" stroke="#ff9478" stroke-width="1"/>
   </svg>`,
 ];
 
