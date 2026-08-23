@@ -9,19 +9,19 @@
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://benevolent-longma-57c78a.netlify.app/site/come-funziona.html" />
 <meta property="og:locale" content="it_IT" />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#0F0F0F; --ink-soft:#161616; --cream:#F4EFE6; --paper:#FAF8F4;
-  --gold:#C9A96E; --gold-soft:#E8D5B0; --gold-deep:#8B6914; --gold-hot:#F0C877;
-  --muted:#9A9488; --line:#2A2924; --good:#5FAE6E;
-  --display:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --ink:#070c0d; --ink-soft:#141d1f; --cream:#F4EFE6; --paper:#FAF8F4;
+  --gold:#c9f24d; --gold-soft:#eefad1; --gold-deep:#8fb536; --gold-hot:#ddff6b;
+  --muted:#9A9488; --line:#141d1f; --good:#5FAE6E;
+  --display:'Space Grotesk',ui-serif,Georgia,serif;
   --body:'Montserrat',system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
-body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-smoothing:antialiased;display:flex;justify-content:center;align-items:center;min-height:100dvh}
-#stage{width:100%;max-width:420px;height:100dvh;max-height:840px;background:radial-gradient(circle at 50% -10%,#1a1710 0%,var(--ink) 55%);position:relative;overflow:hidden}
+body{font-family:var(--body);background:#070c0d;color:var(--cream);-webkit-font-smoothing:antialiased;display:flex;justify-content:center;align-items:center;min-height:100dvh}
+#stage{width:100%;max-width:420px;height:100dvh;max-height:840px;background:radial-gradient(circle at 50% -10%,#141d1f 0%,var(--ink) 55%);position:relative;overflow:hidden}
 @media (min-width:460px){#stage{border-radius:6px;box-shadow:0 30px 90px rgba(0,0,0,.65)}}
 
 #langToggle{position:absolute;top:16px;right:16px;z-index:6;display:flex;gap:4px;background:rgba(0,0,0,.45);border-radius:20px;padding:3px}
@@ -41,15 +41,15 @@ body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-
 .step-num{font-family:var(--display);font-size:14px;color:var(--gold-hot);letter-spacing:.08em;margin-bottom:10px;opacity:.9;font-weight:600}
 
 .art-wrap{width:150px;height:112px;margin-bottom:14px;position:relative;display:flex;align-items:center;justify-content:center}
-.art-glow{position:absolute;inset:-14px;background:radial-gradient(circle,rgba(240,200,119,.22) 0%,transparent 68%);opacity:0;transition:opacity .5s ease .15s}
+.art-glow{position:absolute;inset:-14px;background:radial-gradient(circle,rgba(221,255,107,.22) 0%,transparent 68%);opacity:0;transition:opacity .5s ease .15s}
 .slide.active .art-glow{opacity:1}
 .art{width:150px;height:112px;transform:scale(.86);opacity:0;transition:transform .55s cubic-bezier(.2,1.4,.4,1) .1s, opacity .4s ease .1s}
 .slide.active .art{transform:scale(1);opacity:1}
 
 .stat-chip{
   display:inline-flex;align-items:baseline;gap:5px;
-  background:rgba(240,200,119,.1);
-  border:1px solid rgba(240,200,119,.35);
+  background:rgba(221,255,107,.1);
+  border:1px solid rgba(221,255,107,.35);
   border-radius:22px;
   padding:6px 14px 6px 12px;
   margin-bottom:14px;
@@ -106,12 +106,12 @@ body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-
     <div class="step-num">01 / 04</div>
     <div class="art-wrap"><div class="art-glow"></div>
       <svg class="art" viewBox="0 0 172 130" fill="none">
-        <path d="M64 70C64 58 73 49 85 49C97 49 106 58 106 70V96H64V70Z" stroke="#F0C877" stroke-width="1.5"/>
-        <path d="M70 96V102C70 105 73 108 76 108H94C97 108 100 105 100 102V96" stroke="#F0C877" stroke-width="1.5"/>
-        <ellipse cx="85" cy="70" rx="14" ry="18" stroke="#F0C877" stroke-width="1.2" opacity=".7"/>
-        <rect x="24" y="30" width="34" height="52" rx="5" stroke="#E8D5B0" stroke-width="1.7" transform="rotate(-8 24 30)"/>
-        <circle cx="43" cy="65" r="7" stroke="#E8D5B0" stroke-width="1.3" transform="rotate(-8 24 30)"/>
-        <path d="M78 24L86 30L94 24M78 36L86 30L94 36" stroke="#F0C877" stroke-width="1.3" opacity=".9"/>
+        <path d="M64 70C64 58 73 49 85 49C97 49 106 58 106 70V96H64V70Z" stroke="#ddff6b" stroke-width="1.5"/>
+        <path d="M70 96V102C70 105 73 108 76 108H94C97 108 100 105 100 102V96" stroke="#ddff6b" stroke-width="1.5"/>
+        <ellipse cx="85" cy="70" rx="14" ry="18" stroke="#ddff6b" stroke-width="1.2" opacity=".7"/>
+        <rect x="24" y="30" width="34" height="52" rx="5" stroke="#eefad1" stroke-width="1.7" transform="rotate(-8 24 30)"/>
+        <circle cx="43" cy="65" r="7" stroke="#eefad1" stroke-width="1.3" transform="rotate(-8 24 30)"/>
+        <path d="M78 24L86 30L94 24M78 36L86 30L94 36" stroke="#ddff6b" stroke-width="1.3" opacity=".9"/>
       </svg>
     </div>
     <div class="stat-chip"><span class="n">3s</span><span class="l" data-key="stat0"></span></div>
@@ -124,11 +124,11 @@ body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-
     <div class="step-num">02 / 04</div>
     <div class="art-wrap"><div class="art-glow"></div>
       <svg class="art" viewBox="0 0 172 130" fill="none">
-        <path d="M40 90C55 78 62 62 62 52C62 39 51.5 30 40 30C28.5 30 18 39 18 52C18 62 25 78 40 90Z" stroke="#E8D5B0" stroke-width="1.6"/>
-        <circle cx="40" cy="52" r="7" stroke="#E8D5B0" stroke-width="1.4"/>
-        <path d="M50 78C68 68 84 68 100 74" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 4"/>
-        <circle cx="122" cy="60" r="26" stroke="#F0C877" stroke-width="1.5"/>
-        <path d="M96 60H148M122 34C130 42 134 51 134 60C134 69 130 78 122 86C114 78 110 69 110 60C110 51 114 42 122 34Z" stroke="#F0C877" stroke-width="1"/>
+        <path d="M40 90C55 78 62 62 62 52C62 39 51.5 30 40 30C28.5 30 18 39 18 52C18 62 25 78 40 90Z" stroke="#eefad1" stroke-width="1.6"/>
+        <circle cx="40" cy="52" r="7" stroke="#eefad1" stroke-width="1.4"/>
+        <path d="M50 78C68 68 84 68 100 74" stroke="#ddff6b" stroke-width="1.1" stroke-dasharray="2 4"/>
+        <circle cx="122" cy="60" r="26" stroke="#ddff6b" stroke-width="1.5"/>
+        <path d="M96 60H148M122 34C130 42 134 51 134 60C134 69 130 78 122 86C114 78 110 69 110 60C110 51 114 42 122 34Z" stroke="#ddff6b" stroke-width="1"/>
       </svg>
     </div>
     <div class="eyebrow" data-key="eyebrow">Come funziona</div>
@@ -140,13 +140,13 @@ body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-
     <div class="step-num">03 / 04</div>
     <div class="art-wrap"><div class="art-glow"></div>
       <svg class="art" viewBox="0 0 172 130" fill="none">
-        <rect x="58" y="52" width="52" height="44" rx="2" stroke="#F0C877" stroke-width="1.6"/>
-        <path d="M58 66H110M84 52V96" stroke="#F0C877" stroke-width="1"/>
-        <circle cx="120" cy="46" r="2" fill="#E8D5B0"/>
-        <path d="M120 48V56" stroke="#E8D5B0" stroke-width="1"/>
-        <rect x="112" y="56" width="18" height="18" rx="2" stroke="#E8D5B0" stroke-width="1.5"/>
-        <rect x="116" y="60" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="60" width="4" height="4" fill="#E8D5B0"/>
-        <rect x="116" y="66" width="4" height="4" fill="#E8D5B0"/><rect x="122" y="66" width="4" height="4" fill="#E8D5B0"/>
+        <rect x="58" y="52" width="52" height="44" rx="2" stroke="#ddff6b" stroke-width="1.6"/>
+        <path d="M58 66H110M84 52V96" stroke="#ddff6b" stroke-width="1"/>
+        <circle cx="120" cy="46" r="2" fill="#eefad1"/>
+        <path d="M120 48V56" stroke="#eefad1" stroke-width="1"/>
+        <rect x="112" y="56" width="18" height="18" rx="2" stroke="#eefad1" stroke-width="1.5"/>
+        <rect x="116" y="60" width="4" height="4" fill="#eefad1"/><rect x="122" y="60" width="4" height="4" fill="#eefad1"/>
+        <rect x="116" y="66" width="4" height="4" fill="#eefad1"/><rect x="122" y="66" width="4" height="4" fill="#eefad1"/>
       </svg>
     </div>
     <div class="eyebrow" data-key="eyebrow">Come funziona</div>
@@ -158,12 +158,12 @@ body{font-family:var(--body);background:#050505;color:var(--cream);-webkit-font-
     <div class="step-num">04 / 04</div>
     <div class="art-wrap"><div class="art-glow"></div>
       <svg class="art" viewBox="0 0 172 130" fill="none">
-        <rect x="22" y="30" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
-        <rect x="124" y="24" width="26" height="22" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
-        <rect x="30" y="66" width="24" height="20" rx="2" stroke="#E8D5B0" stroke-width="1.3" opacity=".8"/>
-        <path d="M46 50L74 66M140 44L104 62M50 76L74 70" stroke="#F0C877" stroke-width="1.1" stroke-dasharray="2 3"/>
-        <rect x="66" y="62" width="42" height="34" rx="3" stroke="#F0C877" stroke-width="1.8"/>
-        <path d="M66 74H108M87 62V96" stroke="#F0C877" stroke-width="1"/>
+        <rect x="22" y="30" width="26" height="22" rx="2" stroke="#eefad1" stroke-width="1.3" opacity=".8"/>
+        <rect x="124" y="24" width="26" height="22" rx="2" stroke="#eefad1" stroke-width="1.3" opacity=".8"/>
+        <rect x="30" y="66" width="24" height="20" rx="2" stroke="#eefad1" stroke-width="1.3" opacity=".8"/>
+        <path d="M46 50L74 66M140 44L104 62M50 76L74 70" stroke="#ddff6b" stroke-width="1.1" stroke-dasharray="2 3"/>
+        <rect x="66" y="62" width="42" height="34" rx="3" stroke="#ddff6b" stroke-width="1.8"/>
+        <path d="M66 74H108M87 62V96" stroke="#ddff6b" stroke-width="1"/>
       </svg>
     </div>
     <div class="stat-chip"><span class="n">1</span><span class="l" data-key="stat3"></span></div>
