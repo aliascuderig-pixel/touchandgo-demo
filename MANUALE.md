@@ -64,6 +64,17 @@ Pagina pubblica standalone, separata da `index.html`: una demo animata a slide d
 
 ---
 
+## Anteprime estetiche design weekend (`dist/design-preview/`) (TOU-21)
+
+Due pagine HTML statiche e isolate, per far confrontare a Giuseppe tre direzioni (produzione attuale + queste due) prima di decidere se procedere con un vero re-styling:
+
+- **`dist/design-preview/lime/index.html`** — variante verde-lime (`#C9F24D`).
+- **`dist/design-preview/corallo/index.html`** — variante corallo/arancione (`#FF6B4A`).
+
+Sono bundle standalone esportati da Claude Design (prototipo navigabile dell'intera suite: app turista, area partner, CRM interno, sito), copiati così come ricevuti, senza modifiche: caricano il proprio contenuto via script inline al primo render, nessuna dipendenza esterna. Non sono collegate da nessun link/nav del sito o dell'app reali, non sono elencate in `dist/sitemap.xml` (non sono pagine pubbliche reali, vedi "SEO e indicizzazione" sopra) e non toccano nessun componente/colore di produzione: solo materiale di riferimento visivo, la scelta della direzione estetica non è ancora stata fatta. L'eventuale re-styling vero del prodotto sarà un lavoro separato, dopo la decisione.
+
+---
+
 ## CRM interno, area investitori e kit riservato
 
 Vivono nel repository privato `touchandgo-internal`, non in questo repository — vedi "Due repository" in Panoramica. Il CRM (`dist/site/admin.html`) è il gestionale per lo staff (acquisti, partner, documenti, legale, blocklist...); l'area investitori (`dist/site/investitori.html`) e il kit riservato (NDA, cap table, SAFE, modello economico, pitch deck) sono contenuti confidenziali dietro password, e **sono esclusi dall'indicizzazione direttamente in quel repository** (meta `noindex` su entrambi i file + `robots.txt` del sito `touchandgo-internal` con `Disallow: /` sull'intero dominio — non presenti in questo repository pubblico, dove non servirebbero). La documentazione tab-per-tab del CRM vive nella copia di `MANUALE.md` di quel repository, non qui.
