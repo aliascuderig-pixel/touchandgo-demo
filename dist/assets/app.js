@@ -1361,7 +1361,7 @@ function PartnerTrendSection(stats) {
         ? ""
         : commissionDelta >= 0
         ? `<span style="color:var(--good)">▲ +€${commissionDelta.toFixed(2)} vs mese precedente</span>`
-        : `<span style="color:#B3261E">▼ €${commissionDelta.toFixed(2)} vs mese precedente</span>`;
+        : `<span style="color:var(--danger)">▼ €${commissionDelta.toFixed(2)} vs mese precedente</span>`;
     compare.innerHTML = `
       <div class="info-row"><span>Questo mese (${current.label})</span><b>${current.orders} ordini · €${current.commission.toFixed(2)} commissioni</b></div>
       ${previous ? `<div class="info-row"><span>Mese precedente (${previous.label})</span><b>${previous.orders} ordini · €${previous.commission.toFixed(2)} commissioni</b></div>` : ""}
@@ -1485,6 +1485,27 @@ function PartnerCreditSection(stats) {
   return wrap;
 }
 
+// Il QR è un'immagine raster generata da un servizio esterno (api.qrserver.com,
+// vedi qrCodeUrl() sotto) — i suoi colori sono quindi "cotti" nel PNG stesso,
+// non CSS: non seguirebbero altrimenti i temi lime/corallo (TOU-21), lasciando
+// un riquadro dal vecchio colore fisso dentro una .qr-card ormai scura. Letti
+// qui a runtime da --ink/--paper (gli stessi token usati da .qr-card) così il
+// QR resta coerente col tema attivo in tutti e tre (produzione + lime/corallo).
+function hexToDashRgb(hex) {
+  hex = (hex || "").trim().replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  const r = parseInt(hex.slice(0, 2), 16) || 0;
+  const g = parseInt(hex.slice(2, 4), 16) || 0;
+  const b = parseInt(hex.slice(4, 6), 16) || 0;
+  return `${r}-${g}-${b}`;
+}
+function qrCodeUrl(data, size) {
+  const style = getComputedStyle(document.documentElement);
+  const color = hexToDashRgb(style.getPropertyValue("--ink") || "#0F0F0F");
+  const bgcolor = hexToDashRgb(style.getPropertyValue("--paper") || "#FAF8F4");
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&color=${color}&bgcolor=${bgcolor}&data=${data}`;
+}
+
 // QR che incorpora l'URL dell'app con ?partner=CODICE già impostato —
 // chi lo scansiona apre l'app con capturePartnerCode() che salva il
 // codice partner in automatico (vedi capturePartnerCode(), non toccata).
@@ -1503,7 +1524,7 @@ function PartnerQRSection(code) {
 
   const partnerUrl = `${window.location.origin}/?partner=${encodeURIComponent(code)}`;
   const qrData = encodeURIComponent(partnerUrl);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
+  const qrUrl = qrCodeUrl(qrData, 220);
 
   const card = el("div", "qr-card");
   card.innerHTML = `
@@ -2848,7 +2869,7 @@ function QueuedScreen() {
   const wrap = el("div", "section booked-screen");
   wrap.appendChild(AssistantAvatar("queued"));
   const qrData = encodeURIComponent(`TouchAndGo|${item.id}|negozio:${item.pickupPoint}|dest:${item.addressLabel}`);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
+  const qrUrl = qrCodeUrl(qrData, 220);
   const intro = el("div");
   intro.innerHTML = `
     <div class="booked-icon">🕓</div>
