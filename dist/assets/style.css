@@ -151,7 +151,7 @@ button{font-family:inherit;cursor:pointer}
   margin:18px 20px 0;background:var(--ink);border-radius:var(--radius);padding:28px 20px;text-align:center;color:var(--ivory);
   box-shadow:var(--shadow);
 }
-.capture-icon{font-size:34px;margin-bottom:10px}
+.capture-icon{margin-bottom:10px;display:flex;justify-content:center}
 .capture-card h3{font-family:var(--display);font-size:19px;margin:0 0 6px;font-weight:600}
 .capture-card p{font-size:12.5px;color:#B8B0A0;margin:0 0 10px}
 .lang-line{font-family:var(--mono);font-size:10.5px;color:var(--gold-soft);letter-spacing:.02em}
@@ -234,9 +234,27 @@ button{font-family:inherit;cursor:pointer}
 @keyframes blink{50%{opacity:0}}
 .capture-icon{animation:breathe 2.4s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+/* Iride/diaframma fotografico (TOU-20): 6 lamelle identiche, posizionate in
+   slot da 60° via l'attributo SVG "transform" sul <g> che le contiene
+   (fisso). L'apertura/chiusura è un secondo transform, in CSS stavolta, sul
+   singolo <path> — transform-origin sulla punta esterna della lamella (il
+   perno reale di rotazione), non sul centro dell'icona, altrimenti le
+   lamelle ruoterebbero rigidamente come una girandola invece di "chiudersi"
+   verso il centro. Aperta di default; la classe "closing" (aggiunta via JS
+   al tap sul riquadro "Fotografa l'oggetto", vedi HomeScreen() in app.js)
+   la chiude in sincrono col rumore dell'otturatore. */
+.aperture-icon{width:40px;height:40px;overflow:visible}
+.aperture-blade{
+  fill:var(--gold-soft);stroke:var(--ink);stroke-width:0.6;
+  transform-origin:50px 4px;
+  transform:rotate(0deg);
+  transition:transform .23s cubic-bezier(.4,0,.2,1);
+}
+.aperture-icon.closing .aperture-blade{transform:rotate(60deg)}
 @media (prefers-reduced-motion: reduce){
   .capture-icon{animation:none}
   .caret::after{animation:none}
+  .aperture-blade{transition:none}
 }
 .result-title,.hs-code{min-height:1.2em}
 .result-card,.price-card{animation:fadein .35s ease both}

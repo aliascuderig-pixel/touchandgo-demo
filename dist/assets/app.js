@@ -1945,6 +1945,24 @@ function CoverScreen() {
   return wrap;
 }
 
+// Icona a iride/diaframma fotografico (TOU-20, sostituisce la vecchia
+// emoji 📷 nel riquadro placeholder pre-tap) — 6 lamelle reali (non
+// un'immagine raster), ognuna un <path> identico ruotato in slot da 60°
+// via l'attributo SVG transform (posizione fissa). L'apertura/chiusura è
+// invece un secondo transform CSS sul singolo <path>, con transform-origin
+// sulla punta esterna della lamella (non sul centro dell'icona): è quello
+// il perno su cui una lamella reale ruota, così la punta interna spazza
+// verso il centro invece che l'intera lamella ruotare rigidamente attorno
+// al centro come farebbe una girandola. Vedi .aperture-icon/.aperture-blade
+// in style.css per l'animazione (classe "closing" aggiunta via JS).
+const APERTURE_BLADE_D = "M 50,4 L 93.2,34.3 L 66.1,27.1 Z";
+function apertureIconMarkup() {
+  const blades = [0, 60, 120, 180, 240, 300]
+    .map((deg) => `<g transform="rotate(${deg} 50 50)"><path class="aperture-blade" d="${APERTURE_BLADE_D}"/></g>`)
+    .join("");
+  return `<svg class="aperture-icon" viewBox="0 0 100 100" aria-hidden="true">${blades}</svg>`;
+}
+
 function HomeScreen() {
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("home"));
@@ -1989,7 +2007,7 @@ function HomeScreen() {
   section.appendChild(el("div", "step-lbl", t("home_step1_lbl")));
   const captureCard = el("div", "capture-card");
   captureCard.innerHTML = `
-    <div class="capture-icon">📷</div>
+    <div class="capture-icon">${apertureIconMarkup()}</div>
     <h3>${t("home_capture_title")}</h3>
     <p>${t("capture_tap_camera")}</p>`;
   const cameraInput = el("input");
@@ -1999,7 +2017,22 @@ function HomeScreen() {
   cameraInput.style.display = "none";
   cameraInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
   captureCard.appendChild(cameraInput);
-  captureCard.addEventListener("click", () => openCameraViewfinder(handleImageDataUrl, cameraInput));
+  // TOU-20 (Giuseppe): l'iride va mostrata aperta prima del tap e chiudersi
+  // "nel momento dello scatto", in sincrono col rumore dell'otturatore.
+  // L'unico "scatto" che questo riquadro placeholder può davvero mostrare è
+  // il tap che lo apre (il vero pulsante di scatto vive dentro l'overlay a
+  // schermo intero del mirino, dove questa icona non è più visibile) — Code
+  // interpreta quindi "lo scatto" come questo tap: chiude l'iride e riproduce
+  // il suono qui, poi apre la fotocamera come "passo successivo del flusso",
+  // esattamente come descritto da Giuseppe. Il ritardo (uguale alla durata
+  // della transizione CSS, .aperture-icon.closing) lascia vedere l'animazione
+  // prima di passare al mirino vero e proprio.
+  captureCard.addEventListener("click", () => {
+    const icon = captureCard.querySelector(".aperture-icon");
+    if (icon) icon.classList.add("closing");
+    playShutterSound();
+    setTimeout(() => openCameraViewfinder(handleImageDataUrl, cameraInput), 230);
+  });
   section.appendChild(captureCard);
 
   const galleryCard = el("div", "gallery-card");
@@ -4036,33 +4069,61 @@ let viewfinderStream = null;
 // rumore filtrato, apertura+chiusura otturatore) invece di un file audio
 // esterno: nessun asset da scaricare, nessuna questione di licenza,
 // funziona anche offline nella PWA.
+//
+// TOU-20 (audio completamente assente su dispositivo reale, confermato da
+// Giuseppe): la funzione creava un nuovo AudioContext ad ogni scatto senza
+// mai controllarne lo stato. Su Safari/Chrome mobile un AudioContext può
+// nascere "suspended" anche se costruito dentro un gesto utente reale (il
+// tap sul pulsante di scatto) — senza un resume() esplicito, i nodi
+// programmati non producono alcun suono e non sollevano alcun errore:
+// esattamente il sintomo riportato ("nessun suono, neanche l'ombra",
+// nessun errore in console). Fix: un solo AudioContext condiviso e
+// riusato (creato al primo scatto, quindi già dentro un gesto utente), con
+// resume() esplicito prima di programmare i suoni ogni volta che risulta
+// "suspended". Il .catch(e=>{}) che inghiottiva ogni errore in silenzio è
+// stato sostituito con un console.warn, per non ripetere lo stesso
+// problema di diagnosticabilità già risolto per il fallback fotocamera.
+let sharedAudioCtx = null;
+function getSharedAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+  return sharedAudioCtx;
+}
+function scheduleShutterNoise(ctx) {
+  const now = ctx.currentTime;
+  [
+    { delay: 0, freq: 1800, gain: 0.5 },
+    { delay: 0.07, freq: 2800, gain: 0.35 },
+  ].forEach(({ delay, freq, gain }) => {
+    const bufferSize = Math.floor(ctx.sampleRate * 0.02);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = freq;
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = gain;
+    noise.connect(filter).connect(gainNode).connect(ctx.destination);
+    noise.start(now + delay);
+    noise.stop(now + delay + 0.02);
+  });
+}
 function playShutterSound() {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime;
-    [
-      { delay: 0, freq: 1800, gain: 0.5 },
-      { delay: 0.07, freq: 2800, gain: 0.35 },
-    ].forEach(({ delay, freq, gain }) => {
-      const bufferSize = Math.floor(ctx.sampleRate * 0.02);
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = "highpass";
-      filter.frequency.value = freq;
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = gain;
-      noise.connect(filter).connect(gainNode).connect(ctx.destination);
-      noise.start(now + delay);
-      noise.stop(now + delay + 0.02);
-    });
-    setTimeout(() => ctx.close(), 300);
-  } catch (e) {}
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume().then(() => scheduleShutterNoise(ctx)).catch((e) => console.warn("Audio scatto: resume() dell'AudioContext fallito", e));
+    } else {
+      scheduleShutterNoise(ctx);
+    }
+  } catch (e) {
+    console.warn("Audio scatto non riprodotto", e);
+  }
 }
 
 function closeViewfinder(overlay) {
