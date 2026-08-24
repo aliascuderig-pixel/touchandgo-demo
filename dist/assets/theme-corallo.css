@@ -1,0 +1,36 @@
+/* Tema "corallo" (TOU-21) — sovrascrive solo il sottoinsieme di design token
+   invertibile (superficie/testo principali + famiglia accento), caricato
+   IN PIÙ rispetto ad assets/style.css, solo sulle route /design-preview/corallo/.
+   Non tocca assets/style.css: zero rischio per la produzione.
+   Palette e testo/font: vedi MANUALE.md, sezione "Temi lime/corallo". */
+:root{
+  --paper:#101014;
+  --cream:#17171C;
+  --surface:#1E1E25;
+  --line:#44444E;
+  --muted:#77757F;
+  --text:#EDECEF;
+  --ivory:#EDECEF;
+
+  --text-2:#EDECEF;
+  --text-3:#EDECEF;
+  --text-warm:#EDECEF;
+  --text-secondary:#77757F;
+
+  --muted-on-ink:#A9A7B2;
+  --label-on-ink:#5C5A63;
+  --strike-on-ink:#5C5A63;
+  --text-on-ink-soft:#C8C6CE;
+  --ink-border:#44444E;
+
+  /* Accento: corallo/arancione primario + tinta chiara. --gold-deep
+     calcolato (non estratto dal bundle) per le varianti "deep" esistenti.
+     --clay riusa il tono chiaro dell'accento, come nel tema lime. */
+  --gold:#FF6B4A;
+  --gold-soft:#FF8E73;
+  --gold-hot:#FF6B4A;
+  --gold-deep:#B34A32;
+  --clay:#FF8E73;
+
+  --danger:#FF6B6B;
+}
