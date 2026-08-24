@@ -1,0 +1,48 @@
+/* Tema "lime" (TOU-21) — sovrascrive solo il sottoinsieme di design token
+   invertibile (superficie/testo principali + famiglia accento), caricato
+   IN PIÙ rispetto ad assets/style.css, solo sulle route /design-preview/lime/.
+   Non tocca assets/style.css: zero rischio per la produzione.
+   Palette e testo/font: vedi MANUALE.md, sezione "Temi lime/corallo". */
+:root{
+  /* Superficie principale: da carta chiara a fondo quasi-nero, come nel
+     prototipo Claude Design del weekend. */
+  --paper:#0B1113;
+  --cream:#101819;
+  --surface:#172023;
+  --line:#3A4744;
+  --muted:#7E8D8A;
+  --text:#E9EEEB;
+  --ivory:#E9EEEB;
+
+  /* Testo secondario sulla superficie principale: mappato sulla stessa
+     scala di grigi chiari estratta dal bundle, con --text-secondary più
+     smorzato per mantenere una gerarchia visiva. */
+  --text-2:#E9EEEB;
+  --text-3:#E9EEEB;
+  --text-warm:#E9EEEB;
+  --text-secondary:#7E8D8A;
+
+  /* Testo/bordi sulla "chrome" scura (header, capture-card, hs-block...) —
+     questi pannelli restano scuri in ogni tema, qui solo la scala di grigi
+     chiari sopra di essi viene allineata al bundle Claude Design. */
+  --muted-on-ink:#A7B5B2;
+  --label-on-ink:#6F7E7B;
+  --strike-on-ink:#5F6E6B;
+  --text-on-ink-soft:#C4D0CD;
+  --ink-border:#3A4744;
+
+  /* Accento: verde-lime primario + tinta chiara per chip/testo su fondo
+     scuro. --gold-deep è una tonalità più scura calcolata (non estratta dal
+     bundle, che non ne conteneva una) per mantenere leggibili le varianti
+     "deep" esistenti (badge stato, bordi). --clay riusa il tono chiaro
+     dell'accento, coerente col suo ruolo di "etichetta/testo strutturale". */
+  --gold:#C9F24D;
+  --gold-soft:#E4FF8E;
+  --gold-hot:#C9F24D;
+  --gold-deep:#8FA83A;
+  --clay:#E4FF8E;
+
+  /* Errore: reso più chiaro del default per restare leggibile su fondo
+     scuro (il rosso scuro originale sparirebbe su un fondo quasi-nero). */
+  --danger:#FF6B6B;
+}
