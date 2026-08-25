@@ -226,6 +226,14 @@ const I18N = {
     capture_tap_camera: "Tocca per aprire la fotocamera",
     home_gallery_choose: "Scegli dalla galleria",
     home_describe_lbl: "Non puoi fotografarlo? Descrivilo",
+    // ---- Mirino immersivo (TOU-21 Opzione B / TOU-20) ----
+    capture_guide_text: "Inquadra l'oggetto da spedire",
+    capture_describe_voice_link: "Non puoi fotografarlo? Descrivilo a voce",
+    capture_back_aria: "Indietro",
+    capture_shutter_aria: "Scatta foto",
+    capture_gallery_aria: "Scegli dalla galleria",
+    capture_flash_on_aria: "Attiva il flash",
+    capture_flash_off_aria: "Disattiva il flash",
     home_describe_placeholder: "Es. bottiglia di vino, borsa in pelle…",
     home_foot: "Peso e dimensioni stimati dalla foto · prezzo calcolato sulla destinazione",
     home_promo_link: "Hai un codice invito?",
@@ -454,6 +462,14 @@ const I18N = {
     capture_tap_camera: "Tap to open the camera",
     home_gallery_choose: "Choose from gallery",
     home_describe_lbl: "Can't take a photo? Describe it",
+    // ---- Immersive viewfinder (TOU-21 Option B / TOU-20) ----
+    capture_guide_text: "Frame the item you want to ship",
+    capture_describe_voice_link: "Can't take a photo? Describe it by voice",
+    capture_back_aria: "Back",
+    capture_shutter_aria: "Take photo",
+    capture_gallery_aria: "Choose from gallery",
+    capture_flash_on_aria: "Turn on flash",
+    capture_flash_off_aria: "Turn off flash",
     home_describe_placeholder: "E.g. bottle of wine, leather bag…",
     home_foot: "Weight and size estimated from the photo · price calculated based on destination",
     home_promo_link: "Have an invite code?",
@@ -905,6 +921,29 @@ function render() {
   // non perde il contesto (es. può farsi una domanda da ResultScreen e
   // ritrovarsi esattamente lì chiudendo la chat).
   if (state.assistantChatOpen) app.appendChild(AssistantChatModal());
+
+  // TOU-21 Opzione B "Mirino immersivo": elimina il primo passo (il
+  // riquadro "Fotografa l'oggetto" da toccare) aprendo il mirino da solo
+  // non appena si arriva su Home — l'utente si trova già nel mirino attivo.
+  // "Arrivo su Home" = la coppia modalità+schermata è cambiata rispetto
+  // all'ultimo render (torna vero anche tornando da un'altra modalità, es.
+  // Partner → Turista): un semplice re-render mentre si resta su Home
+  // (lingua, banner promemoria posizione, ecc.) non deve riaprirlo. Se
+  // l'utente lo chiude esplicitamente (pulsante indietro/link "descrivilo a
+  // voce" del mirino) homeCaptureDismissed resta true finché non se ne va e
+  // ritorna — altrimenti riaprirebbe subito il mirino appena chiuso.
+  const screenKey = state.mode + ":" + state.screen;
+  if (screenKey !== lastRenderedScreenKey) homeCaptureDismissed = false;
+  lastRenderedScreenKey = screenKey;
+  if (
+    state.mode === "turista" &&
+    state.screen === "home" &&
+    !homeCaptureDismissed &&
+    !state.assistantChatOpen &&
+    !viewfinderStream
+  ) {
+    beginHomeCapture();
+  }
 }
 
 function el(tag, cls, html) {
@@ -2033,26 +2072,24 @@ function HomeScreen() {
     <p>${t("capture_tap_camera")}</p>`;
   const cameraInput = el("input");
   cameraInput.type = "file";
+  cameraInput.id = "home-camera-input";
   cameraInput.accept = "image/*";
   cameraInput.capture = "environment";
   cameraInput.style.display = "none";
   cameraInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
   captureCard.appendChild(cameraInput);
-  // TOU-20 (Giuseppe): l'iride va mostrata aperta prima del tap e chiudersi
-  // "nel momento dello scatto", in sincrono col rumore dell'otturatore.
-  // L'unico "scatto" che questo riquadro placeholder può davvero mostrare è
-  // il tap che lo apre (il vero pulsante di scatto vive dentro l'overlay a
-  // schermo intero del mirino, dove questa icona non è più visibile) — Code
-  // interpreta quindi "lo scatto" come questo tap: chiude l'iride e riproduce
-  // il suono qui, poi apre la fotocamera come "passo successivo del flusso",
-  // esattamente come descritto da Giuseppe. Il ritardo (uguale alla durata
-  // della transizione CSS, .aperture-icon.closing) lascia vedere l'animazione
-  // prima di passare al mirino vero e proprio.
+  // TOU-21 Opzione B "Mirino immersivo": questo riquadro non è più il primo
+  // passo del flusso (il mirino si apre già da solo all'arrivo su Home, vedo
+  // beginHomeCapture() più sotto) — resta solo come schermata di riserva,
+  // visibile se il mirino custom non è disponibile o se lo staff/il turista
+  // lo chiude senza scattare. Per questo qui non anima più l'iride né
+  // riproduce il rumore di scatto (quel comportamento, introdotto per TOU-20
+  // quando questo riquadro ERA il primo passo, è superato dalla nuova
+  // struttura): il suono resta legato esclusivamente al vero pulsante di
+  // scatto dentro il mirino (.vf-shutter).
   captureCard.addEventListener("click", () => {
-    const icon = captureCard.querySelector(".aperture-icon");
-    if (icon) icon.classList.add("closing");
-    playShutterSound();
-    setTimeout(() => openCameraViewfinder(handleImageDataUrl, cameraInput), 230);
+    homeCaptureDismissed = false;
+    beginHomeCapture();
   });
   section.appendChild(captureCard);
 
@@ -2071,6 +2108,7 @@ function HomeScreen() {
   const describeLbl = el("div", "tg-lbl", t("home_describe_lbl"));
   const input = el("input");
   input.type = "text";
+  input.id = "home-describe-input";
   input.placeholder = t("home_describe_placeholder");
   const goBtn = el("button", null, "→");
   goBtn.addEventListener("click", () => {
@@ -4186,7 +4224,13 @@ function showCameraFallbackToast() {
   }, 4000);
 }
 
-function openCameraViewfinder(onCapture, fallbackInput) {
+// opts è opzionale — solo HomeScreen (beginHomeCapture, sotto) lo passa,
+// per la chrome "immersiva" del mirino richiesta da TOU-21 Opzione B
+// (barra superiore indietro/wordmark/lingua, testo guida, badge fiducia,
+// galleria/scatto/flash, link descrizione). Senza opts il mirino resta
+// esattamente quello di sempre — bottone ✕ in alto a destra, cornice,
+// scatto — usato tale e quale da PackageCheckScreen: nessuna modifica lì.
+function openCameraViewfinder(onCapture, fallbackInput, opts) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.warn("Mirino fotocamera custom non disponibile, uso la fotocamera nativa:", "navigator.mediaDevices.getUserMedia non è supportato da questo browser/contesto");
     showCameraFallbackToast();
@@ -4207,19 +4251,14 @@ function openCameraViewfinder(onCapture, fallbackInput) {
       video.srcObject = stream;
       overlay.appendChild(video);
 
-      const frame = el("div", "viewfinder-frame");
-      frame.innerHTML = `
-        <span class="vf-corner vf-tl"></span><span class="vf-corner vf-tr"></span>
-        <span class="vf-corner vf-bl"></span><span class="vf-corner vf-br"></span>`;
-      overlay.appendChild(frame);
+      const immersive = !!(opts && opts.chrome === "immersive");
 
-      const closeBtn = el("button", "vf-close", "✕");
-      closeBtn.setAttribute("aria-label", "Chiudi fotocamera");
-      closeBtn.addEventListener("click", () => closeViewfinder(overlay));
-      overlay.appendChild(closeBtn);
-
+      // Condiviso da entrambe le varianti — l'unico vero pulsante di
+      // scatto del flusso, con il rumore otturatore legato esclusivamente
+      // a questo tap (TOU-20). Costruito qui, appeso al punto giusto più
+      // sotto (posizione diversa tra le due varianti, comportamento identico).
       const shutterBtn = el("button", "vf-shutter");
-      shutterBtn.setAttribute("aria-label", "Scatta foto");
+      shutterBtn.setAttribute("aria-label", t("capture_shutter_aria"));
       shutterBtn.addEventListener("click", () => {
         playShutterSound();
         const canvas = document.createElement("canvas");
@@ -4230,7 +4269,132 @@ function openCameraViewfinder(onCapture, fallbackInput) {
         closeViewfinder(overlay);
         onCapture(dataUrl, "image/jpeg");
       });
-      overlay.appendChild(shutterBtn);
+
+      let topbar, guide, backBtn, wordmark, langBtnIt, langBtnEn;
+      if (immersive) {
+        overlay.appendChild(el("div", "vf-scrim vf-scrim-top"));
+
+        topbar = el("div", "vf-topbar");
+        backBtn = el("button", "vf-back", "←");
+        backBtn.type = "button";
+        backBtn.addEventListener("click", () => {
+          closeViewfinder(overlay);
+          if (opts.onDismiss) opts.onDismiss();
+        });
+        topbar.appendChild(backBtn);
+
+        wordmark = el("div", "vf-wordmark", `Touch<b>&amp;</b>Go`);
+        topbar.appendChild(wordmark);
+
+        const langGroup = el("div", "vf-lang-group");
+        langBtnIt = el("button", "vf-lang-btn", "IT");
+        langBtnIt.type = "button";
+        langBtnIt.dataset.lang = "it";
+        langBtnEn = el("button", "vf-lang-btn", "EN");
+        langBtnEn.type = "button";
+        langBtnEn.dataset.lang = "en";
+        langGroup.appendChild(langBtnIt);
+        langGroup.appendChild(langBtnEn);
+        topbar.appendChild(langGroup);
+        overlay.appendChild(topbar);
+
+        guide = el("div", "vf-guide", opts.guideText);
+        overlay.appendChild(guide);
+      }
+
+      const frame = el("div", "viewfinder-frame");
+      frame.innerHTML = `
+        <span class="vf-corner vf-tl"></span><span class="vf-corner vf-tr"></span>
+        <span class="vf-corner vf-bl"></span><span class="vf-corner vf-br"></span>`;
+      overlay.appendChild(frame);
+
+      if (!immersive) {
+        const closeBtn = el("button", "vf-close", "✕");
+        closeBtn.setAttribute("aria-label", "Chiudi fotocamera");
+        closeBtn.addEventListener("click", () => closeViewfinder(overlay));
+        overlay.appendChild(closeBtn);
+        overlay.appendChild(shutterBtn);
+      } else {
+        // Da qui in giù: tutto position:absolute rispetto a .viewfinder-overlay,
+        // stesso approccio già usato da .vf-close/.vf-shutter — niente flex,
+        // così lo shutter condiviso (che resta invariato, vedi sopra) non va
+        // in conflitto con un contenitore flex che lo terrebbe fuori flusso.
+        overlay.appendChild(el("div", "vf-scrim vf-scrim-bottom"));
+
+        const badge = el("div", "vf-badge", opts.badgeText);
+        overlay.appendChild(badge);
+
+        const galleryBtn = el("button", "vf-gallery", "🖼️");
+        galleryBtn.type = "button";
+        const galleryInput = el("input");
+        galleryInput.type = "file";
+        galleryInput.accept = "image/*";
+        galleryInput.style.display = "none";
+        galleryInput.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          closeViewfinder(overlay);
+          if (opts.onDismiss) opts.onDismiss();
+          if (file) handleFile(file);
+        });
+        overlay.appendChild(galleryInput);
+        galleryBtn.addEventListener("click", () => galleryInput.click());
+        overlay.appendChild(galleryBtn);
+
+        overlay.appendChild(shutterBtn);
+
+        // Flash/torch: solo se la traccia video lo supporta davvero (in
+        // pratica Chrome/Android — Safari/iOS non lo espone). Se non è
+        // disponibile non mostriamo un secondo controllo galleria duplicato
+        // al suo posto: meglio una riga controlli più essenziale che un
+        // bottone che non farebbe nulla.
+        let flashBtn = null;
+        let flashOn = false;
+        try {
+          const videoTrack = stream.getVideoTracks()[0];
+          const caps = videoTrack && videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+          if (caps && caps.torch) {
+            flashBtn = el("button", "vf-secondary", "⚡");
+            flashBtn.type = "button";
+            flashBtn.addEventListener("click", () => {
+              flashOn = !flashOn;
+              videoTrack.applyConstraints({ advanced: [{ torch: flashOn }] }).catch((e) => {
+                console.warn("Flash fotocamera non attivabile", e);
+                flashOn = !flashOn;
+              });
+              flashBtn.classList.toggle("on", flashOn);
+              flashBtn.setAttribute("aria-label", flashOn ? t("capture_flash_off_aria") : t("capture_flash_on_aria"));
+            });
+            overlay.appendChild(flashBtn);
+          }
+        } catch (e) {
+          console.warn("Verifica capacità flash fallita", e);
+        }
+
+        const describeLink = el("div", "vf-describe-link", opts.describeVoiceText);
+        describeLink.addEventListener("click", () => {
+          closeViewfinder(overlay);
+          if (opts.onDescribeVoice) opts.onDescribeVoice();
+        });
+        overlay.appendChild(describeLink);
+
+        const refreshChrome = () => {
+          guide.textContent = t("capture_guide_text");
+          badge.textContent = t("trust_coverage") + " · " + t("trust_tracked");
+          describeLink.textContent = t("capture_describe_voice_link");
+          backBtn.setAttribute("aria-label", t("capture_back_aria"));
+          galleryBtn.setAttribute("aria-label", t("capture_gallery_aria"));
+          shutterBtn.setAttribute("aria-label", t("capture_shutter_aria"));
+          if (flashBtn) flashBtn.setAttribute("aria-label", flashOn ? t("capture_flash_off_aria") : t("capture_flash_on_aria"));
+          [langBtnIt, langBtnEn].forEach((b) => b.classList.toggle("on", b.dataset.lang === state.lang));
+        };
+        [langBtnIt, langBtnEn].forEach((b) =>
+          b.addEventListener("click", () => {
+            setLang(b.dataset.lang);
+            refreshChrome();
+          })
+        );
+        refreshChrome();
+      }
 
       document.body.appendChild(overlay);
     })
@@ -4240,6 +4404,40 @@ function openCameraViewfinder(onCapture, fallbackInput) {
       fallbackInput.click();
     });
 }
+
+// TOU-21 Opzione B "Mirino immersivo" — punto d'ingresso unico per aprire
+// il mirino con la chrome ricca (barra superiore, badge, controlli,
+// descrizione alternativa) dalla schermata di acquisizione (Home).
+// Richiamato sia automaticamente all'arrivo su Home (render(), sopra) sia
+// dal tap sul riquadro di riserva in HomeScreen() se il mirino era stato
+// chiuso o non si era aperto da solo.
+function beginHomeCapture() {
+  const fallbackInput = document.getElementById("home-camera-input");
+  if (!fallbackInput) return;
+  openCameraViewfinder(handleImageDataUrl, fallbackInput, {
+    chrome: "immersive",
+    guideText: t("capture_guide_text"),
+    badgeText: t("trust_coverage") + " · " + t("trust_tracked"),
+    describeVoiceText: t("capture_describe_voice_link"),
+    onDismiss: () => {
+      homeCaptureDismissed = true;
+      render();
+    },
+    onDescribeVoice: () => {
+      homeCaptureDismissed = true;
+      render();
+      requestAnimationFrame(() => {
+        const describeInput = document.getElementById("home-describe-input");
+        if (describeInput) {
+          describeInput.focus();
+          describeInput.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+      });
+    },
+  });
+}
+let homeCaptureDismissed = false;
+let lastRenderedScreenKey = null;
 
 function handleDescribe(label) {
   state.pendingInput = { type: "text", label };
