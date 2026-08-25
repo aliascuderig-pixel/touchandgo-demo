@@ -196,13 +196,6 @@ button{font-family:inherit;cursor:pointer}
 .capture-card p{font-size:12.5px;color:var(--muted-on-ink);margin:0 0 10px}
 .lang-line{font-family:var(--mono);font-size:10.5px;color:var(--gold-soft);letter-spacing:.02em}
 
-.gallery-card{
-  margin:12px 20px 0;background:var(--paper);border:1.5px solid var(--line);border-radius:var(--radius);
-  padding:22px 20px;text-align:center;
-}
-.gallery-card h3{font-family:var(--display);font-size:17px;margin:0 0 4px;font-weight:600}
-.gallery-card p{font-size:12px;color:var(--muted);margin:0}
-
 .divider-label{
   display:flex;align-items:center;gap:10px;margin:24px 20px 12px;
   font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
@@ -274,27 +267,9 @@ button{font-family:inherit;cursor:pointer}
 @keyframes blink{50%{opacity:0}}
 .capture-icon{animation:breathe 2.4s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
-/* Iride/diaframma fotografico (TOU-20): 6 lamelle identiche, posizionate in
-   slot da 60° via l'attributo SVG "transform" sul <g> che le contiene
-   (fisso). L'apertura/chiusura è un secondo transform, in CSS stavolta, sul
-   singolo <path> — transform-origin sulla punta esterna della lamella (il
-   perno reale di rotazione), non sul centro dell'icona, altrimenti le
-   lamelle ruoterebbero rigidamente come una girandola invece di "chiudersi"
-   verso il centro. Aperta di default; la classe "closing" (aggiunta via JS
-   al tap sul riquadro "Fotografa l'oggetto", vedi HomeScreen() in app.js)
-   la chiude in sincrono col rumore dell'otturatore. */
-.aperture-icon{width:40px;height:40px;overflow:visible}
-.aperture-blade{
-  fill:var(--gold-soft);stroke:var(--ink);stroke-width:0.6;
-  transform-origin:50px 4px;
-  transform:rotate(0deg);
-  transition:transform .23s cubic-bezier(.4,0,.2,1);
-}
-.aperture-icon.closing .aperture-blade{transform:rotate(60deg)}
 @media (prefers-reduced-motion: reduce){
   .capture-icon{animation:none}
   .caret::after{animation:none}
-  .aperture-blade{transition:none}
 }
 .result-title,.hs-code{min-height:1.2em}
 .result-card,.price-card{animation:fadein .35s ease both}
@@ -351,9 +326,6 @@ button{font-family:inherit;cursor:pointer}
 .camera-fallback-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:86%;background:var(--warn-bg);border:1px solid var(--gold-soft);color:var(--warn);font-size:12px;line-height:1.4;padding:9px 14px;border-radius:2px;z-index:250;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.18)}
 
 /* ---------- Pending items / consolidation ---------- */
-.pending-banner{margin:0 20px 16px;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:14px 16px}
-.pending-count{font-family:var(--display);font-size:15px;font-weight:600;color:var(--ink)}
-.pending-sub{font-size:11px;color:var(--warn);margin:3px 0 10px}
 .queue-list{margin-bottom:14px}
 .queue-item{background:var(--surface);border:1px solid var(--line);padding:12px 14px;margin-bottom:8px}
 .queue-item-name{font-family:var(--display);font-size:14px;font-weight:600;color:var(--text)}
@@ -392,7 +364,6 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- Reset ---------- */
 .reset-link{display:inline-block;margin:0;background:none;border:none;font-size:10px;color:var(--muted);text-decoration:underline;padding:6px}
 .identify-intro{font-size:12.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:18px}
-.greeting{font-family:var(--display);font-style:italic;font-size:15px;color:var(--clay);margin-bottom:6px}
 
 .cover-screen{position:relative;min-height:calc(100dvh - 60px);background-size:cover;background-position:center;background-color:var(--ink);display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer;overflow:hidden}
 .cover-screen.no-photo{background-image:radial-gradient(circle at 50% 35%, var(--ink-glow), var(--ink) 75%)}
@@ -428,11 +399,6 @@ button{font-family:inherit;cursor:pointer}
 .lang-switch{display:flex;border:1px solid var(--ink-border);border-radius:999px;overflow:hidden}
 .lang-btn{background:transparent;border:none;color:var(--muted-on-ink);font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.04em;padding:6px 9px}
 .lang-btn.on{background:var(--gold-soft);color:var(--ink)}
-
-.location-reminder{display:flex;align-items:flex-start;gap:12px;background:var(--warn-bg);border-bottom:1px solid var(--gold-soft);padding:14px 20px}
-.loc-avatar{width:34px;height:34px;border-radius:999px;background:var(--ink);color:var(--gold);font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
-.loc-text{font-size:11.5px;color:var(--warn);line-height:1.6;flex:1}
-.loc-dismiss{background:none;border:none;color:var(--warn);font-size:12px;padding:4px;flex-shrink:0}
 
 .lock-line{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);display:flex;align-items:center;gap:4px}
 .header-reset{background:none;border:1px solid var(--ink-border);color:var(--muted-on-ink);font-size:10px;padding:6px 10px;letter-spacing:.03em}
@@ -496,16 +462,8 @@ button{font-family:inherit;cursor:pointer}
 .assistant-chat-reply{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);padding:14px 16px;font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap}
 .assistant-chat-reply::before{content:"Touch&Go";display:block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold-deep);margin-bottom:6px}
 
-/* ---------- Trust row ---------- */
-.trust-row{display:flex;background:var(--paper);border-bottom:1px solid var(--line)}
-.trust-item{flex:1;text-align:center;padding:10px 6px;font-size:9.5px;font-weight:600;color:var(--text-secondary);border-right:1px solid var(--line)}
-.trust-item:last-child{border-right:none}
-.trust-ic{display:block;font-size:15px;margin-bottom:3px}
-
 /* ---------- Capture (v2, light) ---------- */
 .capture-card{background:var(--ink);border:none;border-radius:0;box-shadow:none}
-.gallery-card{border:1px solid var(--line);border-radius:0;padding:13px;text-align:center;font-size:12px;font-weight:700;color:var(--text);margin:0 0 18px;background:var(--surface)}
-.gallery-card p,.gallery-card h3{display:none}
 
 .tg-lbl{font-family:var(--body);font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1.5px;margin:6px 0 8px}
 .tg-ex{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);padding:12px 15px;margin-bottom:7px;font-size:12.5px;font-weight:600;color:var(--text-3)}
@@ -659,3 +617,67 @@ button{font-family:inherit;cursor:pointer}
 .vf-shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);z-index:2;width:70px;height:70px;border-radius:50%;background:transparent;border:3px solid #fff;cursor:pointer;padding:0}
 .vf-shutter::after{content:"";display:block;width:56px;height:56px;margin:4px auto;border-radius:50%;background:#fff}
 .vf-shutter:active::after{background:var(--gold-hot)}
+
+/* ---------- Mirino immersivo, schermata Home (TOU-21, Opzione B) ----------
+   La schermata di acquisizione è il mirino stesso fin dall'inizio: niente
+   più riquadro intermedio da toccare prima di vedere il feed camera.
+   .viewfinder-frame/.vf-corner sopra sono riusati identici (cornice ad
+   angoli dorati già confermata funzionante); tutto il resto qui sotto è
+   overlay sopra il feed live — mai una barra opaca piena — con pillole
+   semi-trasparenti/blur, coerenti con lo stesso trattamento già usato per
+   la barra superiore di OnboardingScreen (vedi .ob-lang-group/.ob-skip-btn
+   più sotto). Colori lasciati letterali come il resto del mirino: l'overlay
+   camera non segue la palette lime/corallo. */
+.vf-home{position:relative;min-height:100dvh;overflow:hidden;background:#000;color:var(--ivory);font-family:var(--body);display:flex;flex-direction:column}
+.vf-home-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.vf-home-fallback{position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,var(--onboarding-glow) 0%,var(--ink) 70%)}
+
+.vf-home-topbar{position:relative;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 16px 0}
+.vf-pill{background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.18);border-radius:999px}
+.vf-pill-icon{width:38px;height:38px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0}
+.vf-home-wordmark{font-family:var(--display);font-weight:600;font-size:16px;color:var(--gold-hot);text-align:center;flex:1;letter-spacing:.02em}
+.vf-home-wordmark b{color:#fff;font-weight:600}
+.vf-home-lang{display:flex;padding:3px;gap:2px;flex-shrink:0}
+.vf-lang-btn{background:transparent;border:none;color:rgba(255,255,255,.7);font-family:var(--body);font-size:10.5px;font-weight:700;padding:6px 10px;border-radius:999px;cursor:pointer}
+.vf-lang-btn.on{background:var(--gold-hot);color:var(--ink)}
+
+.vf-home-banners{position:relative;z-index:3;display:flex;flex-direction:column;gap:8px;padding:10px 16px 0}
+.vf-home-banner{background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;font-size:11.5px;line-height:1.5}
+.vf-home-banner-error{border-color:rgba(179,51,51,.55);color:#ffd7d0}
+.vf-home-banner-info{color:var(--ivory)}
+.vf-home-banner-tap{cursor:pointer;justify-content:space-between}
+.vf-banner-text{flex:1}
+.vf-banner-sub{color:rgba(255,255,255,.65)}
+.vf-banner-dismiss{background:none;border:none;color:rgba(255,255,255,.7);font-size:12px;padding:2px;flex-shrink:0;cursor:pointer}
+.vf-banner-cta{font-weight:700;color:var(--gold-hot);white-space:nowrap;flex-shrink:0}
+
+.vf-home-frame-area{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 16px;min-height:40vh}
+.vf-home-guide{font-family:var(--display);font-size:15px;color:#fff;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+
+.vf-home-bottom{position:relative;z-index:3;padding:18px 16px calc(22px + env(safe-area-inset-bottom, 0px));display:flex;flex-direction:column;align-items:center;gap:14px;background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.55) 35%,rgba(0,0,0,.85) 100%)}
+.vf-home-badge{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:7px 14px;font-size:10.5px;font-weight:600;color:var(--gold-soft);text-align:center}
+.vf-home-controls{display:flex;align-items:center;justify-content:center;gap:34px;width:100%}
+.vf-side-btn{width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.vf-side-btn:disabled{opacity:.4;cursor:default}
+.vf-home-shutter{position:static;left:auto;bottom:auto;transform:none}
+.vf-home-describe-link{font-size:11.5px;color:rgba(255,255,255,.85);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:center}
+.vf-home-promo-link{font-size:10.5px;color:rgba(255,255,255,.5);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:center}
+.vf-home-promo-active{font-size:10.5px;color:var(--gold-hot);text-align:center}
+.vf-home-promo-box{position:relative;width:100%;max-width:280px}
+.vf-home-promo-box input{width:100%;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:10px 40px 10px 14px;font-size:12px;font-family:inherit;background:rgba(0,0,0,.4);color:#fff}
+.vf-home-promo-box input::placeholder{color:rgba(255,255,255,.5)}
+.vf-home-promo-box button{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:999px;background:var(--gold-hot);color:var(--ink);border:none}
+.vf-home-bottom .promo-invalid{color:#ff9d90}
+
+/* Percorso "descrivilo a voce" (HomeDescribeScreen) — stesso sfondo/stage
+   scuro dell'onboarding, niente feed camera dato che qui l'utente ha
+   scelto di non fotografare. */
+.vf-home-describe{background:radial-gradient(circle at 50% -10%,var(--onboarding-glow) 0%,var(--ink) 55%)}
+.vf-home-describe-stage{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
+.vf-home-describe-title{font-family:var(--display);font-size:19px;color:#fff;text-align:center}
+.vf-home-describe-row{display:flex;align-items:center;gap:8px;width:100%;max-width:340px}
+.vf-home-describe-field{flex:1;position:relative}
+.vf-home-describe-field input{width:100%;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:12px 34px 12px 16px;font-size:13px;font-family:inherit;background:rgba(255,255,255,.08);color:#fff}
+.vf-home-describe-field input::placeholder{color:rgba(255,255,255,.5)}
+.vf-home-describe-go{width:38px;height:38px;border-radius:999px;background:var(--gold-hot);color:var(--ink);border:none;flex-shrink:0;font-size:15px;padding:0}
+.vf-home-describe-back{font-size:11.5px;color:rgba(255,255,255,.7);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
