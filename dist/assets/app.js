@@ -219,15 +219,16 @@ const I18N = {
     cover_pickup_detected: "📍 Punto di ritiro rilevato",
     cover_tap: "Tocca per iniziare →",
 
-    // ---- HomeScreen ----
-    home_greeting: "Ciao",
-    home_step1_lbl: "Passo 1 · Fotografa l'acquisto",
-    home_capture_title: "Fotografa l'oggetto",
+    // ---- HomeScreen / mirino immersivo (TOU-21, Opzione B) ----
     capture_tap_camera: "Tocca per aprire la fotocamera",
     home_gallery_choose: "Scegli dalla galleria",
     home_describe_lbl: "Non puoi fotografarlo? Descrivilo",
     home_describe_placeholder: "Es. bottiglia di vino, borsa in pelle…",
-    home_foot: "Peso e dimensioni stimati dalla foto · prezzo calcolato sulla destinazione",
+    vf_home_guide: "Inquadra l'oggetto da spedire",
+    vf_home_shutter_aria: "Scatta foto",
+    vf_home_flip_aria: "Cambia fotocamera",
+    vf_home_describe_link: "Non puoi fotografarlo? Descrivilo a voce",
+    vf_home_back_to_camera: "← Torna alla fotocamera",
     home_promo_link: "Hai un codice invito?",
     home_promo_placeholder: "Codice invito",
     code_invalid_generic: "Codice non valido o già utilizzato.",
@@ -242,19 +243,17 @@ const I18N = {
     loc_reminder_dismiss_aria: "Chiudi",
 
     // ---- Assistente (suggerimenti contestuali) ----
-    assistant_home: "Fotografa l'oggetto che hai comprato, o descrivilo se preferisci — ci penso io a classificarlo.",
     assistant_destination: "Conferma da dove ritirare l'acquisto e dove deve arrivare — poi calcolo il prezzo.",
     assistant_analyzing: "Un attimo, sto analizzando l'oggetto e calcolando peso e categoria doganale.",
     assistant_options: "Touch&Go si occupa di tutta la spedizione — corriere, dogana e assicurazione inclusi in base a peso, valore e destinazione.",
     assistant_result: "Scegli tra prezzo pieno o abbonamento, poi genera il codice QR per lasciare l'oggetto in negozio.",
     assistant_dismiss_aria: "Chiudi suggerimento",
 
-    // ---- TrustRow ----
+    // ---- Badge fiducia (già mostrato nel mirino immersivo, vf-home-badge) ----
     trust_coverage: "Copertura inclusa",
     trust_tracked: "Tracciato via WhatsApp",
-    trust_customs: "Dogana automatica",
 
-    // ---- Footer (mostrato con HomeScreen) ----
+    // ---- Footer (mostrato su CoverScreen) ----
     footer_tagline: "Prototipo Touch&amp;Go · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Classificazione AI reale · Quote e pagamenti simulati per il test",
     footer_dashboard: "La tua spesa",
     footer_history: "I tuoi acquisti ({count})",
@@ -447,15 +446,16 @@ const I18N = {
     cover_pickup_detected: "📍 Pickup point detected",
     cover_tap: "Tap to start →",
 
-    // ---- HomeScreen ----
-    home_greeting: "Hi",
-    home_step1_lbl: "Step 1 · Photograph your purchase",
-    home_capture_title: "Take a photo of the item",
+    // ---- HomeScreen / immersive viewfinder (TOU-21, Option B) ----
     capture_tap_camera: "Tap to open the camera",
     home_gallery_choose: "Choose from gallery",
     home_describe_lbl: "Can't take a photo? Describe it",
     home_describe_placeholder: "E.g. bottle of wine, leather bag…",
-    home_foot: "Weight and size estimated from the photo · price calculated based on destination",
+    vf_home_guide: "Frame the item you're shipping",
+    vf_home_shutter_aria: "Take photo",
+    vf_home_flip_aria: "Switch camera",
+    vf_home_describe_link: "Can't take a photo? Describe it by voice",
+    vf_home_back_to_camera: "← Back to camera",
     home_promo_link: "Have an invite code?",
     home_promo_placeholder: "Invite code",
     code_invalid_generic: "Invalid or already used code.",
@@ -470,19 +470,17 @@ const I18N = {
     loc_reminder_dismiss_aria: "Close",
 
     // ---- Assistant (contextual tips) ----
-    assistant_home: "Take a photo of what you bought, or describe it if you prefer — I'll take care of classifying it.",
     assistant_destination: "Confirm where to pick up your purchase and where it should arrive — then I'll calculate the price.",
     assistant_analyzing: "One moment, I'm analyzing the item and working out its weight and customs category.",
     assistant_options: "Touch&Go takes care of the whole shipment — courier, customs and insurance included, based on weight, value and destination.",
     assistant_result: "Choose between full price or subscription, then generate the QR code to leave the item at the store.",
     assistant_dismiss_aria: "Close tip",
 
-    // ---- TrustRow ----
+    // ---- Trust badge (shown in the immersive viewfinder, vf-home-badge) ----
     trust_coverage: "Insurance included",
     trust_tracked: "Tracked via WhatsApp",
-    trust_customs: "Automatic customs",
 
-    // ---- Footer (shown with HomeScreen) ----
+    // ---- Footer (shown on CoverScreen) ----
     footer_tagline: "Touch&amp;Go prototype · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Real AI classification · Quotes and payments simulated for testing",
     footer_dashboard: "Your spending",
     footer_history: "Your purchases ({count})",
@@ -755,6 +753,7 @@ const state = {
   lang: detectInitialLang(),
   mode: "turista",
   screen: "cover",
+  homeCaptureMode: "camera",
   error: null,
   result: null,
   price: null,
@@ -870,6 +869,13 @@ function injectSketchFilter() {
 }
 injectSketchFilter();
 
+// Traccia lo screen del giro precedente, solo per sapere se si sta
+// "entrando" ora in Home da un'altra schermata (vedi render()) — in quel
+// caso il mirino deve sempre ripartire in modalità fotocamera, anche se
+// l'utente aveva lasciato Home in modalità "descrivilo a voce" l'ultima
+// volta che c'era stato.
+let lastRenderedScreen = null;
+
 function render() {
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
@@ -877,12 +883,27 @@ function render() {
     app.appendChild(OnboardingScreen());
     return;
   }
+  // Mirino immersivo (TOU-21, Opzione B): la schermata di acquisizione è il
+  // mirino stesso fin dall'inizio, senza il chrome normale dell'app (niente
+  // Header/mode-toggle/Footer) — stesso principio già usato per
+  // OnboardingScreen qui sopra. Se non siamo (più) su questa schermata, lo
+  // stream della fotocamera va sempre chiuso esplicitamente: getUserMedia
+  // non si ferma da solo quando il <video> a cui è agganciato viene rimosso
+  // dal DOM da app.innerHTML="".
+  const onHomeCameraScreen = state.mode !== "partner" && state.screen === "home";
+  if (!onHomeCameraScreen && homeViewfinderStream) stopHomeViewfinder();
+  if (onHomeCameraScreen) {
+    if (lastRenderedScreen !== "home") state.homeCaptureMode = "camera";
+    lastRenderedScreen = "home";
+    app.appendChild(CaptureViewfinderScreen());
+    return;
+  }
+  lastRenderedScreen = state.screen;
   app.appendChild(Header());
   if (state.mode === "partner") app.appendChild(PartnerScreen());
   else if (state.screen === "biometric-lock") app.appendChild(BiometricLockScreen());
   else if (state.screen === "cover") app.appendChild(CoverScreen());
   else if (state.screen === "identify") app.appendChild(IdentifyScreen());
-  else if (state.screen === "home") app.appendChild(HomeScreen());
   else if (state.screen === "destination") app.appendChild(DestinationScreen());
   else if (state.screen === "add-address") app.appendChild(AddAddressScreen());
   else if (state.screen === "choose-address") app.appendChild(ChooseAddressScreen());
@@ -897,7 +918,12 @@ function render() {
   else if (state.screen === "dashboard") app.appendChild(DashboardScreen());
   else if (state.screen === "documents") app.appendChild(DocumentsScreen());
   else if (state.screen === "package-check") app.appendChild(PackageCheckScreen());
-  if (state.screen === "home") app.appendChild(Footer());
+  // Footer (Dashboard/Storico/Reset/Termini/Privacy): prima viveva solo in
+  // fondo a HomeScreen. Ora che Home è il mirino immersivo a schermo intero
+  // (niente chrome, vedi sopra), Cover resta l'unico altro screen sempre
+  // raggiungibile con un tap dal mirino (pulsante "←") — spostato qui
+  // perché altrimenti quei link diventerebbero irraggiungibili.
+  if (state.mode !== "partner" && state.screen === "cover") app.appendChild(Footer());
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
   }
@@ -1683,20 +1709,10 @@ function addRecentPickup(city) {
   } catch (e) {}
 }
 
-function TrustRow() {
-  const row = el("div", "trust-row");
-  row.innerHTML = `
-    <div class="trust-item"><span class="trust-ic">🛡️</span>${t("trust_coverage")}</div>
-    <div class="trust-item"><span class="trust-ic">📍</span>${t("trust_tracked")}</div>
-    <div class="trust-item"><span class="trust-ic">✓</span>${t("trust_customs")}</div>`;
-  return row;
-}
-
 // Chiavi I18N per screenKey già tradotti in questa fase (Home, Destination,
 // Analyzing, Result/Options). "queued" e "history" restano in italiano
 // fisso finché quelle schermate non vengono migrate.
 const ASSISTANT_TIP_KEYS = {
-  home: "assistant_home",
   destination: "assistant_destination",
   analyzing: "assistant_analyzing",
   options: "assistant_options",
@@ -1966,161 +1982,323 @@ function CoverScreen() {
   return wrap;
 }
 
-// Icona a iride/diaframma fotografico (TOU-20, sostituisce la vecchia
-// emoji 📷 nel riquadro placeholder pre-tap) — 6 lamelle reali (non
-// un'immagine raster), ognuna un <path> identico ruotato in slot da 60°
-// via l'attributo SVG transform (posizione fissa). L'apertura/chiusura è
-// invece un secondo transform CSS sul singolo <path>, con transform-origin
-// sulla punta esterna della lamella (non sul centro dell'icona): è quello
-// il perno su cui una lamella reale ruota, così la punta interna spazza
-// verso il centro invece che l'intera lamella ruotare rigidamente attorno
-// al centro come farebbe una girandola. Vedi .aperture-icon/.aperture-blade
-// in style.css per l'animazione (classe "closing" aggiunta via JS).
-const APERTURE_BLADE_D = "M 50,4 L 93.2,34.3 L 66.1,27.1 Z";
-function apertureIconMarkup() {
-  const blades = [0, 60, 120, 180, 240, 300]
-    .map((deg) => `<g transform="rotate(${deg} 50 50)"><path class="aperture-blade" d="${APERTURE_BLADE_D}"/></g>`)
-    .join("");
-  return `<svg class="aperture-icon" viewBox="0 0 100 100" aria-hidden="true">${blades}</svg>`;
+// ---------------- Schermata di acquisizione: mirino immersivo (TOU-21, Opzione B) ----------------
+//
+// Sostituisce il vecchio flusso a due passi (riquadro "Fotografa l'oggetto"
+// con icona statica → tap → si apre il mirino) con un mirino che È la
+// schermata stessa fin dall'inizio: niente stato intermedio da toccare per
+// "aprire" la fotocamera, il feed live è già lo sfondo a schermo intero
+// appena si arriva su questa schermata. Risolve strutturalmente anche
+// TOU-20 (icona placeholder pre-tap): quello stato non esiste più, quindi
+// non c'è più nessuna icona (iride o fotocamera) da mostrare prima dello
+// scatto — l'unico pulsante di cattura in tutto il flusso Home è il
+// cerchio bianco del mirino, .vf-home-shutter più sotto.
+//
+// La cornice ad angoli dorati (.viewfinder-frame/.vf-corner) è la stessa,
+// identica, già confermata funzionante da Giuseppe per PackageCheckScreen —
+// riusata qui senza modifiche di stile.
+let homeViewfinderStream = null;
+let homeViewfinderStarting = false;
+let homeViewfinderFacing = "environment";
+let homeViewfinderUnsupported = false;
+
+function stopHomeViewfinder() {
+  if (homeViewfinderStream) {
+    homeViewfinderStream.getTracks().forEach((track) => track.stop());
+  }
+  homeViewfinderStream = null;
+  homeViewfinderStarting = false;
 }
 
-function HomeScreen() {
-  const wrap = el("div");
-  wrap.appendChild(AssistantAvatar("home"));
-  wrap.appendChild(TrustRow());
+// Chiamata da render() a ogni giro: se lo stream esiste già lo riusiamo
+// (nessun nuovo permesso richiesto, nessun flicker), altrimenti lo apriamo
+// una volta sola e ri-renderizziamo al termine per agganciarlo al <video>
+// del giro successivo.
+function startHomeViewfinder() {
+  if (homeViewfinderStream || homeViewfinderStarting) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.warn("Mirino immersivo non disponibile:", "navigator.mediaDevices.getUserMedia non è supportato da questo browser/contesto");
+    homeViewfinderUnsupported = true;
+    render();
+    return;
+  }
+  homeViewfinderStarting = true;
+  navigator.mediaDevices
+    .getUserMedia({ video: { facingMode: homeViewfinderFacing }, audio: false })
+    .then((stream) => {
+      homeViewfinderStarting = false;
+      // Nel frattempo l'utente potrebbe aver lasciato la schermata Home
+      // (altro screen, modalità partner, o passato a "descrivilo a voce"):
+      // in quel caso lo stream non serve più, chiudiamolo subito.
+      const stillOnHomeCamera = state.mode !== "partner" && state.screen === "home" && state.homeCaptureMode !== "describe";
+      if (!stillOnHomeCamera) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      homeViewfinderStream = stream;
+      homeViewfinderUnsupported = false;
+      render();
+    })
+    .catch((err) => {
+      console.warn("Mirino immersivo non disponibile, uso la fotocamera nativa:", err);
+      homeViewfinderStarting = false;
+      homeViewfinderUnsupported = true;
+      render();
+    });
+}
+
+function flipHomeViewfinderCamera() {
+  homeViewfinderFacing = homeViewfinderFacing === "environment" ? "user" : "environment";
+  stopHomeViewfinder();
+  render();
+}
+
+// Pillola semi-trasparente/blur riusata per i controlli overlay in cima al
+// feed (indietro, wordmark, selettore lingua) — mai una barra opaca piena,
+// così il feed camera resta visibile sotto.
+function ViewfinderTopBar(onBack) {
+  const bar = el("div", "vf-home-topbar");
+  const back = el("button", "vf-pill vf-pill-icon");
+  back.type = "button";
+  back.innerHTML = "←";
+  back.setAttribute("aria-label", t("back_generic"));
+  back.addEventListener("click", onBack);
+  bar.appendChild(back);
+
+  bar.appendChild(el("div", "vf-home-wordmark", `Touch<b>&amp;</b>Go`));
+
+  const langGroup = el("div", "vf-pill vf-home-lang");
+  langGroup.innerHTML = `
+    <button class="vf-lang-btn ${state.lang === "it" ? "on" : ""}" data-lang="it" aria-label="Italiano">IT</button>
+    <button class="vf-lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>`;
+  langGroup.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => setLang(b.dataset.lang)));
+  bar.appendChild(langGroup);
+
+  return bar;
+}
+
+// Banner contestuali (errore, promemoria posizione, acquisti in sospeso) —
+// restano tutti raggiungibili come overlay compatti sotto la barra
+// superiore, invece di sparire con l'eliminazione del vecchio riquadro
+// intermedio: nessuna funzionalità esistente persa, solo riposizionata
+// dentro la nuova struttura a overlay.
+function ViewfinderBanners() {
+  const wrap = el("div", "vf-home-banners");
+
+  if (state.error) {
+    wrap.appendChild(el("div", "vf-home-banner vf-home-banner-error", `⚠️ ${state.error}`));
+  }
 
   if (state.pickupSource !== "gps" && !state.locationReminderDismissed) {
-    const loc = el("div", "location-reminder");
+    const loc = el("div", "vf-home-banner vf-home-banner-info");
     loc.innerHTML = `
-      <div class="loc-avatar">📍</div>
-      <div class="loc-text"><b>${t("loc_reminder_title")}</b><br/>${t("loc_reminder_text")}</div>
-      <button class="loc-dismiss" aria-label="${t("loc_reminder_dismiss_aria")}">✕</button>`;
-    loc.querySelector(".loc-dismiss").addEventListener("click", () => {
+      <div class="vf-banner-text"><b>${t("loc_reminder_title")}</b><br/>${t("loc_reminder_text")}</div>
+      <button class="vf-banner-dismiss" aria-label="${t("loc_reminder_dismiss_aria")}">✕</button>`;
+    loc.querySelector(".vf-banner-dismiss").addEventListener("click", (e) => {
+      e.stopPropagation();
       state.locationReminderDismissed = true;
       render();
     });
-    loc.querySelector(".loc-avatar").addEventListener("click", () => loadLocation());
+    loc.querySelector(".vf-banner-text").addEventListener("click", () => loadLocation());
     wrap.appendChild(loc);
   }
 
   if (state.pendingItems.length > 0) {
-    const banner = el("div", "pending-banner");
     const pendingItemWord = state.pendingItems.length === 1 ? t("home_pending_item_singular") : t("home_pending_item_plural");
-    banner.innerHTML = `<div class="pending-count">🧳 ${state.pendingItems.length} ${pendingItemWord} ${t("home_pending_suffix")}</div>
-      <div class="pending-sub">${t("home_pending_sub")}</div>`;
-    const concludeBtn = el("button", "btn-secondary", t("home_conclude_btn"));
-    concludeBtn.addEventListener("click", () => {
+    const banner = el("div", "vf-home-banner vf-home-banner-info vf-home-banner-tap");
+    banner.innerHTML = `
+      <div class="vf-banner-text">🧳 ${state.pendingItems.length} ${pendingItemWord} ${t("home_pending_suffix")}<br/><span class="vf-banner-sub">${t("home_pending_sub")}</span></div>
+      <span class="vf-banner-cta">${t("home_conclude_btn")}</span>`;
+    banner.addEventListener("click", () => {
       state.screen = "conclude";
       render();
     });
-    banner.appendChild(concludeBtn);
     wrap.appendChild(banner);
   }
 
-  if (state.error) {
-    wrap.appendChild(el("div", "alert", `⚠️ ${state.error}`));
-  }
+  return wrap;
+}
 
-  const section = el("div", "section");
-  if (state.touristName) {
-    section.appendChild(el("div", "greeting", `${t("home_greeting")}, ${state.touristName}`));
-  }
-  section.appendChild(el("div", "step-lbl", t("home_step1_lbl")));
-  const captureCard = el("div", "capture-card");
-  captureCard.innerHTML = `
-    <div class="capture-icon">${apertureIconMarkup()}</div>
-    <h3>${t("home_capture_title")}</h3>
-    <p>${t("capture_tap_camera")}</p>`;
+function goBackFromHomeCamera() {
+  stopHomeViewfinder();
+  state.screen = "cover";
+  render();
+}
+
+function CaptureViewfinderScreen() {
+  if (state.homeCaptureMode === "describe") return HomeDescribeScreen();
+
+  const wrap = el("div", "vf-home");
+  wrap.appendChild(ViewfinderTopBar(goBackFromHomeCamera));
+  wrap.appendChild(ViewfinderBanners());
+
   const cameraInput = el("input");
   cameraInput.type = "file";
   cameraInput.accept = "image/*";
   cameraInput.capture = "environment";
   cameraInput.style.display = "none";
   cameraInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
-  captureCard.appendChild(cameraInput);
-  // TOU-20 (Giuseppe): l'iride va mostrata aperta prima del tap e chiudersi
-  // "nel momento dello scatto", in sincrono col rumore dell'otturatore.
-  // L'unico "scatto" che questo riquadro placeholder può davvero mostrare è
-  // il tap che lo apre (il vero pulsante di scatto vive dentro l'overlay a
-  // schermo intero del mirino, dove questa icona non è più visibile) — Code
-  // interpreta quindi "lo scatto" come questo tap: chiude l'iride e riproduce
-  // il suono qui, poi apre la fotocamera come "passo successivo del flusso",
-  // esattamente come descritto da Giuseppe. Il ritardo (uguale alla durata
-  // della transizione CSS, .aperture-icon.closing) lascia vedere l'animazione
-  // prima di passare al mirino vero e proprio.
-  captureCard.addEventListener("click", () => {
-    const icon = captureCard.querySelector(".aperture-icon");
-    if (icon) icon.classList.add("closing");
-    playShutterSound();
-    setTimeout(() => openCameraViewfinder(handleImageDataUrl, cameraInput), 230);
-  });
-  section.appendChild(captureCard);
+  wrap.appendChild(cameraInput);
 
-  const galleryCard = el("div", "gallery-card");
-  galleryCard.innerHTML = `<span>${t("home_gallery_choose")}</span>`;
+  let video = null;
+  if (homeViewfinderStream) {
+    video = document.createElement("video");
+    video.className = "vf-home-video";
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.srcObject = homeViewfinderStream;
+    wrap.appendChild(video);
+  } else {
+    wrap.appendChild(el("div", "vf-home-fallback"));
+    startHomeViewfinder();
+  }
+
+  const frameArea = el("div", "vf-home-frame-area");
+  frameArea.appendChild(el("div", "vf-home-guide", t("vf_home_guide")));
+  const frame = el("div", "viewfinder-frame");
+  frame.innerHTML = `
+    <span class="vf-corner vf-tl"></span><span class="vf-corner vf-tr"></span>
+    <span class="vf-corner vf-bl"></span><span class="vf-corner vf-br"></span>`;
+  frameArea.appendChild(frame);
+  wrap.appendChild(frameArea);
+
+  const bottom = el("div", "vf-home-bottom");
+  bottom.appendChild(el("div", "vf-home-badge", `🛡️ ${t("trust_coverage")} · ${t("trust_tracked")}`));
+
+  const controls = el("div", "vf-home-controls");
+
   const galleryInput = el("input");
   galleryInput.type = "file";
   galleryInput.accept = "image/*";
   galleryInput.style.display = "none";
   galleryInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
-  galleryCard.appendChild(galleryInput);
-  galleryCard.addEventListener("click", () => galleryInput.click());
-  section.appendChild(galleryCard);
+  const galleryBtn = el("button", "vf-side-btn", "🖼️");
+  galleryBtn.type = "button";
+  galleryBtn.setAttribute("aria-label", t("home_gallery_choose"));
+  galleryBtn.addEventListener("click", () => galleryInput.click());
+  controls.appendChild(galleryBtn);
+  controls.appendChild(galleryInput);
 
-  const describeBox = el("div", "describe-box");
-  const describeLbl = el("div", "tg-lbl", t("home_describe_lbl"));
+  const shutterBtn = el("button", "vf-shutter vf-home-shutter");
+  shutterBtn.type = "button";
+  shutterBtn.setAttribute("aria-label", t("vf_home_shutter_aria"));
+  shutterBtn.addEventListener("click", () => {
+    if (video && homeViewfinderStream) {
+      playShutterSound();
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      stopHomeViewfinder();
+      handleImageDataUrl(dataUrl, "image/jpeg");
+    } else {
+      showCameraFallbackToast();
+      cameraInput.click();
+    }
+  });
+  controls.appendChild(shutterBtn);
+
+  const flipBtn = el("button", "vf-side-btn", "🔄");
+  flipBtn.type = "button";
+  flipBtn.setAttribute("aria-label", t("vf_home_flip_aria"));
+  flipBtn.disabled = !homeViewfinderStream;
+  flipBtn.addEventListener("click", flipHomeViewfinderCamera);
+  controls.appendChild(flipBtn);
+
+  bottom.appendChild(controls);
+
+  const describeLink = el("div", "vf-home-describe-link", t("vf_home_describe_link"));
+  describeLink.addEventListener("click", () => {
+    stopHomeViewfinder();
+    state.homeCaptureMode = "describe";
+    render();
+  });
+  bottom.appendChild(describeLink);
+
+  if (state.promoValid) {
+    bottom.appendChild(el("div", "vf-home-promo-active", t("home_promo_active", { code: state.promoCode })));
+  } else if (!state.showPromoInput) {
+    const promoLink = el("div", "vf-home-promo-link", t("home_promo_link"));
+    promoLink.addEventListener("click", () => {
+      state.showPromoInput = true;
+      render();
+    });
+    bottom.appendChild(promoLink);
+  } else {
+    const promoBox = el("div", "vf-home-promo-box");
+    const promoInput = el("input");
+    promoInput.type = "text";
+    promoInput.placeholder = t("home_promo_placeholder");
+    promoInput.value = state.promoCode || "";
+    const promoGo = el("button", null, "→");
+    promoGo.type = "button";
+    promoGo.addEventListener("click", () => {
+      if (promoInput.value.trim()) checkPromoCode(promoInput.value.trim());
+    });
+    promoInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && promoInput.value.trim()) checkPromoCode(promoInput.value.trim());
+    });
+    promoBox.appendChild(promoInput);
+    promoBox.appendChild(promoGo);
+    bottom.appendChild(promoBox);
+    if (state.promoChecked && !state.promoValid) {
+      bottom.appendChild(el("div", "promo-invalid", t("code_invalid_generic")));
+    }
+  }
+
+  wrap.appendChild(bottom);
+  return wrap;
+}
+
+// Percorso alternativo già esistente (descrizione manuale) — raggiunto dal
+// link "Descrivilo a voce" nel mirino immersivo. Stessa barra superiore
+// (indietro/wordmark/lingua) per coerenza visiva, ma il feed camera lascia
+// il posto a un campo di testo con dettatura vocale (addVoiceButton, già
+// usato altrove in app.js) invece che a un mirino — non ha senso mostrare
+// un feed live su una schermata pensata per chi non può/vuole fotografare.
+function HomeDescribeScreen() {
+  const wrap = el("div", "vf-home vf-home-describe");
+  const backToCamera = () => {
+    state.homeCaptureMode = "camera";
+    render();
+  };
+  wrap.appendChild(ViewfinderTopBar(backToCamera));
+
+  const stage = el("div", "vf-home-describe-stage");
+  stage.appendChild(el("div", "vf-home-describe-title", t("home_describe_lbl")));
+
+  // Riga a sé (non il layout .describe-box, che presuppone un solo
+  // pulsante assoluto sul bordo destro dell'input): qui ci sono due
+  // controlli sul lato destro, il microfono di addVoiceButton() e il
+  // pulsante di invio, quindi vanno affiancati come fratelli in un flex
+  // invece che sovrapposti.
+  const describeRow = el("div", "vf-home-describe-row");
+  const fieldWrap = el("div", "vf-home-describe-field");
   const input = el("input");
   input.type = "text";
   input.placeholder = t("home_describe_placeholder");
-  const goBtn = el("button", null, "→");
-  goBtn.addEventListener("click", () => {
+  const goBtn = el("button", "vf-home-describe-go", "→");
+  goBtn.type = "button";
+  const submit = () => {
     if (input.value.trim()) handleDescribe(input.value.trim());
-  });
+  };
+  goBtn.addEventListener("click", submit);
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && input.value.trim()) handleDescribe(input.value.trim());
+    if (e.key === "Enter") submit();
   });
-  describeBox.appendChild(input);
-  describeBox.appendChild(goBtn);
-  section.appendChild(describeLbl);
-  section.appendChild(describeBox);
+  fieldWrap.appendChild(input);
+  describeRow.appendChild(fieldWrap);
+  describeRow.appendChild(goBtn);
+  stage.appendChild(describeRow);
+  addVoiceButton(input);
 
-  const foot = el("div", "home-foot", t("home_foot"));
-  section.appendChild(foot);
+  const back = el("div", "vf-home-describe-back", t("vf_home_back_to_camera"));
+  back.addEventListener("click", backToCamera);
+  stage.appendChild(back);
 
-  if (!state.promoValid) {
-    if (!state.showPromoInput) {
-      const promoLink = el("div", "promo-link", t("home_promo_link"));
-      promoLink.addEventListener("click", () => {
-        state.showPromoInput = true;
-        render();
-      });
-      section.appendChild(promoLink);
-    } else {
-      const promoBox = el("div", "describe-box");
-      const promoInput = el("input");
-      promoInput.type = "text";
-      promoInput.placeholder = t("home_promo_placeholder");
-      promoInput.value = state.promoCode || "";
-      const promoGo = el("button", null, "→");
-      promoGo.addEventListener("click", () => {
-        if (promoInput.value.trim()) checkPromoCode(promoInput.value.trim());
-      });
-      promoInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && promoInput.value.trim()) checkPromoCode(promoInput.value.trim());
-      });
-      promoBox.appendChild(promoInput);
-      promoBox.appendChild(promoGo);
-      section.appendChild(promoBox);
-      if (state.promoChecked && !state.promoValid) {
-        section.appendChild(el("div", "promo-invalid", t("code_invalid_generic")));
-      }
-    }
-  } else {
-    section.appendChild(el("div", "promo-active-note", t("home_promo_active", { code: state.promoCode })));
-  }
-
-  wrap.appendChild(section);
-
+  wrap.appendChild(stage);
   return wrap;
 }
 
