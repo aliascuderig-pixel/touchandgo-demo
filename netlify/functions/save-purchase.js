@@ -8,6 +8,65 @@ const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
 const COMMISSION_RATE = 0.1; // stessa aliquota usata come commissione/credito partner (crm.js, partner-stats.js)
 
+// Numero massimo di esempi recenti tenuti per ogni voce dell'archivio
+// doganale (store "customs-reference", sotto) — evita che un bucket
+// categoria+materiale molto comune (es. "Accessori Moda / pelle") cresca
+// senza limite: bastano pochi esempi reali recenti come riferimento.
+const CUSTOMS_REFERENCE_MAX_EXAMPLES = 5;
+
+// Chiave dell'archivio doganale: categoria+materiale normalizzati, non il
+// codice HS (che è l'output che vogliamo aiutare a prevedere, non un
+// input disponibile prima della classificazione) e non l'oggetto singolo
+// (troppo specifico per essere un riferimento utile ad altri oggetti).
+// Categoria+materiale è il punto di equilibrio: abbastanza ampio da
+// accumulare più esempi nello stesso bucket, abbastanza specifico perché
+// quegli esempi siano davvero pertinenti tra loro (es. "borsa in pelle" e
+// "portafoglio in pelle" finiscono nello stesso bucket "Accessori Moda /
+// pelle", con codici HS tipicamente vicini).
+function customsReferenceKey(category, material) {
+  return `${String(category).trim().toLowerCase()}::${String(material).trim().toLowerCase()}`;
+}
+
+// Registra/aggiorna una voce dell'archivio doganale con i dati REALI di
+// una classificazione andata a buon fine — mai un valore stimato o
+// inventato: se uno dei tre campi manca, semplicemente non si scrive
+// nulla. Chiamata solo al primo salvataggio di un acquisto (non ad ogni
+// risincronizzazione di stato), altrimenti lo stesso acquisto
+// gonfierebbe il conteggio a ogni "in sospeso" -> "in confezionamento" ->
+// "ritiro richiesto" -> "ritirato". Best-effort: un errore qui non deve
+// mai far fallire il salvataggio vero e proprio dell'acquisto.
+async function recordCustomsReference(item, blobsAuth) {
+  if (!item.category || !item.hsCode || item.hsCode === "—" || !item.material) return;
+  try {
+    const store = getStore({ name: "customs-reference", ...blobsAuth });
+    const key = customsReferenceKey(item.category, item.material);
+    const existing = (await store.get(key, { type: "json" })) || {
+      category: item.category,
+      material: item.material,
+      count: 0,
+      hsCodeCounts: {},
+      recentExamples: [],
+    };
+    existing.count += 1;
+    existing.hsCodeCounts[item.hsCode] = (existing.hsCodeCounts[item.hsCode] || 0) + 1;
+    existing.mostCommonHsCode = Object.keys(existing.hsCodeCounts).reduce((best, code) =>
+      existing.hsCodeCounts[code] > (existing.hsCodeCounts[best] || 0) ? code : best
+    , item.hsCode);
+    existing.recentExamples.unshift({
+      objectName: item.objectName || null,
+      hsCode: item.hsCode,
+      weightKg: typeof item.weightKg === "number" ? item.weightKg : null,
+      recordedAt: new Date().toISOString(),
+    });
+    existing.recentExamples = existing.recentExamples.slice(0, CUSTOMS_REFERENCE_MAX_EXAMPLES);
+    existing.updatedAt = new Date().toISOString();
+    await store.setJSON(key, existing);
+  } catch (e) {
+    // Archivio di riferimento: mai bloccante. L'acquisto è già stato (o
+    // sta per essere) salvato correttamente indipendentemente da questo.
+  }
+}
+
 function getClientIp(event) {
   return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
 }
@@ -146,6 +205,27 @@ exports.handler = async (event) => {
           await partners.setJSON(item.partnerCode, partner);
         }
       }
+    }
+
+    // Solo al primo salvataggio di questo id: le risincronizzazioni di
+    // stato successive (in sospeso -> in confezionamento -> ...) portano
+    // sempre la stessa classificazione, quindi non devono contare di
+    // nuovo nell'archivio doganale. Lettura indipendente da quella usata
+    // sopra per il credito partner (quella è scoped al solo caso
+    // "ritirato" + partnerCode) per non toccarne la logica.
+    const alreadySaved = await purchases.get(item.id, { type: "json" });
+    if (!alreadySaved) {
+      await recordCustomsReference(item, blobsAuth);
+    }
+
+    // Conferma di consegna del turista (deliveryConfirmedAt): come per
+    // creditIssued sopra, questo salvataggio sovrascrive l'intero record.
+    // Se il client che sta sincronizzando ora non porta il campo (es. un
+    // altro dispositivo, o un resync innescato da un'azione diversa) ma lo
+    // store ce l'ha già, va preservato — altrimenti una conferma già data
+    // sparirebbe al prossimo salvataggio da quel dispositivo.
+    if (!item.deliveryConfirmedAt && alreadySaved && alreadySaved.deliveryConfirmedAt) {
+      item.deliveryConfirmedAt = alreadySaved.deliveryConfirmedAt;
     }
 
     await purchases.setJSON(item.id, item);
