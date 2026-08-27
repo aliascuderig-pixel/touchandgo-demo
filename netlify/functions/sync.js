@@ -12,6 +12,7 @@
 // non raggiungibile da questo deploy pubblico.
 
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 function generateDiscountCode(partnerCode) {
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -78,7 +79,7 @@ function getClientIp(event) {
 
 async function checkRateLimit(key) {
   const store = getStore({
-    name: "rate-limits",
+    name: guestScopedStoreName("rate-limits"),
     siteID: process.env.NETLIFY_BLOBS_SITE_ID,
     token: process.env.NETLIFY_BLOBS_TOKEN,
   });
@@ -105,9 +106,9 @@ exports.handler = async (event) => {
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     };
-    const purchases = getStore({ name: "purchases", ...blobsAuth });
-    const partners = getStore({ name: "partners", ...blobsAuth });
-    const discountCodes = getStore({ name: "partner-discount-codes", ...blobsAuth });
+    const purchases = getStore({ name: guestScopedStoreName("purchases"), ...blobsAuth });
+    const partners = getStore({ name: guestScopedStoreName("partners"), ...blobsAuth });
+    const discountCodes = getStore({ name: guestScopedStoreName("partner-discount-codes"), ...blobsAuth });
 
     // Usata dall'app turista per allineare localmente lo stato degli
     // acquisti già noti (status, pickupPoint, ecc.) con quanto aggiornato
