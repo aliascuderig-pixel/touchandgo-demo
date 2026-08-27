@@ -54,6 +54,10 @@ nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px sol
 .hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
 .btn-primary{background:var(--gold);color:var(--ink);padding:15px 30px;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.03em;display:inline-block}
 .btn-outline{background:transparent;color:var(--cream);border:1px solid #3A362C;padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
+/* Come .btn-outline ma per le sezioni chiare (--paper): .btn-outline usa
+   testo/bordo chiari pensati solo per lo sfondo scuro dell'hero — su una
+   sezione chiara sarebbe testo quasi bianco su sfondo quasi bianco. */
+.btn-outline-light{background:transparent;color:var(--ink);border:1px solid var(--line);padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
 .hero-stats{display:flex;justify-content:center;gap:56px;margin-top:64px;flex-wrap:wrap}
 .hero-stat b{display:block;font-family:var(--display);font-size:32px;color:var(--gold);font-weight:500}
 .hero-stat span{font-size:11px;color:#9A9284;text-transform:uppercase;letter-spacing:.08em}
@@ -151,7 +155,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
   .nav-links{display:none}
   .footer-grid{gap:26px}
   .nav-cta,.nav-cta-secondary{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
-  .btn-primary,.btn-outline{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .btn-primary,.btn-outline,.btn-outline-light{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   .copy-code-btn{min-height:44px;padding:6px 18px;display:inline-flex;align-items:center;justify-content:center}
 }
 
@@ -380,6 +384,10 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
     </div>
     <p class="commission-note"><b>10%</b> di commissione su ogni spedizione generata tramite il tuo codice, sui piani a pagamento — una sola commissione per spedizione, a chi ha portato il cliente. È disponibile anche un piano gratuito, senza canone ma senza commissione.</p>
 
+    <p style="text-align:center;margin-top:22px">
+      <a class="btn-outline-light" href="#" id="app-link-partner-login" target="_blank" rel="noopener">Hai già un account partner? Accedi →</a>
+    </p>
+
     <form class="partner-signup" id="partner-signup-form">
       <h3>Registra il tuo negozio</h3>
       <div class="field">
@@ -459,6 +467,20 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
   </div>
 </section>
 
+<section id="contatti">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Contatti</div>
+      <h2>Scrivici</h2>
+      <p>Una domanda su come funziona il servizio, un negozio interessato, un partner tecnico, la stampa — scrivici, ti rispondiamo direttamente.</p>
+    </div>
+    <p style="text-align:center">
+      <a class="btn-primary" href="mailto:partnership@touchandgo.it?subject=Contatto%20dal%20sito">Scrivici → partnership@touchandgo.it</a>
+    </p>
+    <p style="text-align:center;margin-top:14px;font-size:12px;color:var(--muted)">Per proposte di partnership commerciale con negozi/hotel o reseller, vedi anche le sezioni <a href="#partner" style="color:var(--gold-deep);text-decoration:underline">Per i partner</a> e <a href="#rivenditori" style="color:var(--gold-deep);text-decoration:underline">Reseller</a> più sopra.</p>
+  </div>
+</section>
+
 <section class="cta-band">
   <div class="wrap">
     <h2>Provalo ora, gratuitamente</h2>
@@ -481,7 +503,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
         <h5>Azienda</h5>
         <a href="#chi-siamo">Chi siamo</a>
         <a href="https://cute-moxie-cd1e4b.netlify.app/site/admin.html" target="_blank" rel="noopener">Area riservata</a>
-        <a href="#">Contatti</a>
+        <a href="#contatti">Contatti</a>
       </div>
       <div class="footer-col">
         <h5>Legale</h5>
@@ -504,6 +526,17 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
     a.setAttribute("target", "_blank");
     a.setAttribute("rel", "noopener");
   });
+
+  // "Hai già un account partner? Accedi" — apre l'app direttamente in
+  // modalità Partner (?mode=partner, letto da app.js all'avvio) invece di
+  // limitarsi a scrollare al form di registrazione nuovo partner: chi ha
+  // già un codice arriva così dritto su PartnerLoginAndHistory (il login
+  // esiste già dentro l'app, riusato tale e quale — nessuna UI di login
+  // duplicata qui sul sito).
+  var partnerLoginLink = document.getElementById("app-link-partner-login");
+  if (partnerLoginLink) {
+    partnerLoginLink.setAttribute("href", APP_URL + "?mode=partner");
+  }
 
   // Registrazione self-service partner — chiama l'action "register-partner"
   // in netlify/functions/sync.js, che crea il codice, salva il piano e

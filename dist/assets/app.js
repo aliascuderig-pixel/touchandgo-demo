@@ -17,7 +17,16 @@ const STEPS = [
   "Tracking live fino alla consegna a casa",
 ];
 
-const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
+// "material" (TOU-*, archivio di riferimento doganale) — aggiunto per
+// popolare netlify/functions/save-purchase.js -> store Blobs
+// "customs-reference" con dati reali (materiale costruttivo dichiarato/
+// rilevato dall'AI), non prima disponibile: senza questo campo l'archivio
+// non avrebbe potuto registrare il materiale come richiesto, e inventarlo
+// altrove (es. da una regex sul nome oggetto) sarebbe stata l'euristica
+// fragile che si voleva evitare. Testo libero breve, stesso stile di
+// hs_description_it — non un enum, i materiali variano troppo per
+// categoria per un elenco fisso utile.
+const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
 
 // L'imballo non è un margine fisso: più l'oggetto è grande, più materiale
 // serve in termini assoluti (stessa percentuale); se è fragile, il
@@ -2620,7 +2629,7 @@ function historyStatusClass(status) {
 // cambiato, per sapere se salvare/ri-renderizzare.
 function applyRemotePurchaseUpdate(local, remote) {
   let changed = false;
-  ["status", "pickupPoint", "pickupPointChanged", "pickupPointChangedAt", "previousPickupPoint", "packagingDispatch", "pickupRequestedAt"].forEach((key) => {
+  ["status", "pickupPoint", "pickupPointChanged", "pickupPointChangedAt", "previousPickupPoint", "packagingDispatch", "pickupRequestedAt", "deliveryConfirmedAt"].forEach((key) => {
     if (remote[key] !== undefined && JSON.stringify(remote[key]) !== JSON.stringify(local[key])) {
       local[key] = remote[key];
       changed = true;
@@ -2716,6 +2725,22 @@ function markPickupPointSeen(item) {
     // Se la conferma non arriva al server, il banner potrebbe ripresentarsi
     // al prossimo sync — non blocca comunque il turista.
   });
+  render();
+}
+
+// Conferma di consegna del turista, indipendente dallo stato "ritirato"
+// (che indica solo che il corriere lo ha ritirato dal negozio, non che sia
+// arrivato a casa). Mostrata sempre per ogni oggetto "ritirato" finché non
+// confermato — nessuna soglia di giorni: un ritardo del corriere non deve
+// nascondere la domanda proprio nel momento in cui servirebbe di più, e un
+// singolo tap è comunque a costo zero per il turista se il pacco non è
+// ancora arrivato (può semplicemente ignorarla finché non lo riceve).
+// Un solo tap è prova sufficiente, nessun altro dato richiesto.
+function confirmDelivery(item) {
+  item.deliveryConfirmedAt = new Date().toISOString();
+  saveHistory();
+  savePending();
+  syncPurchaseToCRM(item);
   render();
 }
 
@@ -3096,25 +3121,53 @@ function ShippedScreen() {
 // voce invece di scrivere (turisti di fretta o con difficoltà con la
 // tastiera). Usa la Web Speech API nativa del browser (su Chrome/Chromium
 // la trascrizione passa comunque dai server di Google, non è on-device —
-// serve quindi connessione dati attiva). Se il browser non la supporta,
-// non aggiunge nulla: il campo resta scrivibile normalmente, senza errori.
+// serve quindi connessione dati attiva).
+//
+// Bug investigato (segnalato come "il microfono non funziona"): fino a
+// questa versione, se il browser non esponeva SpeechRecognition/
+// webkitSpeechRecognition la funzione usciva subito senza aggiungere
+// nulla — il controllo spariva senza alcuna spiegazione, indistinguibile
+// da un campo che non ha mai avuto dettatura vocale. Verificato con test
+// reali (Playwright + Chromium, vedi commit): (a) su un browser che ESPONE
+// l'API, il pulsante appare correttamente, è cliccabile, non è coperto né
+// tagliato da nessun elemento — anche dentro AssistantChatModal, che è
+// stata verificata esplicitamente perché sospettata di avere un problema
+// suo; (b) il flusso di permesso/errore (recognition "error" con
+// not-allowed/no-speech) funziona davvero e mostra il toast corretto —
+// provato scatenando per davvero un rifiuto di permesso reale. Non è
+// quindi un bug di layout/gestione errori specifico della modale.
+// La causa reale è la (a) del sospetto originale, confermata anche solo
+// leggendo il codice (nessun test necessario: il "return" immediato è
+// deterministico) — su un browser che non espone affatto l'API (Firefox
+// desktop/Android, che non la implementa per scelta di privacy; Safari ha
+// un supporto storicamente incompleto/dipendente dalla versione) il
+// controllo non compariva mai, ovunque nell'app: non solo nella chat
+// assistente, ma anche nei campi nome/indirizzo — semplicemente lì viene
+// notato meno perché scrivere a mano è l'alternativa ovvia e già in vista.
+//
+// Fix: il pulsante compare SEMPRE, anche quando l'API non è disponibile —
+// in versione visivamente attenuata, non clickable per avviare un
+// riconoscimento (non esiste nulla da avviare), ma il tap mostra comunque
+// una spiegazione breve tramite lo stesso toast già usato per gli altri
+// errori, invece di far sparire il controllo senza dire nulla.
+//
 // onResult(transcript), opzionale, viene chiamato dopo che il testo
 // dettato è già stato scritto nel campo — usato dal chat dell'assistente
 // per inviare subito il messaggio dopo la dettatura.
 function addVoiceButton(input, onResult) {
   if (!input) return;
-  if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) return;
   const parent = input.parentElement;
   if (!parent) return;
+  const supported = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
 
   const wrap = el("div", "voice-field-wrap" + (input.classList.contains("addr-cap") ? " voice-cap" : ""));
   parent.insertBefore(wrap, input);
   wrap.appendChild(input);
 
-  const btn = el("button", "voice-btn", "🎤");
+  const btn = el("button", "voice-btn" + (supported ? "" : " voice-btn-unsupported"), "🎤");
   btn.type = "button";
-  btn.title = "Detta a voce";
-  btn.setAttribute("aria-label", "Detta a voce");
+  btn.title = supported ? "Detta a voce" : "Dettatura vocale non disponibile su questo browser";
+  btn.setAttribute("aria-label", supported ? "Detta a voce" : "Dettatura vocale non disponibile su questo browser");
   wrap.appendChild(btn);
 
   const toast = el("div", "voice-toast");
@@ -3129,6 +3182,11 @@ function addVoiceButton(input, onResult) {
       toast.hidden = true;
     }, 4000);
   };
+
+  if (!supported) {
+    btn.addEventListener("click", () => showToast("🎤 Dettatura vocale non disponibile su questo browser — puoi comunque scrivere qui a mano."));
+    return;
+  }
 
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognizing = false;
@@ -3526,6 +3584,8 @@ function ChooseAddressScreen() {
         id: generateBookingCode(),
         objectName: localizeObjectName(state.result),
         hsCode: (state.result && state.result.hs_code) || "—",
+        category: (state.result && state.result.category) || null,
+        material: (state.result && state.result.material) || null,
         weightKg: state.result ? state.result.weight_kg : 1,
         dims: state.result
           ? { length_cm: state.result.length_cm, width_cm: state.result.width_cm, height_cm: state.result.height_cm }
@@ -3980,6 +4040,23 @@ function PurchaseHistoryList(items, emptyText, editable) {
         });
         row.appendChild(pickupBtn);
       }
+      if (editable && it.status === "ritirato" && !it.deliveryConfirmedAt) {
+        const confirmBox = el("div", "delivery-confirm-box");
+        confirmBox.appendChild(el("div", "delivery-confirm-question", "Hai ricevuto il tuo pacco?"));
+        const confirmBtn = el("button", "btn-primary delivery-confirm-btn", "Sì, l'ho ricevuto");
+        confirmBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          confirmDelivery(it);
+        });
+        confirmBox.appendChild(confirmBtn);
+        row.appendChild(confirmBox);
+      } else if (editable && it.status === "ritirato" && it.deliveryConfirmedAt) {
+        const confirmedDt = new Date(it.deliveryConfirmedAt);
+        const confirmedStr = isNaN(confirmedDt)
+          ? ""
+          : confirmedDt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+        row.appendChild(el("div", "delivery-confirmed-note", `✓ Consegna confermata${confirmedStr ? " il " + confirmedStr : ""}`));
+      }
       wrap.appendChild(row);
     });
   return wrap;
@@ -4283,6 +4360,26 @@ function capturePartnerCode() {
 }
 
 capturePartnerCode();
+
+// Percorso "Hai già un account partner? Accedi" dal sito marketing
+// (dist/site/index.html, sezione #partner): apre l'app con ?mode=partner
+// invece di limitarsi allo scroll sulla sezione di registrazione nuovo
+// partner. Stesso principio di capturePartnerCode()/capturePromoCode()
+// sopra/sotto — un parametro in query letto una volta all'avvio. Non
+// tocca in nessun modo la logica di login (PartnerLoginAndHistory, sotto)
+// o l'autenticazione via partner-stats.js: imposta solo la modalità con
+// cui l'app parte, così chi arriva da quel link trova già in vista il
+// login del componente esistente, senza duplicare nessuna UI sul sito.
+function captureModeFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "partner") {
+      state.mode = "partner";
+    }
+  } catch (e) {}
+}
+
+captureModeFromUrl();
 
 // Codice invito per l'offerta "prima spedizione a prezzo breakeven".
 // A differenza del codice partner, non viene mai mostrato di default:

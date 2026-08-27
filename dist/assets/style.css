@@ -342,6 +342,13 @@ button{font-family:inherit;cursor:pointer}
    dedicato in assets/theme-lime.css / theme-corallo.css. */
 .voice-btn.listening{background:var(--gold);color:#fff;animation:voice-pulse 1.1s ease-in-out infinite}
 @keyframes voice-pulse{0%,100%{box-shadow:0 0 0 0 rgba(201,169,110,.5)}50%{box-shadow:0 0 0 6px rgba(201,169,110,0)}}
+/* Browser senza SpeechRecognition/webkitSpeechRecognition (es. Firefox,
+   alcune versioni di Safari): il pulsante resta visibile invece di
+   sparire senza spiegazione (vedi addVoiceButton in app.js) — attenuato,
+   cursore non "pointer" (non avvia nulla), il tap mostra comunque il
+   motivo tramite lo stesso .voice-toast. */
+.voice-btn.voice-btn-unsupported{opacity:.4;cursor:default}
+.voice-btn.voice-btn-unsupported:hover{background:none}
 .voice-toast{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--warn-bg);border:1px solid var(--gold-soft);color:var(--warn);font-size:10px;line-height:1.4;padding:6px 8px;border-radius:2px;z-index:5}
 
 /* Avviso fallback fotocamera nativa (TOU-20) — stessa palette/forma del
@@ -378,6 +385,12 @@ button{font-family:inherit;cursor:pointer}
 .pickup-update-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
 .pickup-update-banner:active{background:var(--gold-soft)}
 .pickup-update-note{font-size:9.5px;font-weight:400;text-transform:none;letter-spacing:0;margin-top:3px;opacity:.85}
+
+/* ---------- Conferma consegna (post "ritirato") ---------- */
+.delivery-confirm-box{margin-top:10px;background:var(--good-bg);border:1px solid var(--success-border);padding:10px 12px}
+.delivery-confirm-question{font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px}
+.delivery-confirm-btn{font-size:11.5px;padding:9px 14px}
+.delivery-confirmed-note{font-size:10.5px;color:var(--good);font-weight:600;margin-top:8px}
 
 /* ---------- Punto di ritiro: rilevamento manuale/automatico, città recenti ---------- */
 .pickup-use-location{display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid var(--line);color:var(--clay);font-family:var(--body);font-size:11px;font-weight:600;padding:8px 12px;margin:8px 0 0;border-radius:var(--radius-sm);cursor:pointer}
