@@ -1,0 +1,16 @@
+[build]
+  publish = "dist"
+  functions = "netlify/functions"
+
+# La root "/" invoca direttamente la function go.js (rewrite interno,
+# status 200 — non un redirect visibile all'utente: un solo salto verso il
+# sito finale, non due). "force = true" è necessario perché senza di esso
+# Netlify servirebbe il file statico dist/index.html al posto della
+# function quando la richiesta è esattamente "/" — qui vogliamo il
+# contrario: dist/index.html resta un fallback di sicurezza (vedi
+# MANUALE.md), non il percorso normale.
+[[redirects]]
+  from = "/"
+  to = "/.netlify/functions/go"
+  status = 200
+  force = true
