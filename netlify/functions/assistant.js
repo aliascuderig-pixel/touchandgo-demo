@@ -15,6 +15,7 @@
 // SHIPPING_RATES, SHIPPING_MARGIN, stati di un acquisto) — se quei valori
 // cambiano, aggiornare anche qui.
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -25,7 +26,7 @@ function getClientIp(event) {
 
 async function checkRateLimit(key) {
   const store = getStore({
-    name: "rate-limits",
+    name: guestScopedStoreName("rate-limits"),
     siteID: process.env.NETLIFY_BLOBS_SITE_ID,
     token: process.env.NETLIFY_BLOBS_TOKEN,
   });

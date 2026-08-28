@@ -436,6 +436,12 @@ button{font-family:inherit;cursor:pointer}
 .header-site-link{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);text-decoration:none;border:1px solid var(--ink-border);padding:6px 10px}
 .header-assistant-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--ink);background:var(--gold-soft);border:1px solid var(--gold-soft);padding:6px 10px;cursor:pointer}
 .offline-banner{background:var(--offline-bg);color:var(--gold-soft);font-size:11px;padding:10px 20px;line-height:1.6}
+/* Spazio ospite (continuità operativa) — vedi state.guestMode in app.js.
+   Verde "rassicurante" (stessa coppia --good/--good-bg già usata per
+   conferme/successo altrove), volutamente distinto da .offline-banner:
+   qui non è un problema da segnalare ma il contrario, una spiegazione
+   tranquillizzante di perché il turista sta vedendo questo sito. */
+.guest-mode-banner{background:var(--good-bg);color:var(--good);font-size:11px;font-weight:600;padding:10px 20px;line-height:1.6}
 
 /* ---------- Selettore lingua (IT/EN) — sempre visibile nell'header ---------- */
 .lang-switch{display:flex;border:1px solid var(--ink-border);border-radius:999px;overflow:hidden}

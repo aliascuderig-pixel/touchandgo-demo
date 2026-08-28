@@ -3,6 +3,7 @@
 // device, not just what's stored locally on each phone.
 
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -38,7 +39,7 @@ function customsReferenceKey(category, material) {
 async function recordCustomsReference(item, blobsAuth) {
   if (!item.category || !item.hsCode || item.hsCode === "—" || !item.material) return;
   try {
-    const store = getStore({ name: "customs-reference", ...blobsAuth });
+    const store = getStore({ name: guestScopedStoreName("customs-reference"), ...blobsAuth });
     const key = customsReferenceKey(item.category, item.material);
     const existing = (await store.get(key, { type: "json" })) || {
       category: item.category,
@@ -73,7 +74,7 @@ function getClientIp(event) {
 
 async function checkRateLimit(key) {
   const store = getStore({
-    name: "rate-limits",
+    name: guestScopedStoreName("rate-limits"),
     siteID: process.env.NETLIFY_BLOBS_SITE_ID,
     token: process.env.NETLIFY_BLOBS_TOKEN,
   });
@@ -127,8 +128,8 @@ exports.handler = async (event) => {
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     };
-    const purchases = getStore({ name: "purchases", ...blobsAuth });
-    const blocklist = getStore({ name: "blocklist", ...blobsAuth });
+    const purchases = getStore({ name: guestScopedStoreName("purchases"), ...blobsAuth });
+    const blocklist = getStore({ name: guestScopedStoreName("blocklist"), ...blobsAuth });
 
     const email = normalizeEmail(item.touristEmail);
 
@@ -192,7 +193,7 @@ exports.handler = async (event) => {
         // comportamento invariato per quei record. Un partnerCode che non
         // corrisponde a nessun partner reale non genera commissione: non
         // c'è nessuno a cui accreditarla.
-        const partners = getStore({ name: "partners", ...blobsAuth });
+        const partners = getStore({ name: guestScopedStoreName("partners"), ...blobsAuth });
         const partner = await partners.get(item.partnerCode, { type: "json" });
         const commission =
           partner && partner.plan !== "free" ? Math.round((item.price || 0) * COMMISSION_RATE * 100) / 100 : 0;

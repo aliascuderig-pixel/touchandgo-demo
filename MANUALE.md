@@ -358,6 +358,7 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 |---|---|
 | `assistant.js` | Assistente conversazionale "Chiedi a Touch&Go" (vedi sezione dedicata sotto in "App turista") — stessa `ANTHROPIC_API_KEY` di `classify.js`, system prompt con i fatti reali del servizio costruito lato server. |
 | `classify.js` | Proxy verso l'API Claude (Anthropic) per la classificazione doganale delle foto/descrizioni — nasconde `ANTHROPIC_API_KEY` dal browser. Arricchisce il prompt con un digest dell'archivio di riferimento doganale (vedi sotto). |
+| `guest-status.js` | Espone al client se questo deploy gira in modalità ospite (`GUEST_MODE=true`) — vedi "Spazio ospite (continuità operativa)" più sotto. |
 | `partner-discount.js` | Valida e consuma i codici sconto partner al checkout del turista; scala il credito del partner esattamente dell'importo scontato. |
 | `partner-stats.js` | Verifica un codice partner e restituisce statistiche reali (vendite, valore, commissione, credito) aggregate dallo store centrale. |
 | `promo.js` | Valida e consuma i codici invito per l'offerta breakeven. |
@@ -392,8 +393,9 @@ Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-dis
 |---|---|
 | `ANTHROPIC_API_KEY` | Chiave per le chiamate a Claude (classificazione, packaging check, rilevamento firma). |
 | `NETLIFY_BLOBS_SITE_ID` / `NETLIFY_BLOBS_TOKEN` | Credenziali di accesso a Netlify Blobs, usate da tutte le funzioni che leggono/scrivono dati — le stesse configurate anche sul deploy del repository privato, così i due siti condividono gli stessi dati (vedi "Due repository" in Panoramica). |
+| `GUEST_MODE` | `true` **solo** sul deploy ospite (continuità operativa) — mai su produzione. Vedi "Spazio ospite (continuità operativa)" più sotto. |
 
-> **Importante — non rimuovere l'auth Blobs esplicita da `getStore()`.** In questo ambiente di deploy il provisioning automatico di Netlify Blobs (che in teoria non richiederebbe alcuna configurazione) **non funziona** — un tentativo di farne a meno (TOU-13) ha causato in produzione l'errore `The environment has not been configured to use Netlify Blobs`, bloccando la registrazione partner. Ogni `getStore()` in questo repository (`sync.js`, `save-purchase.js`, `classify.js`, `promo.js`, `partner-discount.js`, `partner-stats.js`, `assistant.js`) deve continuare a passare esplicitamente `siteID`/`token` da `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN` (pattern `blobsAuth` ripetuto identico in ogni file) — non è codice ridondante da "pulire".
+> **Importante — non rimuovere l'auth Blobs esplicita da `getStore()`.** In questo ambiente di deploy il provisioning automatico di Netlify Blobs (che in teoria non richiederebbe alcuna configurazione) **non funziona** — un tentativo di farne a meno (TOU-13) ha causato in produzione l'errore `The environment has not been configured to use Netlify Blobs`, bloccando la registrazione partner. Ogni `getStore()` in questo repository (`sync.js`, `save-purchase.js`, `classify.js`, `promo.js`, `partner-discount.js`, `partner-stats.js`, `assistant.js`, `guest-status.js` — quest'ultima non ne fa uso diretto) deve continuare a passare esplicitamente `siteID`/`token` da `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN` (pattern `blobsAuth` ripetuto identico in ogni file) — non è codice ridondante da "pulire". Allo stesso modo, il **nome** dello store passato a `getStore()` deve sempre passare da `guestScopedStoreName()` (`netlify/lib/guest-mode.js`), mai una stringa letterale scritta a mano — vedi "Spazio ospite (continuità operativa)" più sotto.
 
 `KIT_VAULT_PASSWORD` e `INVESTOR_PASSWORD` non servono più in questo repository — sono configurate solo sul deploy Netlify di `touchandgo-internal`, che ospita le function che le verificano.
 
@@ -402,3 +404,48 @@ Nessun valore reale di queste variabili è mai scritto in questo file o nel codi
 ### Blocklist
 
 Un solo store (`blocklist`), condiviso tra due punti di scrittura: il blocco automatico in `save-purchase.js`, in questo repository (secondo acquisto senza mai essere stato abbonato), e il blocco manuale dello staff dalla tab Bloccati del CRM (`block-customer`/`unblock-customer` in `crm.js`, repository privato). Ogni voce registra email, motivo, se è automatico o manuale, e la data.
+
+---
+
+## Spazio ospite (continuità operativa)
+
+**Perché esiste**: una seconda istanza dell'app turista, deployata come sito Netlify separato (stesso repository GitHub, stesso branch/codice — la creazione del sito Netlify vero e proprio è manuale, fuori da questo repository), pronta a subentrare se il sito principale va in crash. **Questa fase copre solo l'isolamento dei dati**: nessun meccanismo di passaggio automatico o manuale tra i due siti esiste ancora — arriverà in una fase successiva.
+
+**Principio guida** (non solo per questo): ogni componente del sistema deve restare riparabile, aggiornabile o sostituibile in isolamento, senza che un problema in una parte blocchi le altre. Lo spazio ospite ne è la prima applicazione esplicita; man mano che il progetto cresce, vale la pena tenerlo a mente anche altrove.
+
+### Come funziona
+
+Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **solo** sul deploy ospite (mai su produzione — se assente o `false`, tutto si comporta esattamente come oggi):
+
+- **`netlify/lib/guest-mode.js`** — helper condiviso da tutte le Netlify Functions di questo repository (non dentro `netlify/functions/` apposta, per evitare che il discovery automatico delle function di Netlify lo scambi per un endpoint). Espone due funzioni pure:
+  - `isGuestMode()` — legge `GUEST_MODE`, confronto case-insensitive.
+  - `guestScopedStoreName(baseName)` — restituisce `baseName` invariato in produzione, `${baseName}-guest` nello spazio ospite.
+- **Ogni `getStore({ name: ..., ...blobsAuth })`** in questo repository passa il nome attraverso `guestScopedStoreName()` invece di scrivere la stringa a mano — un solo punto che decide la separazione, quindi un solo punto da aggiornare se la convenzione cambiasse in futuro. Così i dati generati nello spazio ospite finiscono in store Blobs **completamente separati**, non si mescolano mai con quelli di produzione — nemmeno per errore, anche se i due siti finissero per condividere per sbaglio le stesse credenziali `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN`.
+
+**Store "gemellati" (produzione + ospite)** — ognuno di questi 7 store esiste oggi in due copie indipendenti, `nome` e `nome-guest`:
+
+| Store | Scritto/letto da |
+|---|---|
+| `purchases` | `save-purchase.js`, `sync.js`, `partner-stats.js` |
+| `partners` | `save-purchase.js`, `partner-discount.js`, `partner-stats.js`, `sync.js` |
+| `blocklist` | `save-purchase.js` |
+| `promo` | `promo.js` |
+| `partner-discount-codes` | `partner-discount.js`, `sync.js` |
+| `customs-reference` | `save-purchase.js` (scrive), `classify.js` (legge) |
+| `rate-limits` | tutte le function pubbliche (`assistant.js`, `classify.js`, `partner-discount.js`, `partner-stats.js`, `save-purchase.js`, `sync.js`) — isolato anch'esso: il conteggio anti-abuso dello spazio ospite non condivide mai la finestra con quello di produzione |
+
+`assistant.js` non ha alcuno store business (solo `rate-limits`): il chatbot non persiste nulla, quindi non ha bisogno di alcuna logica aggiuntiva oltre al rate limiting già isolato sopra.
+
+### Il banner "spazio ospite"
+
+`GUEST_MODE` è una variabile letta solo lato server (Netlify Functions) — il client statico servito da `dist/` (nessun build step in questo repository) non ha alcun modo di leggerla direttamente. Per questo esiste **`netlify/functions/guest-status.js`**: un endpoint minimo, senza dati sensibili, che restituisce `{ guestMode: true|false }`.
+
+- All'avvio, `app.js` chiama questo endpoint (`checkGuestMode()`) e, se risponde `true`, imposta `state.guestMode` e mostra un banner ben visibile in cima alla pagina (prima ancora dell'header, così compare anche durante l'onboarding di un turista nuovo): *"Stai usando la versione di continuità di Touch&Go. I tuoi acquisti sono al sicuro e verranno sincronizzati automaticamente."* (localizzato IT/EN, chiave `guest_mode_banner`).
+- Se la chiamata fallisce (offline, funzione irraggiungibile) il banner resta semplicemente nascosto — mai un falso positivo che lo mostri su un deploy che non è davvero lo spazio ospite.
+- Nascosto di default: su produzione (`GUEST_MODE` assente) non compare mai.
+
+### Cosa NON copre ancora questa fase
+
+- **Nessun failover automatico o manuale** tra i due siti — un problema al sito principale non reindirizza ancora nessuno allo spazio ospite; per ora è solo una seconda istanza pronta, isolata, che va raggiunta manualmente se serve.
+- **Lo spazio ospite parte vuoto**: nessun acquisto, partner, codice promo/sconto o voce dell'archivio doganale di produzione è visibile lì, per design — è la conseguenza diretta dell'isolamento completo, non un bug. Un partner registrato o un codice invito creato su produzione non esistono nello store `-guest` corrispondente finché non verrà costruito un meccanismo di sincronizzazione (fuori scope qui).
+- **5 dei 7 store gemellati sono scritti/letti anche da `touchandgo-internal`** (repository privato del CRM, `crm.js`): `purchases`, `partners`, `blocklist`, `promo`, `partner-discount-codes` (verificato leggendo `crm.js`). Quel codice non conosce `GUEST_MODE` e usa sempre i nomi store "di base" (senza suffisso) — un'azione fatta dallo staff nel CRM (registrare un partner, sbloccare un cliente, creare un codice invito, cambiare lo stato di un acquisto) raggiunge solo la copia di produzione, mai quella `-guest`. Solo `customs-reference` e `rate-limits` sono esclusivi di questo repository. Coerente con l'isolamento di questa fase, ma da tenere presente quando si progetterà la sincronizzazione — un'eventuale azione CRM sullo spazio ospite richiederebbe di portare la stessa consapevolezza di `GUEST_MODE` anche in `touchandgo-internal`.

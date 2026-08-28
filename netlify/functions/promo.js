@@ -13,6 +13,7 @@
 // inesistente o già usato, senza distinguere i due casi lato client.
 
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -29,7 +30,7 @@ exports.handler = async (event) => {
     }
 
     const promos = getStore({
-      name: "promo",
+      name: guestScopedStoreName("promo"),
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     });

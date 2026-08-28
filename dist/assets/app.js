@@ -209,6 +209,7 @@ const I18N = {
     header_reset_title: "Resetta profilo e ricomincia",
     header_reset_label: "Reset",
     offline_banner: "📡 Sei offline — la classificazione AI e le foto delle città non sono disponibili finché non torni online. I tuoi acquisti, indirizzi e dashboard restano comunque consultabili.",
+    guest_mode_banner: "🛟 Stai usando la versione di continuità di Touch&amp;Go. I tuoi acquisti sono al sicuro e verranno sincronizzati automaticamente.",
     mode_tourist: "Turista",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Chiedi a Touch&Go",
@@ -437,6 +438,7 @@ const I18N = {
     header_reset_title: "Reset profile and start over",
     header_reset_label: "Reset",
     offline_banner: "📡 You're offline — AI classification and city photos aren't available until you're back online. Your purchases, addresses and dashboard are still available.",
+    guest_mode_banner: "🛟 You're using Touch&amp;Go's continuity space. Your purchases are safe and will sync automatically.",
     mode_tourist: "Tourist",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Ask Touch&Go",
@@ -777,6 +779,11 @@ const state = {
   pickupPoint: "Catania",
   pickupSource: null,
   isOffline: typeof navigator !== "undefined" && "onLine" in navigator ? !navigator.onLine : false,
+  // Spazio ospite (continuità operativa) — vedi checkGuestMode() più sotto
+  // e MANUALE.md. Sempre false finché /.netlify/functions/guest-status non
+  // risponde guestMode:true, cosa che succede solo sul deploy con la
+  // variabile d'ambiente GUEST_MODE=true (mai su produzione).
+  guestMode: false,
   locationReminderDismissed: false,
   bookingCode: null,
   pendingItems: [],
@@ -879,9 +886,23 @@ function injectSketchFilter() {
 }
 injectSketchFilter();
 
+// Banner "spazio ospite" (continuità operativa) — vedi checkGuestMode()
+// più sotto e MANUALE.md. Nascosto di default: compare SOLO se
+// state.guestMode è true, cioè solo quando /.netlify/functions/guest-status
+// risponde guestMode:true — cosa che succede solo sul deploy con la
+// variabile d'ambiente GUEST_MODE=true, mai su produzione.
+function GuestModeBanner() {
+  return el("div", "guest-mode-banner", t("guest_mode_banner"));
+}
+
 function render() {
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
+  // Spazio ospite: mostrato PRIMA del controllo onboarding qui sotto (che
+  // altrimenti fa uscire da render() subito, senza mai arrivare a
+  // Header()) — così il banner è visibile fin dalla primissima schermata
+  // vista da un turista nuovo, non solo dopo l'onboarding.
+  if (state.guestMode) app.appendChild(GuestModeBanner());
   if (state.screen === "onboarding") {
     app.appendChild(OnboardingScreen());
     return;
@@ -4437,6 +4458,26 @@ capturePromoCode();
 if (state.promoCode) checkPromoCode(state.promoCode);
 loadHistory();
 
+// Spazio ospite (continuità operativa, vedi MANUALE.md): GUEST_MODE è una
+// variabile d'ambiente Netlify letta solo dalle Netlify Functions — questo
+// file statico servito da dist/ non ha modo di leggerla direttamente
+// (nessun build step in questo repository che possa iniettarla). Un
+// endpoint minimo e non sensibile (guest-status.js) la espone come
+// booleano; se la chiamata fallisce (offline, funzione irraggiungibile)
+// il banner resta semplicemente nascosto — mai un falso positivo che
+// mostri "spazio ospite" su un deploy che non lo è davvero.
+async function checkGuestMode() {
+  try {
+    const res = await fetch("/.netlify/functions/guest-status");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.guestMode) {
+      state.guestMode = true;
+      render();
+    }
+  } catch (e) {}
+}
+
 // Un punto di ritiro scelto a mano in una sessione precedente ha priorità
 // sulla rilevazione automatica GPS/rete al prossimo avvio — altrimenti
 // loadLocation() lo sovrascriverebbe sempre, impedendo di continuare ad
@@ -4455,6 +4496,7 @@ render();
 if (!manualPickupAtStartup) loadLocation();
 syncPurchaseUpdatesFromCRM();
 discoverPurchasesByEmail();
+checkGuestMode();
 
 window.addEventListener("online", () => {
   state.isOffline = false;

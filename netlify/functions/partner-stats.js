@@ -9,6 +9,7 @@
 // codici partner esistono.
 
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -50,7 +51,7 @@ function getClientIp(event) {
 
 async function checkRateLimit(key) {
   const store = getStore({
-    name: "rate-limits",
+    name: guestScopedStoreName("rate-limits"),
     siteID: process.env.NETLIFY_BLOBS_SITE_ID,
     token: process.env.NETLIFY_BLOBS_TOKEN,
   });
@@ -82,7 +83,7 @@ exports.handler = async (event) => {
     }
 
     const partners = getStore({
-      name: "partners",
+      name: guestScopedStoreName("partners"),
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     });
@@ -103,7 +104,7 @@ exports.handler = async (event) => {
     const access = computeAccessStatus(record, Date.now());
 
     const purchases = getStore({
-      name: "purchases",
+      name: guestScopedStoreName("purchases"),
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     });

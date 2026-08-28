@@ -1,6 +1,7 @@
 // Netlify serverless function — keeps the Anthropic API key on the server,
 // never exposed to visitors' browsers.
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -14,7 +15,7 @@ function getClientIp(event) {
 // verso l'API Anthropic pagata dalla nostra chiave.
 async function checkRateLimit(key) {
   const store = getStore({
-    name: "rate-limits",
+    name: guestScopedStoreName("rate-limits"),
     siteID: process.env.NETLIFY_BLOBS_SITE_ID,
     token: process.env.NETLIFY_BLOBS_TOKEN,
   });
@@ -56,7 +57,7 @@ const CUSTOMS_REFERENCE_MAX_CATEGORIES = 8;
 
 async function buildCustomsReferenceContext(blobsAuth) {
   try {
-    const store = getStore({ name: "customs-reference", ...blobsAuth });
+    const store = getStore({ name: guestScopedStoreName("customs-reference"), ...blobsAuth });
     const { blobs } = await store.list();
     if (!blobs.length) return null;
     const entries = (

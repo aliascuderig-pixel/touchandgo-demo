@@ -14,6 +14,7 @@
 // partner) — non è un'enumerazione.
 
 const { getStore } = require("@netlify/blobs");
+const { guestScopedStoreName } = require("../lib/guest-mode");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -30,7 +31,7 @@ function getClientIp(event) {
 
 async function checkRateLimit(key) {
   const store = getStore({
-    name: "rate-limits",
+    name: guestScopedStoreName("rate-limits"),
     siteID: process.env.NETLIFY_BLOBS_SITE_ID,
     token: process.env.NETLIFY_BLOBS_TOKEN,
   });
@@ -77,7 +78,7 @@ exports.handler = async (event) => {
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     };
-    const discountCodes = getStore({ name: "partner-discount-codes", ...blobsAuth });
+    const discountCodes = getStore({ name: guestScopedStoreName("partner-discount-codes"), ...blobsAuth });
     const record = await discountCodes.get(normalized, { type: "json" });
 
     // Codice inesistente o già usato: stessa risposta generica, per non
@@ -86,7 +87,7 @@ exports.handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Codice non valido o già utilizzato." }) };
     }
 
-    const partners = getStore({ name: "partners", ...blobsAuth });
+    const partners = getStore({ name: guestScopedStoreName("partners"), ...blobsAuth });
     const partner = await partners.get(record.partnerCode, { type: "json" });
     if (!partner) {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Codice non valido o già utilizzato." }) };
