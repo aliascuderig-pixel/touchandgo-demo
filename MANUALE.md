@@ -12,7 +12,7 @@ Documentazione funzionale di tutto quello che è stato costruito finora. Aggiorn
 
 ### Due repository
 
-Il progetto è diviso in due repository GitHub, deployati come due siti Netlify separati e indipendenti:
+Il progetto è diviso in due repository GitHub, deployati come due siti Netlify separati e indipendenti (più altri siti Netlify aggiuntivi sourciati dagli stessi repository — spazio ospite e router di continuità, entrambi da questo repository su branch/sottocartelle diverse — vedi "Spazio ospite (continuità operativa)" più sotto):
 
 | Repository | Visibilità | Contiene |
 |---|---|---|
@@ -446,6 +446,23 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
 
 ### Cosa NON copre ancora questa fase
 
-- **Nessun failover automatico o manuale** tra i due siti — un problema al sito principale non reindirizza ancora nessuno allo spazio ospite; per ora è solo una seconda istanza pronta, isolata, che va raggiunta manualmente se serve.
+- **Nessun failover automatico** tra i due siti — un problema al sito principale non reindirizza *da solo* nessuno allo spazio ospite. Esiste però un passaggio **manuale** rapido tramite il router (vedi "Router di continuità" più sotto): Giuseppe cambia una variabile d'ambiente, non serve toccare codice né fare un nuovo deploy.
 - **Lo spazio ospite parte vuoto**: nessun acquisto, partner, codice promo/sconto o voce dell'archivio doganale di produzione è visibile lì, per design — è la conseguenza diretta dell'isolamento completo, non un bug. Un partner registrato o un codice invito creato su produzione non esistono nello store `-guest` corrispondente finché non verrà costruito un meccanismo di sincronizzazione (fuori scope qui).
 - **5 dei 7 store gemellati sono scritti/letti anche da `touchandgo-internal`** (repository privato del CRM, `crm.js`): `purchases`, `partners`, `blocklist`, `promo`, `partner-discount-codes` (verificato leggendo `crm.js`). Quel codice non conosce `GUEST_MODE` e usa sempre i nomi store "di base" (senza suffisso) — un'azione fatta dallo staff nel CRM (registrare un partner, sbloccare un cliente, creare un codice invito, cambiare lo stato di un acquisto) raggiunge solo la copia di produzione, mai quella `-guest`. Solo `customs-reference` e `rate-limits` sono esclusivi di questo repository. Coerente con l'isolamento di questa fase, ma da tenere presente quando si progetterà la sincronizzazione — un'eventuale azione CRM sullo spazio ospite richiederebbe di portare la stessa consapevolezza di `GUEST_MODE` anche in `touchandgo-internal`.
+
+### Router di continuità (`/router`)
+
+Un **terzo sito Netlify indipendente**, dentro la sottocartella `/router` alla radice di questo repository — completamente isolato dal resto del codice (`dist/`, `netlify/` alla radice non sono toccati, hanno un proprio `netlify.toml` separato che vive dentro `/router`). È il link stabile pensato per essere condiviso pubblicamente al posto del link diretto al sito principale: un passaggio allo spazio ospite non richiede più editare in fretta un link pubblico proprio mentre il sito principale potrebbe essere in crash — basta cambiare dove *questo* router punta.
+
+**Come funziona**: una sola variabile d'ambiente, **`ACTIVE_TARGET`**, impostata su questo terzo sito (mai sugli altri due):
+
+- `ACTIVE_TARGET=main` (o assente, o qualunque valore non riconosciuto — **fallback sicuro**) → redirect `302` verso il sito principale (`https://benevolent-longma-57c78a.netlify.app/`).
+- `ACTIVE_TARGET=guest` → redirect `302` verso lo spazio ospite (`https://touchandgo-guest.netlify.app/`).
+
+**Struttura**:
+
+- `router/netlify.toml` — configurazione indipendente (`publish = "dist"`, `functions = "netlify/functions"`, entrambi relativi a `/router`). Un redirect (`[[redirects]]`, `from = "/"`, `to = "/.netlify/functions/go"`, `status = 200`, `force = true`) fa sì che visitare la root del sito invochi direttamente la function — un solo salto HTTP visibile all'utente (dal dominio del router dritto al sito finale), non due. `force = true` è necessario perché altrimenti Netlify servirebbe il file statico `dist/index.html` al posto della function per una richiesta esattamente su "/".
+- `router/netlify/functions/go.js` — la function stessa: legge `ACTIVE_TARGET`, risponde con l'header `Location` giusto e `Cache-Control: no-store` (il bersaglio del redirect cambia quando Giuseppe aggiorna la variabile, senza un nuovo deploy — una risposta messa in cache da un browser o un proxy continuerebbe a reindirizzare verso il sito sbagliato proprio nel momento in cui contare su un link stabile è più importante). **Nessuna dipendenza** da Netlify Blobs, `ANTHROPIC_API_KEY` o qualunque altra risorsa condivisa con gli altri due siti — deve restare la parte più semplice e affidabile di tutto il sistema, per definizione quella che non deve mai essere lei stessa la causa di un'interruzione.
+- `router/dist/index.html` — pagina statica di fallback (meta refresh + redirect JS verso `/.netlify/functions/go`, nessuna dipendenza esterna: niente font, niente chiamate di rete). Non è il percorso normale (quello è il redirect di `netlify.toml` sopra), ma protegge i casi limite in cui qualcuno finisca su quel file senza passare dalla function, o funge da breve schermata di caricamento durante il redirect.
+
+**Come Giuseppe lo attiva**: dal pannello Netlify del sito router (Site settings → Environment variables), cambia `ACTIVE_TARGET` da `main` a `guest` (o viceversa) e basta — **nessun redeploy del codice necessario**, la function legge la variabile a ogni richiesta. È esattamente il tipo di passaggio rapido, senza toccare codice, pensato per un momento in cui il sito principale potrebbe essere down.
