@@ -359,6 +359,7 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 | `assistant.js` | Assistente conversazionale "Chiedi a Touch&Go" (vedi sezione dedicata sotto in "App turista") — stessa `ANTHROPIC_API_KEY` di `classify.js`, system prompt con i fatti reali del servizio costruito lato server. |
 | `classify.js` | Proxy verso l'API Claude (Anthropic) per la classificazione doganale delle foto/descrizioni — nasconde `ANTHROPIC_API_KEY` dal browser. Arricchisce il prompt con un digest dell'archivio di riferimento doganale (vedi sotto). |
 | `guest-status.js` | Espone al client se questo deploy gira in modalità ospite (`GUEST_MODE=true`) — vedi "Spazio ospite (continuità operativa)" più sotto. |
+| `health.js` | Endpoint di salute leggero per il router di continuità (verifica autenticazione/connettività Anthropic a costo minimo, nessuna generazione) — vedi "Router di continuità" più sotto. |
 | `partner-discount.js` | Valida e consuma i codici sconto partner al checkout del turista; scala il credito del partner esattamente dell'importo scontato. |
 | `partner-stats.js` | Verifica un codice partner e restituisce statistiche reali (vendite, valore, commissione, credito) aggregate dallo store centrale. |
 | `promo.js` | Valida e consuma i codici invito per l'offerta breakeven. |
@@ -387,11 +388,13 @@ Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-dis
 
 `sync.js` non ha un rate limit generale (le sue azioni richiedono id/codici già noti al chiamante), tranne l'azione `get-purchases-by-email` (vedi "Sincronizzazione dello storico acquisti tra dispositivi" più sopra), che accetta un'email libera e applica lo stesso schema 20/60 minuti per IP.
 
+`health.js` non applica questo schema **deliberatamente**: è pensato per essere interrogato periodicamente dal router (vedi "Router di continuità" più sotto), che ha già il proprio meccanismo di debounce (un controllo reale al più ogni 45 secondi, non uno per visitatore) — un rate limit per IP qui rischierebbe di autobloccare proprio le chiamate legittime del router durante traffico sostenuto, causando falsi failover. La chiamata Anthropic che fa (`GET /v1/models/...`) non genera comunque alcun costo.
+
 ### Variabili d'ambiente (impostate su Netlify, mai in questo repository)
 
 | Variabile | A cosa serve |
 |---|---|
-| `ANTHROPIC_API_KEY` | Chiave per le chiamate a Claude (classificazione, packaging check, rilevamento firma). |
+| `ANTHROPIC_API_KEY` | Chiave per le chiamate a Claude (classificazione, packaging check, rilevamento firma) e per `health.js` (vedi "Router di continuità" più sotto). |
 | `NETLIFY_BLOBS_SITE_ID` / `NETLIFY_BLOBS_TOKEN` | Credenziali di accesso a Netlify Blobs, usate da tutte le funzioni che leggono/scrivono dati — le stesse configurate anche sul deploy del repository privato, così i due siti condividono gli stessi dati (vedi "Due repository" in Panoramica). |
 | `GUEST_MODE` | `true` **solo** sul deploy ospite (continuità operativa) — mai su produzione. Vedi "Spazio ospite (continuità operativa)" più sotto. |
 
@@ -446,7 +449,7 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
 
 ### Cosa NON copre ancora questa fase
 
-- **Nessun failover automatico** tra i due siti — un problema al sito principale non reindirizza *da solo* nessuno allo spazio ospite. Esiste però un passaggio **manuale** rapido tramite il router (vedi "Router di continuità" più sotto): Giuseppe cambia una variabile d'ambiente, non serve toccare codice né fare un nuovo deploy.
+- **Il failover verso lo spazio ospite è ora automatico** (vedi "Router di continuità" più sotto) quando la classificazione del sito principale smette di funzionare — ma il **ripristino resta sempre e solo manuale**: il router non torna da solo su produzione nemmeno se il sito principale si rimette a funzionare da solo nel frattempo. Resta comunque disponibile anche il passaggio manuale diretto (`ACTIVE_TARGET`), che vince sempre su tutto il resto.
 - **Lo spazio ospite parte vuoto**: nessun acquisto, partner, codice promo/sconto o voce dell'archivio doganale di produzione è visibile lì, per design — è la conseguenza diretta dell'isolamento completo, non un bug. Un partner registrato o un codice invito creato su produzione non esistono nello store `-guest` corrispondente finché non verrà costruito un meccanismo di sincronizzazione (fuori scope qui).
 - **5 dei 7 store gemellati sono scritti/letti anche da `touchandgo-internal`** (repository privato del CRM, `crm.js`): `purchases`, `partners`, `blocklist`, `promo`, `partner-discount-codes` (verificato leggendo `crm.js`). Quel codice non conosce `GUEST_MODE` e usa sempre i nomi store "di base" (senza suffisso) — un'azione fatta dallo staff nel CRM (registrare un partner, sbloccare un cliente, creare un codice invito, cambiare lo stato di un acquisto) raggiunge solo la copia di produzione, mai quella `-guest`. Solo `customs-reference` e `rate-limits` sono esclusivi di questo repository. Coerente con l'isolamento di questa fase, ma da tenere presente quando si progetterà la sincronizzazione — un'eventuale azione CRM sullo spazio ospite richiederebbe di portare la stessa consapevolezza di `GUEST_MODE` anche in `touchandgo-internal`.
 
@@ -454,15 +457,63 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
 
 Un **terzo sito Netlify indipendente**, dentro la sottocartella `/router` alla radice di questo repository — completamente isolato dal resto del codice (`dist/`, `netlify/` alla radice non sono toccati, hanno un proprio `netlify.toml` separato che vive dentro `/router`). È il link stabile pensato per essere condiviso pubblicamente al posto del link diretto al sito principale: un passaggio allo spazio ospite non richiede più editare in fretta un link pubblico proprio mentre il sito principale potrebbe essere in crash — basta cambiare dove *questo* router punta.
 
-**Come funziona**: una sola variabile d'ambiente, **`ACTIVE_TARGET`**, impostata su questo terzo sito (mai sugli altri due):
+**Due livelli, in ordine di priorità:**
 
-- `ACTIVE_TARGET=main` (o assente, o qualunque valore non riconosciuto — **fallback sicuro**) → redirect `302` verso il sito principale (`https://benevolent-longma-57c78a.netlify.app/`).
-- `ACTIVE_TARGET=guest` → redirect `302` verso lo spazio ospite (`https://touchandgo-guest.netlify.app/`).
+1. **Override manuale esplicito (`ACTIVE_TARGET`)** — vince SEMPRE, bypassando tutto il resto. Pensato per test manuali o un'emergenza in cui Giuseppe vuole decidere lui, subito, senza aspettare né fidarsi della logica automatica.
+2. **Failover automatico** (quando `ACTIVE_TARGET` non è impostata — il caso normale in produzione) — descritto sotto.
+
+#### Livello 1 — override manuale (`ACTIVE_TARGET`)
+
+Una variabile d'ambiente sul sito router (mai sugli altri due):
+
+- `ACTIVE_TARGET=main` (o assente, o qualunque valore non riconosciuto — **fallback sicuro**) → redirect `302` verso il sito principale (`https://benevolent-longma-57c78a.netlify.app/`), **bypassando anche la logica automatica del livello 2**.
+- `ACTIVE_TARGET=guest` → redirect `302` verso lo spazio ospite (`https://touchandgo-guest.netlify.app/`), stesso bypass.
+
+**Come Giuseppe lo attiva**: dal pannello Netlify del sito router (Site settings → Environment variables), cambia `ACTIVE_TARGET` e basta — **nessun redeploy del codice necessario**, la function legge la variabile a ogni richiesta.
+
+#### Livello 2 — failover automatico verso lo spazio ospite
+
+Quando `ACTIVE_TARGET` non è impostata, il router controlla da solo se il sito principale funzionerebbe e, se no, passa automaticamente allo spazio ospite. Il **ripristino è sempre e solo manuale** (vedi sotto) — anche se il sito principale torna a funzionare da solo nel frattempo, il router NON torna indietro da solo. Questo è deliberato: senza un minimo di isteresi, un sito che oscilla (torna su e giù) farebbe "sbattere" il traffico avanti e indietro tra i due deploy a ogni controllo — molto peggio che restare fermi sullo spazio ospite finché un umano non conferma che è sicuro tornare.
+
+**Come funziona, passo per passo** (`router/netlify/functions/go.js`):
+
+1. Legge lo stato persistito nello store Blobs dedicato `router-state` (vedi sotto) — un solo record, chiave `state`: `{ failoverActive, since, reason, lastCheckAt, lastCheckOk }`.
+2. Se `failoverActive` è già `true` → redirect diretto a `guest`, **senza rifare alcun controllo di salute** — evita di martellare `health.js` (e quindi l'API Anthropic) a ogni singola visita mentre il sito resta bloccato sullo spazio ospite. L'unico modo per uscirne è il ripristino manuale.
+3. Altrimenti, se l'ultimo controllo riuscito risale a **meno di 45 secondi fa** (debounce, vedi sotto), si fida di quell'esito e va su `main` senza richiamare `health.js` di nuovo.
+4. Altrimenti fa un controllo reale: chiama `GET /.netlify/functions/health` sul sito principale con un timeout breve (4s).
+   - **200** → sito sano: va su `main`, e aggiorna (best-effort) il timestamp del debounce nello store — se questa scrittura fallisce non cambia comunque nulla, si va su `main` lo stesso.
+   - **Qualunque altro esito** (status diverso da 200, timeout, errore di rete) → registra `failoverActive: true` con `since`/`reason` nello store, poi redirect a `guest`.
+5. **Fallback di sicurezza**: qualunque eccezione imprevista in tutta questa logica (tipicamente: lo store `router-state` stesso irraggiungibile, in lettura o in scrittura) fa terminare la richiesta sempre su `main`, mai su `guest` — un guasto nel *meccanismo* di failover non deve mai bloccare l'accesso al sito principale quando quello in realtà funziona. Unica eccezione voluta: se il controllo di salute **è riuscito a completarsi** e ha risposto "non sano", quello non è un errore imprevisto ma il segnale di design per passare a `guest` — l'unico caso in cui un problema nello scrivere quell'esito riporta comunque a `main` (mai a `guest` senza uno stato registrato in modo affidabile).
+
+**Perché 45 secondi di debounce**: abbastanza breve da accorgersi di un'interruzione reale in meno di un minuto dalla prima visita dopo che si è verificata, abbastanza lungo da tagliare drasticamente le chiamate a `health.js` (e quindi il traffico verso l'API Anthropic) durante traffico continuo — al più circa 80 controlli reali all'ora invece di uno per ogni singola visita. Modificabile cambiando `HEALTH_DEBOUNCE_MS` in `go.js`.
+
+**`netlify/functions/health.js`** (nel sito **principale**, non nel router): endpoint di salute leggero, unico consumatore il router. Verifica rapidamente e a costo minimo se la classificazione (`classify.js`) funzionerebbe:
+1. `ANTHROPIC_API_KEY` presente sul sito principale — se assente, `503` con `reason: "missing_api_key"`, senza nemmeno provare una chiamata di rete.
+2. `GET https://api.anthropic.com/v1/models/claude-sonnet-5` (Models API) con timeout di 4 secondi — stessa autenticazione e stessa rete di una vera classificazione, ma **zero generazione**: nessun costo, a differenza di una vera chiamata di classificazione che genererebbe token a ogni controllo del router. Risponde `200` se l'autenticazione/connettività verso Anthropic funziona, `503` con un `reason` breve (`anthropic_auth_failed`, `anthropic_bad_status`, `anthropic_timeout`, `anthropic_unreachable`) altrimenti.
+
+**Ripristino manuale (solo umano)**: dopo aver verificato che il sito principale funzioni di nuovo (es. riprovando la classificazione manualmente), Giuseppe visita `https://<sito-router>/admin.html`, inserisce la password dedicata (`ROUTER_ADMIN_PASSWORD`, impostata solo sul sito router) e conferma. Questo azzera `failoverActive` (e il timestamp del debounce, così la richiesta successiva ricontrolla davvero la salute invece di fidarsi di un esito vecchio) chiamando `POST /.netlify/functions/reset.js` — l'**unica** cosa che questo endpoint fa, apposta: nessun'altra funzione, per restare semplice. Funziona anche se il sito principale o il CRM sono giù, perché dipende solo dallo store `router-state` del router stesso, mai da risorse degli altri due siti.
 
 **Struttura**:
 
-- `router/netlify.toml` — configurazione indipendente (`publish = "dist"`, `functions = "netlify/functions"`, entrambi relativi a `/router`). Un redirect (`[[redirects]]`, `from = "/"`, `to = "/.netlify/functions/go"`, `status = 200`, `force = true`) fa sì che visitare la root del sito invochi direttamente la function — un solo salto HTTP visibile all'utente (dal dominio del router dritto al sito finale), non due. `force = true` è necessario perché altrimenti Netlify servirebbe il file statico `dist/index.html` al posto della function per una richiesta esattamente su "/".
-- `router/netlify/functions/go.js` — la function stessa: legge `ACTIVE_TARGET`, risponde con l'header `Location` giusto e `Cache-Control: no-store` (il bersaglio del redirect cambia quando Giuseppe aggiorna la variabile, senza un nuovo deploy — una risposta messa in cache da un browser o un proxy continuerebbe a reindirizzare verso il sito sbagliato proprio nel momento in cui contare su un link stabile è più importante). **Nessuna dipendenza** da Netlify Blobs, `ANTHROPIC_API_KEY` o qualunque altra risorsa condivisa con gli altri due siti — deve restare la parte più semplice e affidabile di tutto il sistema, per definizione quella che non deve mai essere lei stessa la causa di un'interruzione.
-- `router/dist/index.html` — pagina statica di fallback (meta refresh + redirect JS verso `/.netlify/functions/go`, nessuna dipendenza esterna: niente font, niente chiamate di rete). Non è il percorso normale (quello è il redirect di `netlify.toml` sopra), ma protegge i casi limite in cui qualcuno finisca su quel file senza passare dalla function, o funge da breve schermata di caricamento durante il redirect.
+- `router/netlify.toml` — configurazione indipendente (`publish = "dist"`, `functions = "netlify/functions"`, entrambi relativi a `/router`). Un redirect (`[[redirects]]`, `from = "/"`, `to = "/.netlify/functions/go"`, `status = 200`, `force = true`) fa sì che visitare la root del sito invochi direttamente la function — un solo salto HTTP visibile all'utente (dal dominio del router dritto al sito finale), non due. `force = true` è necessario perché altrimenti Netlify servirebbe il file statico `dist/index.html` al posto della function per una richiesta esattamente su "/". Non tocca `/admin.html`, servita normalmente come file statico.
+- `router/package.json` — dichiara `@netlify/blobs` come dipendenza (nuova: prima il router non ne aveva bisogno).
+- `router/netlify/lib/router-state.js` — helper condiviso da `go.js` e `reset.js`: unico punto che legge/scrive lo store `router-state` (stesso motivo di `netlify/lib/guest-mode.js` nel sito principale per non stare dentro `netlify/functions/`).
+- `router/netlify/functions/go.js` — la function di redirect, logica descritta sopra.
+- `router/netlify/functions/reset.js` — il ripristino manuale.
+- `router/dist/index.html` — pagina statica di fallback (meta refresh + redirect JS verso `/.netlify/functions/go`, nessuna dipendenza esterna). Invariata.
+- `router/dist/admin.html` — la pagina di ripristino manuale: un campo password e un pulsante, nessuna dipendenza esterna, stessa filosofia di `index.html`.
+- `netlify/functions/health.js` (sito **principale**, non router) — l'endpoint di salute.
 
-**Come Giuseppe lo attiva**: dal pannello Netlify del sito router (Site settings → Environment variables), cambia `ACTIVE_TARGET` da `main` a `guest` (o viceversa) e basta — **nessun redeploy del codice necessario**, la function legge la variabile a ogni richiesta. È esattamente il tipo di passaggio rapido, senza toccare codice, pensato per un momento in cui il sito principale potrebbe essere down.
+**Variabili d'ambiente sul sito router** (mai sugli altri due, e mai in questo repository):
+
+| Variabile | A cosa serve |
+|---|---|
+| `ACTIVE_TARGET` | Override manuale (livello 1 sopra). |
+| `NETLIFY_BLOBS_SITE_ID` / `NETLIFY_BLOBS_TOKEN` | Credenziali **dedicate al sito router** per lo store `router-state` — volutamente distinte da quelle del sito principale/ospite: lo stato del router non ha nessun motivo di condividere lo stesso store Blobs dei dati di business, e tenerlo separato è coerente con il principio "ogni componente riparabile in isolamento" di questa sezione. |
+| `ROUTER_ADMIN_PASSWORD` | Password per `reset.js`/`admin.html` (ripristino manuale). Se assente, `reset.js` rifiuta ogni richiesta con `503` invece di accettare qualunque password — fallisce sempre "chiuso", mai "aperto". |
+
+Nessun valore reale di queste variabili è mai scritto in questo file o nel codice del repository.
+
+**Cosa NON cambia rispetto a prima**: il principio originale del file (router come parte più semplice e affidabile del sistema) resta il criterio guida anche con questa aggiunta — da qui il vincolo esplicito, verificato con test automatici (vedi sotto), che qualunque guasto imprevisto nel nuovo meccanismo risolva sempre verso `main`, mai verso `guest`.
+
+**Test automatici**: `router/netlify/functions/__tests__/go.test.js` e `.../reset.test.js` (più `netlify/functions/__tests__/health.test.js` per l'endpoint sul sito principale) — stessa tecnica di `save-purchase.commission.test.js` (store Blobs finto in memoria, nessuna rete/credenziale reale), eseguibili con `npm test` dalla radice del repository. Coprono: sito sano (resta su `main`, nessun failover scritto), `health.js` che fallisce (passa a `guest` e registra il failover), un secondo giro dopo il blocco (resta su `guest` senza richiamare `health.js`), entro la finestra di debounce (stesso comportamento sul lato `main`), il reset manuale (torna a controllare davvero alla richiesta successiva), e lo store del router irraggiungibile in lettura o in scrittura (fallback sempre a `main`).
