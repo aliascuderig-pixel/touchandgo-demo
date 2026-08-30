@@ -151,6 +151,91 @@ function priceFor(weightKg, destinationName, dims) {
   return { grandTotal, eta: q.eta, quotes: q };
 }
 
+// Paese di destinazione di un item già in coda: risolto dall'indirizzo
+// salvato (state.addresses, tramite l'addressId già presente su ogni item
+// da sempre), non da un nuovo campo — così funziona anche per gli item già
+// in localStorage prima di questa modifica. Fallback all'indirizzo/paese
+// correntemente selezionato solo nel caso limite in cui quell'indirizzo
+// non esista più (non c'è oggi alcuna funzione per cancellare un
+// indirizzo, quindi in pratica capita solo con dati di test manomessi).
+function destinationCountryForItem(it) {
+  const addr = state.addresses.find((a) => a.id === it.addressId);
+  return addr ? addr.country : currentDestinationName();
+}
+
+// Ricalcolo del prezzo per un INTERO gruppo di oggetti consolidati verso la
+// stessa destinazione (stessa addressLabel) — usato solo in ConcludeScreen,
+// al momento della conferma/pagamento finale. Vedi MANUALE.md, sezione
+// "Prezzo consolidato per gruppo di spedizione".
+//
+// Non è la somma dei prezzi individuali già mostrati durante lo shopping
+// (quelli restano solo stime per spedizione singola, calcolate da
+// priceFor/priceQuotes/shippingCost — INVARIATE, mai richiamate da qui):
+// qui si ricalcola da zero il costo di spedizione UNA SOLA VOLTA sul
+// peso/volume dell'intero gruppo, con UNA SOLA fee di servizio — esattamente
+// come farebbe un vero corriere con un unico collo consolidato, invece di
+// sommare più preventivi (ognuno con la propria fee) già calcolati sui
+// singoli oggetti.
+//
+// Un gruppo con un solo oggetto deve produrre esattamente lo stesso prezzo
+// di priceFor(item.weightKg, ...).grandTotal per quell'oggetto — vedi il
+// commento riga per riga sotto: stessa soglia minima di 0.3kg, stesso peso
+// volumetrico, stessa fascia tariffaria, stessa fee, stesso eventuale sconto
+// codice partner. Nessuna regressione sul caso più comune (un solo acquisto
+// verso una destinazione).
+function consolidatedGroupPrice(items) {
+  const destinationName = destinationCountryForItem(items[0]);
+  const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[DESTINATIONS.length - 1];
+  const zone = SHIPPING_RATES[dest.zone];
+
+  // Peso reale combinato: somma dei pesi reali dei singoli oggetti. Ogni
+  // oggetto resta comunque mai sotto lo 0.3kg minimo fatturabile — la
+  // stessa soglia già applicata oggi al singolo oggetto in shippingCost() —
+  // quindi per un gruppo di uno questo è letteralmente lo stesso numero
+  // usato oggi; per un gruppo di più oggetti non si perde mai il minimo di
+  // fatturazione per collo che un corriere applicherebbe comunque a
+  // ciascun pezzo.
+  const combinedRealWeight = items.reduce((sum, it) => sum + Math.max(0.3, parseFloat(it.weightKg) || 1), 0);
+
+  // Peso volumetrico combinato: SOMMA dei pesi volumetrici individuali — non
+  // un unico volume "ottimizzato" come se gli oggetti si annidassero
+  // perfettamente in una scatola più piccola. Approssimazione deliberatamente
+  // conservativa: gli oggetti vengono lasciati in negozi spesso diversi e
+  // restano colli distinti fino al consolidamento fisico vero e proprio, non
+  // sottostimare mai il costo assumendolo diversamente.
+  const combinedVolumetricWeight = items.reduce((sum, it) => sum + volumetricWeight(it.dims), 0);
+
+  const billableWeight = Math.max(combinedRealWeight, combinedVolumetricWeight);
+  const rawCost = bracketPrice(zone, billableWeight);
+  const shipping = parseFloat((rawCost * (1 + SHIPPING_MARGIN)).toFixed(2));
+
+  // Una sola fee di servizio per l'intero gruppo, non una per oggetto: se
+  // anche un solo oggetto del gruppo era in breakeven/promo quando è stato
+  // aggiunto, l'intero ordine consolidato eredita quella condizione (è
+  // comunque un solo "ordine" che il turista sta confermando e pagando
+  // ora); altrimenti conta l'abbonamento se anche un solo oggetto lo è.
+  const onBreakeven = items.some((it) => it.pricingTier === "breakeven");
+  const isSubscribed = items.some((it) => it.pricingTier === "abbonato");
+  const fee = onBreakeven ? 0 : isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+
+  // Eventuali sconti codice partner già applicati ai singoli oggetti in
+  // ResultScreen restano validi e si sommano (nella pratica quasi sempre un
+  // solo oggetto del gruppo ne ha uno) — stessa logica di sottrazione dalla
+  // fee già usata lì, qui portata a livello di gruppo.
+  const totalPartnerDiscount = items.reduce((sum, it) => sum + (it.partnerDiscountAmount || 0), 0);
+  const total = Math.max(0, Math.round((shipping + fee - totalPartnerDiscount) * 100) / 100);
+
+  return {
+    destinationCountry: destinationName,
+    weightKg: parseFloat(billableWeight.toFixed(2)),
+    shipping,
+    fee,
+    partnerDiscount: totalPartnerDiscount,
+    eta: zone.eta,
+    total,
+  };
+}
+
 async function classify(messages) {
   const res = await fetch("/.netlify/functions/classify", {
     method: "POST",
@@ -339,6 +424,8 @@ const I18N = {
     result_total_lbl: "Totale",
     result_delivery_note: "Consegna in {eta} · tracciamento incluso · copertura standard inclusa",
     result_discount_lbl: "Sconto codice partner ({code})",
+    result_estimate_badge: "Stima per spedizione singola",
+    result_estimate_note: "Il totale finale dipende da eventuali altri acquisti consolidati verso la stessa destinazione — nessun addebito ora, questa è solo un'anteprima. Il calcolo definitivo e il pagamento avvengono solo quando confermi la conclusione del soggiorno.",
     result_qr_btn: "Genera QR code →",
     result_restart_btn: "Classifica un altro oggetto",
     result_partner_discount_link: "Hai un codice sconto partner?",
@@ -568,6 +655,8 @@ const I18N = {
     result_total_lbl: "Total",
     result_delivery_note: "Delivery in {eta} · tracking included · standard coverage included",
     result_discount_lbl: "Partner code discount ({code})",
+    result_estimate_badge: "Estimate for a single shipment",
+    result_estimate_note: "The final total depends on any other purchases consolidated toward the same destination — no charge now, this is only a preview. The final calculation and payment only happen when you confirm the end of your stay.",
     result_qr_btn: "Generate QR code →",
     result_restart_btn: "Classify another item",
     result_partner_discount_link: "Have a partner discount code?",
@@ -2464,6 +2553,19 @@ function ResultScreen() {
     }
   }
 
+  // Il prezzo qui è sempre e solo una STIMA per la spedizione di questo
+  // singolo oggetto — nessun addebito reale (o simulato) avviene in questo
+  // punto del flusso, qualunque sia il ramo di prezzo mostrato sopra (dual
+  // pricing, breakeven, prima spedizione gratuita). Il calcolo definitivo
+  // (consolidato se il turista aggiunge altri oggetti verso la stessa
+  // destinazione — vedi consolidatedGroupPrice()) e il momento del
+  // pagamento (anche solo simulato oggi) sono SOLO in ConcludeScreen — vedi
+  // il commento lì sopra confirmBtn e MANUALE.md, sezione "Punto di
+  // integrazione pagamento futuro".
+  const estimateNote = el("div", "info-line");
+  estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
+  wrap.appendChild(estimateNote);
+
   const actions = el("div", "result-actions");
   const bookBtn = el("button", "btn-primary", t("result_qr_btn"));
   bookBtn.addEventListener("click", () => {
@@ -2635,6 +2737,19 @@ function syncPurchaseToCRM(item) {
     // tourist's local history; it just won't appear centrally until
     // the next successful sync attempt.
   });
+}
+
+// Registra centralmente il record del gruppo di spedizione consolidato
+// (ConcludeScreen, save-shipment-group.js) — stesso pattern "fire and
+// forget" di syncPurchaseToCRM: un fallimento di rete non deve bloccare il
+// flusso del turista, il gruppo resta comunque visibile localmente in
+// ShippedScreen.
+function saveShipmentGroupToCRM(group) {
+  fetch("/.netlify/functions/save-shipment-group", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(group),
+  }).catch(() => {});
 }
 
 function historyStatusClass(status) {
@@ -3042,7 +3157,7 @@ function ConcludeScreen() {
     el(
       "div",
       "identify-intro",
-      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, invii un unico ordine di ritiro consolidato per ciascuna destinazione."
+      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, paghi ora il totale finale — ricalcolato sul gruppo consolidato, non la somma delle stime viste durante lo shopping — e invii un unico ordine di ritiro per ciascuna destinazione."
     )
   );
 
@@ -3051,7 +3166,7 @@ function ConcludeScreen() {
     const row = el("div", "queue-item clickable");
     row.innerHTML = `<div class="queue-item-name">${it.objectName}</div>
       <div class="queue-item-meta">Negozio: ${it.pickupPoint} · HS ${it.hsCode}</div>
-      <div class="queue-item-meta">→ ${it.addressLabel} · €${it.price}</div>`;
+      <div class="queue-item-meta">→ ${it.addressLabel} · stima €${it.price}</div>`;
     row.addEventListener("click", () => {
       state.viewingItemId = it.id;
       state.viewItemReturnTo = "conclude";
@@ -3071,11 +3186,23 @@ function ConcludeScreen() {
   });
   wrap.appendChild(list);
 
-  const totalsByDest = {};
+  // Calcolo finale del prezzo: per ogni destinazione (stessa addressLabel),
+  // consolidatedGroupPrice() ricalcola il gruppo da zero sul peso/volume
+  // combinato con una sola fee di servizio — vedi il commento su quella
+  // funzione e MANUALE.md, sezione "Prezzo consolidato per gruppo di
+  // spedizione". Questo, non la somma di it.price (le stime individuali
+  // mostrate durante lo shopping), è il prezzo che conta davvero.
+  const itemsByDest = {};
   state.pendingItems.forEach((it) => {
-    totalsByDest[it.addressLabel] = (totalsByDest[it.addressLabel] || 0) + it.price;
+    (itemsByDest[it.addressLabel] = itemsByDest[it.addressLabel] || []).push(it);
   });
-  const groups = Object.keys(totalsByDest).length;
+  const groupPricing = {};
+  Object.entries(itemsByDest).forEach(([dest, items]) => {
+    groupPricing[dest] = consolidatedGroupPrice(items);
+  });
+  const groups = Object.keys(itemsByDest).length;
+  const grandTotal = Math.round(Object.values(groupPricing).reduce((s, g) => s + g.total, 0) * 100) / 100;
+
   const summary = el(
     "div",
     "info-line",
@@ -3083,19 +3210,70 @@ function ConcludeScreen() {
   );
   wrap.appendChild(summary);
 
-  const confirmBtn = el("button", "btn-primary", "Conferma e invia ordine di ritiro consolidato →");
+  const paymentSummary = el("div", "price-card");
+  paymentSummary.innerHTML = `
+    <div class="tg-lbl" style="margin-bottom:10px">Totale da confermare e pagare ora</div>
+    ${Object.entries(groupPricing)
+      .map(
+        ([dest, g]) =>
+          `<div class="info-row"><span>${dest} (${g.weightKg} kg fatturabili)</span><b>€${g.total.toFixed(2)}</b></div>`
+      )
+      .join("")}
+    <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
+  wrap.appendChild(paymentSummary);
+
+  // ============================================================
+  // QUI è il punto di integrazione per un pagamento reale futuro
+  // (Stripe o altro PSP) — vedi MANUALE.md, sezione "Punto di
+  // integrazione pagamento futuro".
+  //
+  // Oggi il pagamento è solo simulato (il setTimeout qui sotto conferma
+  // sempre, incondizionatamente), ma questo è già, a livello concettuale,
+  // l'istante in cui il turista conferma E PAGA il totale finale mostrato
+  // sopra (singolo o consolidato a seconda di quanti oggetti sono nel
+  // gruppo, calcolato da consolidatedGroupPrice()) — non solo "notifica un
+  // ritiro". Nessun punto del flusso PRIMA di questo (ResultScreen incluso)
+  // deve mai comunicare un addebito: quello è sempre e solo una stima.
+  //
+  // Quando arriverà un pagamento reale, la chiamata al provider va
+  // agganciata ESATTAMENTE qui, prima del blocco che marca gli oggetti come
+  // "ritirato" e li sincronizza col CRM più sotto — non dopo: un pagamento
+  // vero può fallire (carta rifiutata, timeout), e in quel caso gli oggetti
+  // non andrebbero comunque marcati come ritirati né il gruppo salvato.
+  // ============================================================
+  const confirmBtn = el(
+    "button",
+    "btn-primary",
+    `Conferma e paga €${grandTotal.toFixed(2)} — ordine di ritiro consolidato →`
+  );
   confirmBtn.addEventListener("click", () => {
     confirmBtn.disabled = true;
-    confirmBtn.textContent = "Invio ordine…";
+    confirmBtn.textContent = "Confermo e pago…";
     setTimeout(() => {
-      state.shippedGroups = Object.entries(totalsByDest).map(([dest, total]) => ({
-        dest,
-        total: total.toFixed(2),
-        code: generateBookingCode(),
-        count: state.pendingItems.filter((it) => it.addressLabel === dest).length,
-      }));
+      state.shippedGroups = Object.entries(itemsByDest).map(([dest, items]) => {
+        const pricing = groupPricing[dest];
+        const code = generateBookingCode();
+        const group = {
+          code,
+          dest,
+          destinationCountry: pricing.destinationCountry,
+          itemIds: items.map((it) => it.id),
+          itemCount: items.length,
+          weightKg: pricing.weightKg,
+          shipping: pricing.shipping,
+          fee: pricing.fee,
+          total: pricing.total,
+          eta: pricing.eta,
+          touristEmail: state.touristEmail,
+          createdAt: new Date().toISOString(),
+        };
+        saveShipmentGroupToCRM(group);
+        return { dest, total: pricing.total.toFixed(2), code, count: items.length };
+      });
       state.pendingItems.forEach((it) => {
+        const group = state.shippedGroups.find((g) => g.dest === it.addressLabel);
         it.status = "ritirato";
+        it.shipmentGroupCode = group ? group.code : null;
         syncPurchaseToCRM(it);
       });
       state.pendingItems = [];
@@ -3113,7 +3291,7 @@ function ConcludeScreen() {
 function ShippedScreen() {
   const wrap = el("div", "section booked-screen");
   wrap.appendChild(el("div", "booked-icon", "✓"));
-  wrap.appendChild(el("div", "booked-title", "Ordine di ritiro inviato"));
+  wrap.appendChild(el("div", "booked-title", "Ordine confermato e pagato"));
   wrap.appendChild(
     el(
       "div",
@@ -3121,6 +3299,7 @@ function ShippedScreen() {
       `Il corriere passerà a ritirare tutti gli oggetti lasciati nei negozi entro le prossime 24 ore, consolidati in ${state.shippedGroups.length} spedizion${state.shippedGroups.length === 1 ? "e" : "i"}.`
     )
   );
+  const paidTotal = (state.shippedGroups || []).reduce((s, g) => s + parseFloat(g.total), 0);
   (state.shippedGroups || []).forEach((g) => {
     const card = el("div", "qr-card");
     card.innerHTML = `<div class="qr-code">${g.code}</div>
@@ -3128,7 +3307,12 @@ function ShippedScreen() {
       <div class="qr-note">Totale €${g.total}</div>`;
     wrap.appendChild(card);
   });
-  wrap.appendChild(el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere."));
+  wrap.appendChild(
+    el("div", "booked-text", `Pagamento di €${paidTotal.toFixed(2)} registrato (simulato in questo prototipo).`)
+  );
+  wrap.appendChild(
+    el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere né a un istituto di pagamento.")
+  );
   const backBtn = el("button", "btn-primary", "Torna alla home");
   backBtn.addEventListener("click", () => {
     state.screen = "home";

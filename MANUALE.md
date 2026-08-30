@@ -36,7 +36,7 @@ Il progetto pubblico è composto da due parti, servite dallo stesso sito:
 
 - **Nessun framework, nessun build step.** `app.js` è JavaScript scritto a mano (vanilla JS), caricato direttamente dal browser. I file dentro `dist/` sono quelli serviti in produzione — si editano direttamente, non c'è un passaggio di compilazione da un'altra cartella sorgente.
 - **Backend**: [Netlify Functions](https://docs.netlify.com/functions/overview/) — piccoli file Node.js in `netlify/functions/*.js`, ognuno è un endpoint HTTP indipendente (es. `/.netlify/functions/sync`). Configurati in `netlify.toml`.
-- **Database**: [Netlify Blobs](https://docs.netlify.com/blobs/overview/) — uno storage chiave/valore gestito da Netlify, niente database tradizionale da amministrare. Ogni "store" (`purchases`, `partners`, `legal`, `blocklist`, `promo`, `partner-discount-codes`, `rate-limits`, `customs-reference`) è una collezione separata di record JSON, condivisa con il repository privato (vedi "Due repository" sopra).
+- **Database**: [Netlify Blobs](https://docs.netlify.com/blobs/overview/) — uno storage chiave/valore gestito da Netlify, niente database tradizionale da amministrare. Ogni "store" (`purchases`, `partners`, `legal`, `blocklist`, `promo`, `partner-discount-codes`, `rate-limits`, `customs-reference`, `shipment-groups`) è una collezione separata di record JSON, condivisa con il repository privato (vedi "Due repository" sopra).
 - **AI**: Claude (Anthropic) per la classificazione doganale delle foto, la stima delle dimensioni dell'imballo e il rilevamento firma sui documenti d'identità. La chiave `ANTHROPIC_API_KEY` resta solo sul server (funzione `classify.js`), mai esposta al browser.
 - **QR code**: generati al volo tramite il servizio esterno `api.qrserver.com` (nessuna libreria QR interna).
 - **PWA minima**: `dist/sw.js` mette in cache la shell dell'app (schermate, non i dati) così l'app resta consultabile offline; le chiamate AI/QR/geolocalizzazione richiedono sempre connessione. La app shell (`/`, `/index.html`, `/assets/app.js`, `/assets/style.css`) usa strategia **network-first**: prova sempre prima la rete e aggiorna la cache, usando la cache solo come fallback offline — così un turista vede subito l'ultima versione deployata al primo caricamento dopo un deploy, senza dover ricaricare due volte. Tutte le altre risorse restano invece **cache-first con aggiornamento in background** (risposta immediata dalla cache se presente, rete in parallelo per aggiornarla).
@@ -144,11 +144,11 @@ Prima della schermata Cover, il turista vede una sequenza animata a 4 slide che 
 2. **Home** (`HomeScreen`) — foto dell'oggetto (fotocamera o galleria) oppure descrizione testuale libera. Qui compare anche il campo facoltativo "Hai un codice invito?" (offerta breakeven, vedi sotto).
 3. **Destination** (`DestinationScreen`) — conferma/modifica il punto di ritiro e la destinazione della spedizione.
 4. **Analyzing → Result** — la foto (o descrizione) viene inviata a Claude (funzione `classify.js`) che restituisce: nome oggetto, codice doganale HS, peso, dimensioni, valore stimato, fragilità, confidenza. Da qui si calcola anche il **dimensionamento dell'imballo consigliato** (margine di materiale protettivo, maggiore se l'oggetto è fragile).
-5. **Scelta del prezzo** (in `ResultScreen`) — vedi "Dual pricing e offerte" più sotto: pieno vs abbonamento, eventuale offerta prima spedizione gratuita, codice invito breakeven, codice sconto partner.
+5. **Scelta del prezzo** (in `ResultScreen`) — vedi "Dual pricing e offerte" più sotto: pieno vs abbonamento, eventuale offerta prima spedizione gratuita, codice invito breakeven, codice sconto partner. **Questo prezzo è solo una stima per la spedizione di questo singolo oggetto** — etichettata esplicitamente come tale a schermo ("Stima per spedizione singola"), nessun addebito né conferma di pagamento a questo punto: vedi "Prezzo consolidato per gruppo di spedizione" e "Punto di integrazione pagamento futuro" più sotto.
 6. **Registrazione** (`IdentifyScreen`, se non già fatta) — nome, email, indirizzo di destinazione, documento di riconoscimento (con rilevamento automatico della firma via AI, usata poi per firmare digitalmente le fatture proforma), e proposta di attivare lo sblocco biometrico (Face ID/Touch ID/impronta, via WebAuthn) per gli accessi successivi.
 7. **QR generato** (`QueuedScreen`) — l'acquisto entra in stato **"in sospeso"**, viene mostrato un QR "di deposito" da mostrare in negozio, più le dimensioni consigliate dell'imballo. Da qui si può condividere il QR con chi imballa (`shareQR()`, Web Share API con fallback su link copiabile) e, se disponibili dimensioni consigliate, fotografare l'imballo pronto per farlo validare dall'AI (`PackageCheckScreen` — segnala se il pacco è più grande del necessario).
 8. **Documenti** (`DocumentsScreen`) — lettera di vettura e fattura proforma generate automaticamente per ogni acquisto, consultabili in ogni momento.
-9. **Conclusione soggiorno** (`ConcludeScreen`) — quando il turista ha finito di fare acquisti, consolida tutti gli acquisti "in sospeso" per destinazione in un unico ordine di ritiro (`ShippedScreen`) — qui gli acquisti passano storicamente a "ritirato" in un colpo solo (percorso legacy, oggi affiancato dal flusso più granulare a 4 stati descritto sotto).
+9. **Conclusione soggiorno** (`ConcludeScreen`) — quando il turista ha finito di fare acquisti, consolida tutti gli acquisti "in sospeso" per destinazione in un unico ordine di ritiro (`ShippedScreen`). **È qui, e solo qui, che avviene il calcolo finale vero** (peso/volume combinato del gruppo, una sola fee di servizio — vedi "Prezzo consolidato per gruppo di spedizione") **e il momento del pagamento** (vedi "Punto di integrazione pagamento futuro") — gli acquisti passano quindi a "ritirato" in un colpo solo (percorso legacy, oggi affiancato dal flusso più granulare a 4 stati descritto sotto).
 
 ### Mirino fotocamera con rumore otturatore (TOU-20)
 
@@ -263,6 +263,49 @@ Oltre al dual pricing standard, tre offerte possono ridurre il totale (mostrate 
 2. **Prima spedizione gratuita**: se il turista non ha mai fatto un acquisto (`purchaseHistory` vuoto) e non è già abbonato, la prima spedizione ha la stessa condizione della breakeven (fee azzerata) — per fargli provare il servizio prima di scegliere se abbonarsi.
 3. **Codice sconto partner**: un codice monouso generato da un partner (vedi "Area partner"), applica il 10% di sconto sulla sola fee di servizio (non sul corriere) — vedi "Sistema crediti partner".
 
+**Importante**: quanto sopra descrive solo la **stima per spedizione singola**, calcolata da `priceFor`/`priceQuotes`/`shippingCost` e mostrata in `ResultScreen` subito dopo la classificazione di ogni oggetto — etichettata esplicitamente a schermo come "Stima per spedizione singola", con la nota che il totale finale dipende da eventuali altri acquisti consolidati verso la stessa destinazione. Nessun addebito, nessuna conferma di pagamento avviene qui. Il prezzo VERO — ricalcolato sul gruppo, non sommato dalle stime — è quello descritto subito sotto.
+
+### Prezzo consolidato per gruppo di spedizione
+
+Quando il turista conferma la conclusione del soggiorno (`ConcludeScreen`), gli acquisti "in sospeso" vengono raggruppati per destinazione (stessa `addressLabel`) e il prezzo di ogni gruppo viene **ricalcolato da zero** da `consolidatedGroupPrice(items)` (`dist/assets/app.js`) — non è la somma delle stime individuali (`it.price`) mostrate durante lo shopping, che restano solo l'anteprima vista sopra. Un vero corriere fattura un unico collo consolidato una volta sola, non un preventivo per ogni oggetto che ci finisce dentro; questo calcolo riproduce lo stesso principio:
+
+1. **Peso reale combinato** — somma dei pesi reali dei singoli oggetti, ognuno comunque mai sotto lo 0,3 kg minimo fatturabile (la stessa soglia già applicata oggi al singolo oggetto in `shippingCost()`). Per un gruppo di un solo oggetto questo è letteralmente lo stesso numero già usato oggi.
+2. **Peso volumetrico combinato** — **somma** (non un unico volume "ottimizzato", come se gli oggetti si annidassero perfettamente in una scatola più piccola) dei pesi volumetrici individuali (`volumetricWeight()`, L×W×H/5000 di ciascun oggetto). Scelta deliberatamente conservativa: gli oggetti vengono lasciati in negozi spesso diversi e restano colli distinti fino al consolidamento fisico vero e proprio — sommare non sottostima mai il costo reale, un "nesting" ottimistico invece sì.
+3. **Peso fatturabile del gruppo** = il maggiore tra i due totali combinati sopra — stessa logica già usata oggi per il singolo oggetto in `shippingCost()`, applicata al totale.
+4. **Tariffa a scaglioni** (`bracketPrice()`, stessa tabella `SHIPPING_RATES` a fasce di peso/zona) applicata **una sola volta** su questo peso fatturabile combinato — mai sommando tariffe già calcolate sui singoli pesi.
+5. **Fee di servizio** (`FULL_FEE`/`SUBSCRIBED_FEE`) applicata **una sola volta** per l'intero gruppo, non per ogni oggetto — se anche un solo oggetto del gruppo era in breakeven/promo quando è stato aggiunto, l'intero ordine consolidato eredita quella condizione (è comunque un solo "ordine" che si sta confermando e pagando ora); altrimenti conta l'abbonamento se anche un solo oggetto lo è. Eventuali sconti codice partner già applicati ai singoli oggetti restano validi e si sottraggono dalla fee di gruppo.
+
+**Un gruppo con un solo oggetto produce esattamente lo stesso prezzo di oggi** — stessa soglia minima di 0,3 kg, stesso peso volumetrico, stessa fascia tariffaria, stessa fee, stesso eventuale sconto partner: nessuna regressione sul caso più comune (un solo acquisto verso una destinazione). Verificato sia analiticamente sia con un fuzz test a >3000 combinazioni casuali (pesi, dimensioni, tier di prezzo, tutte le destinazioni) durante lo sviluppo: nessuna violazione trovata.
+
+**Esempio concreto** (destinazione Unione Europea, zona "transfrontaliero", entrambi a tariffa piena):
+
+| | Oggetto 1 (1 kg) | Oggetto 2 (1,5 kg) | Somma stime individuali | Consolidato (gruppo di 2) |
+|---|---|---|---|---|
+| Peso fatturabile | 1 kg | 1,5 kg | — | 2,5 kg |
+| Spedizione | 15 × 1,25 = €18,75 | 20 × 1,25 = €25 | — | 26 × 1,25 = €32,50 |
+| Fee di servizio | €39 | €39 | — | €39 (una sola volta) |
+| **Totale** | **€57,75** | **€64** | **€121,75** | **€71,50** |
+
+Il gruppo consolidato costa €71,50 contro i €121,75 che si otterrebbero sommando le due stime individuali: mai di più, spesso meno, grazie soprattutto alla singola fee di servizio invece di una per oggetto. La destinazione del gruppo (necessaria per scegliere la zona/tariffa) viene risolta dall'indirizzo già salvato su ogni oggetto (`addressId` → `state.addresses`), non da un nuovo campo — funziona quindi anche per gli item già in `localStorage` da prima di questa modifica.
+
+### Persistenza del gruppo di spedizione (`save-shipment-group.js`)
+
+Prima di questa modifica, il "codice di ordine di ritiro consolidato" (`generateBookingCode()`, mostrato in `ShippedScreen`) esisteva solo lato client: nessun record persistente rappresentava la spedizione consolidata come entità, solo i singoli acquisti marcati "ritirato" separatamente — dal CRM non si poteva risalire a "quali oggetti sono stati ritirati insieme, con quale codice, a quale prezzo".
+
+- **`netlify/functions/save-shipment-group.js`** — stesso pattern di `save-purchase.js` (store Blobs con supporto `GUEST_MODE` tramite `guestScopedStoreName()`, rate limiting 20 richieste/60 minuti per IP, validazione dei dati prima di scrivere). Salva, nello store `shipment-groups`, un record per gruppo con: `code` (il bookingCode, usato anche come chiave dello store), destinazione (`dest`, `destinationCountry`), l'elenco degli id degli oggetti inclusi (`itemIds`), il conteggio (`itemCount`), il peso/volume fatturabile combinato (`weightKg`), il dettaglio del prezzo (`shipping`, `fee`, `total`), l'ETA di consegna e la data di creazione. Nessuna logica di commissione/blocklist qui: quella resta interamente su `save-purchase.js`.
+- **Riferimento incrociato**: al momento della conferma, `ConcludeScreen` imposta `shipmentGroupCode` su ciascun oggetto del gruppo prima di risincronizzarlo (`syncPurchaseToCRM`) — dal CRM si può quindi risalire da un singolo acquisto al gruppo consolidato a cui appartiene, e viceversa (il gruppo elenca gli `itemIds`).
+- **Store "gemellato" come tutti gli altri** (vedi "Spazio ospite (continuità operativa)" più sotto): `shipment-groups` passa da `guestScopedStoreName()` come ogni altro store di questo repository, quindi esiste anch'esso in due copie indipendenti (produzione e ospite).
+- **Test**: `netlify/functions/__tests__/save-shipment-group.test.js` — gruppo valido salvato con chiave = bookingCode, validazione dei dati (itemIds vuoto, peso/prezzo fuori range), metodo non-POST rifiutato, due gruppi diversi non si sovrascrivono.
+
+### Punto di integrazione pagamento futuro
+
+Oggi Touch&Go **non ha un pagamento reale integrato**: nessun collegamento a Stripe o ad altro PSP (verificato nel footer dell'app, "Quote e pagamenti simulati per il test", e nell'assenza di qualunque chiamata di checkout nel codice) — il pagamento è simulato con un semplice `setTimeout` prima di passare alla schermata di conferma. Questo non significa però che il *momento* in cui il pagamento (anche solo simulato) avviene sia arbitrario: è costruito fin da ora nel punto giusto, così un'integrazione futura di un pagamento vero si aggancia lì senza dover ristrutturare il flusso.
+
+- **Durante lo shopping (`ResultScreen`, subito dopo la classificazione di ogni oggetto)**: nessun linguaggio di addebito o di impegno. Il prezzo è sempre etichettato "Stima per spedizione singola", con nota esplicita che il totale finale dipende da eventuali altri acquisti consolidati verso la stessa destinazione.
+- **Solo alla "Conferma e invia ordine di ritiro consolidato" (`ConcludeScreen`)**: qui avviene sia il calcolo finale (vedi "Prezzo consolidato per gruppo di spedizione" sopra) sia, concettualmente, **il pagamento**. Il pulsante di conferma mostra esplicitamente il totale da pagare ("Conferma e paga €X — ordine di ritiro consolidato →"), preceduto da un riepilogo con il totale per ogni destinazione e il totale complessivo.
+- **Commento nel codice**: un blocco di commento ben visibile, delimitato da righe `====`, sta esattamente sopra la dichiarazione di `confirmBtn` in `ConcludeScreen` (`dist/assets/app.js`) e indica: *"QUI è il punto di integrazione per un pagamento reale futuro (Stripe o altro PSP) — vedi MANUALE.md, sezione 'Punto di integrazione pagamento futuro'"*. Spiega anche perché lì e non altrove: una chiamata reale al PSP va agganciata **prima** del blocco che marca gli oggetti come `"ritirato"` e li sincronizza col CRM (`syncPurchaseToCRM`)/salva il gruppo (`saveShipmentGroupToCRM`), non dopo — un pagamento vero può fallire (carta rifiutata, timeout), e in quel caso gli oggetti non andrebbero comunque marcati come ritirati né il gruppo salvato, mentre oggi il `setTimeout` conferma sempre incondizionatamente.
+- **`ShippedScreen`** rispecchia lo stesso principio: titolo "Ordine confermato e pagato", una riga che riepiloga il totale pagato (somma dei totali per destinazione) esplicitamente marcata come "registrato (simulato in questo prototipo)", e la nota prototipo aggiornata per menzionare, oltre al corriere, anche l'assenza di una richiesta reale a un istituto di pagamento.
+
 ### Blocco automatico anti-abuso
 
 Gestito in `netlify/functions/save-purchase.js`, ogni volta che un acquisto viene salvato/aggiornato:
@@ -364,6 +407,7 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 | `partner-stats.js` | Verifica un codice partner e restituisce statistiche reali (vendite, valore, commissione, credito) aggregate dallo store centrale. |
 | `promo.js` | Valida e consuma i codici invito per l'offerta breakeven. |
 | `save-purchase.js` | Salva/aggiorna un acquisto nello store centrale `purchases`; applica il blocco automatico anti-abuso; accredita il partner quando lo stato diventa "ritirato" tramite questo percorso (conferma del turista); registra l'archivio di riferimento doganale (vedi sotto). |
+| `save-shipment-group.js` | Salva nello store `shipment-groups` un record per ogni gruppo di spedizione consolidato confermato in `ConcludeScreen` (destinazione, oggetti inclusi, peso/volume combinato, prezzo finale) — vedi "Persistenza del gruppo di spedizione" in "App turista". |
 | `sync.js` | Le azioni sui dati condivisi che l'app/sito pubblico usano senza passare dal CRM interno: `get-purchases`, `get-purchases-by-email`, `ack-pickup-point`, `redeem-credit-for-invoice`, `generate-partner-discount-code`, `register-partner` — stessa identica logica che vivrebbe in `crm.js`, estratta qui perché questo repository non ha accesso a quello privato. Vedi "CRM interno, area investitori e kit riservato" in Panoramica. |
 
 ### Archivio di riferimento doganale (store Blobs `customs-reference`)
@@ -381,10 +425,11 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 `netlify/functions/__tests__/` — test diretti delle Netlify Functions, con uno store Blobs finto in memoria al posto delle credenziali reali (nessuna rete necessaria). Usano il test runner integrato di Node (`node:test`/`node:assert`), senza dipendenze aggiuntive: `npm test` (= `node --test`) li esegue tutti.
 
 - `save-purchase.commission.test.js` — copre esplicitamente il comportamento condizionato al piano introdotto da TOU-12: piano gratuito → nessuna commissione accreditata (`creditBalance` invariato, `creditIssuedAmount: 0` esplicito); piano a pagamento → commissione del 10% come sempre; doppio resync dello stesso ordine → nessun doppio accredito; partner storico senza campo `plan` → trattato come a pagamento (nessun cambio retroattivo di comportamento).
+- `save-shipment-group.test.js` — gruppo di spedizione valido salvato con chiave = bookingCode e leggibile dal CRM; dati non plausibili (nessun oggetto nel gruppo, peso/prezzo fuori range) rifiutati prima di scrivere; due gruppi diversi non si sovrascrivono a vicenda.
 
 ### Rate limiting
 
-Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`, `assistant.js`) applicano tutte lo stesso schema: **massimo 20 richieste ogni 60 minuti per indirizzo IP**, tracciato nello store Blobs `rate-limits`. Oltre il limite, l'endpoint risponde `429`.
+Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-discount.js`, `save-purchase.js`, `save-shipment-group.js`, `assistant.js`) applicano tutte lo stesso schema: **massimo 20 richieste ogni 60 minuti per indirizzo IP**, tracciato nello store Blobs `rate-limits`. Oltre il limite, l'endpoint risponde `429`.
 
 `sync.js` non ha un rate limit generale (le sue azioni richiedono id/codici già noti al chiamante), tranne l'azione `get-purchases-by-email` (vedi "Sincronizzazione dello storico acquisti tra dispositivi" più sopra), che accetta un'email libera e applica lo stesso schema 20/60 minuti per IP.
 
@@ -398,7 +443,7 @@ Le funzioni esposte al pubblico (`classify.js`, `partner-stats.js`, `partner-dis
 | `NETLIFY_BLOBS_SITE_ID` / `NETLIFY_BLOBS_TOKEN` | Credenziali di accesso a Netlify Blobs, usate da tutte le funzioni che leggono/scrivono dati — le stesse configurate anche sul deploy del repository privato, così i due siti condividono gli stessi dati (vedi "Due repository" in Panoramica). |
 | `GUEST_MODE` | `true` **solo** sul deploy ospite (continuità operativa) — mai su produzione. Vedi "Spazio ospite (continuità operativa)" più sotto. |
 
-> **Importante — non rimuovere l'auth Blobs esplicita da `getStore()`.** In questo ambiente di deploy il provisioning automatico di Netlify Blobs (che in teoria non richiederebbe alcuna configurazione) **non funziona** — un tentativo di farne a meno (TOU-13) ha causato in produzione l'errore `The environment has not been configured to use Netlify Blobs`, bloccando la registrazione partner. Ogni `getStore()` in questo repository (`sync.js`, `save-purchase.js`, `classify.js`, `promo.js`, `partner-discount.js`, `partner-stats.js`, `assistant.js`, `guest-status.js` — quest'ultima non ne fa uso diretto) deve continuare a passare esplicitamente `siteID`/`token` da `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN` (pattern `blobsAuth` ripetuto identico in ogni file) — non è codice ridondante da "pulire". Allo stesso modo, il **nome** dello store passato a `getStore()` deve sempre passare da `guestScopedStoreName()` (`netlify/lib/guest-mode.js`), mai una stringa letterale scritta a mano — vedi "Spazio ospite (continuità operativa)" più sotto.
+> **Importante — non rimuovere l'auth Blobs esplicita da `getStore()`.** In questo ambiente di deploy il provisioning automatico di Netlify Blobs (che in teoria non richiederebbe alcuna configurazione) **non funziona** — un tentativo di farne a meno (TOU-13) ha causato in produzione l'errore `The environment has not been configured to use Netlify Blobs`, bloccando la registrazione partner. Ogni `getStore()` in questo repository (`sync.js`, `save-purchase.js`, `save-shipment-group.js`, `classify.js`, `promo.js`, `partner-discount.js`, `partner-stats.js`, `assistant.js`, `guest-status.js` — quest'ultima non ne fa uso diretto) deve continuare a passare esplicitamente `siteID`/`token` da `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN` (pattern `blobsAuth` ripetuto identico in ogni file) — non è codice ridondante da "pulire". Allo stesso modo, il **nome** dello store passato a `getStore()` deve sempre passare da `guestScopedStoreName()` (`netlify/lib/guest-mode.js`), mai una stringa letterale scritta a mano — vedi "Spazio ospite (continuità operativa)" più sotto.
 
 `KIT_VAULT_PASSWORD` e `INVESTOR_PASSWORD` non servono più in questo repository — sono configurate solo sul deploy Netlify di `touchandgo-internal`, che ospita le function che le verificano.
 
@@ -425,7 +470,7 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
   - `guestScopedStoreName(baseName)` — restituisce `baseName` invariato in produzione, `${baseName}-guest` nello spazio ospite.
 - **Ogni `getStore({ name: ..., ...blobsAuth })`** in questo repository passa il nome attraverso `guestScopedStoreName()` invece di scrivere la stringa a mano — un solo punto che decide la separazione, quindi un solo punto da aggiornare se la convenzione cambiasse in futuro. Così i dati generati nello spazio ospite finiscono in store Blobs **completamente separati**, non si mescolano mai con quelli di produzione — nemmeno per errore, anche se i due siti finissero per condividere per sbaglio le stesse credenziali `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN`.
 
-**Store "gemellati" (produzione + ospite)** — ognuno di questi 7 store esiste oggi in due copie indipendenti, `nome` e `nome-guest`:
+**Store "gemellati" (produzione + ospite)** — ognuno di questi 8 store esiste oggi in due copie indipendenti, `nome` e `nome-guest`:
 
 | Store | Scritto/letto da |
 |---|---|
@@ -435,7 +480,8 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
 | `promo` | `promo.js` |
 | `partner-discount-codes` | `partner-discount.js`, `sync.js` |
 | `customs-reference` | `save-purchase.js` (scrive), `classify.js` (legge) |
-| `rate-limits` | tutte le function pubbliche (`assistant.js`, `classify.js`, `partner-discount.js`, `partner-stats.js`, `save-purchase.js`, `sync.js`) — isolato anch'esso: il conteggio anti-abuso dello spazio ospite non condivide mai la finestra con quello di produzione |
+| `shipment-groups` | `save-shipment-group.js` |
+| `rate-limits` | tutte le function pubbliche (`assistant.js`, `classify.js`, `partner-discount.js`, `partner-stats.js`, `save-purchase.js`, `save-shipment-group.js`, `sync.js`) — isolato anch'esso: il conteggio anti-abuso dello spazio ospite non condivide mai la finestra con quello di produzione |
 
 `assistant.js` non ha alcuno store business (solo `rate-limits`): il chatbot non persiste nulla, quindi non ha bisogno di alcuna logica aggiuntiva oltre al rate limiting già isolato sopra.
 
