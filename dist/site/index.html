@@ -134,6 +134,27 @@ section{padding:80px 0}
 .iva-banner h3{margin:0 0 4px;font-size:16px;color:var(--good)}
 .iva-banner p{margin:0;font-size:13px;color:#3C6B3F;line-height:1.6}
 
+/* Contatti — stessa struttura a card con icona già usata per il banner
+   IVA sopra, invece della coppia bottone+paragrafo isolata che c'era
+   prima: visivamente allineata al resto del sito invece di sembrare
+   una sezione ripiegata all'ultimo momento. */
+.contact-card{background:#fff;border:1px solid var(--line);padding:34px 36px;max-width:640px;margin:0 auto;text-align:center}
+.contact-card .ic{font-size:30px;margin-bottom:14px}
+.contact-card p.sub{font-size:12.5px;color:var(--muted);margin:16px 0 0;line-height:1.7}
+.contact-card p.sub a{color:var(--gold-deep);text-decoration:underline}
+
+/* "Hai già un account?" tra il listino piani e il form di registrazione
+   nuovo partner — prima era un link isolato, poco distinguibile dal
+   resto: ora una piccola card così il turista/partner capisce subito
+   che è un percorso alternativo, non parte dello stesso flusso. */
+.partner-login-note{max-width:520px;margin:26px auto 0;background:var(--cream);border:1px solid var(--line);padding:16px 20px;text-align:center}
+.partner-login-note span{display:block;font-size:11.5px;color:var(--muted);margin-bottom:8px}
+
+/* Focus states — assenti nel form di registrazione partner (unico form
+   del sito): senza, la tastiera non mostra mai dove si trova il focus. */
+.partner-signup input:focus-visible,.partner-signup select:focus-visible{outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--gold-deep);outline-offset:2px}
+
 /* CTA band */
 .cta-band{background:var(--ink);color:var(--cream);text-align:center;padding:90px 0}
 .cta-band h2{font-family:var(--display);font-size:36px;font-weight:500;margin:0 0 16px}
@@ -186,6 +207,11 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
   .cta-band h2{font-size:26px}
   .footer-grid{flex-direction:column;gap:28px}
   .footer-bottom{font-size:11.5px}
+  /* Sotto 16px un input fa auto-zoom al focus su iOS Safari — scomodo per
+     chi compila il form di registrazione partner da telefono. */
+  .partner-signup input,.partner-signup select{font-size:16px}
+  .contact-card{padding:26px 22px}
+  .partner-login-note{padding:14px 16px}
 }
 </style>
 <script type="application/ld+json">
@@ -384,9 +410,10 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
     </div>
     <p class="commission-note"><b>10%</b> di commissione su ogni spedizione generata tramite il tuo codice, sui piani a pagamento — una sola commissione per spedizione, a chi ha portato il cliente. È disponibile anche un piano gratuito, senza canone ma senza commissione.</p>
 
-    <p style="text-align:center;margin-top:22px">
-      <a class="btn-outline-light" href="#" id="app-link-partner-login" target="_blank" rel="noopener">Hai già un account partner? Accedi →</a>
-    </p>
+    <div class="partner-login-note">
+      <span>Sei già registrato come partner?</span>
+      <a class="btn-outline-light" href="#" id="app-link-partner-login" target="_blank" rel="noopener">Accedi alla tua area partner →</a>
+    </div>
 
     <form class="partner-signup" id="partner-signup-form">
       <h3>Registra il tuo negozio</h3>
@@ -474,10 +501,11 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <h2>Scrivici</h2>
       <p>Una domanda su come funziona il servizio, un negozio interessato, un partner tecnico, la stampa — scrivici, ti rispondiamo direttamente.</p>
     </div>
-    <p style="text-align:center">
+    <div class="contact-card">
+      <div class="ic">✉️</div>
       <a class="btn-primary" href="mailto:partnership@touchandgo.it?subject=Contatto%20dal%20sito">Scrivici → partnership@touchandgo.it</a>
-    </p>
-    <p style="text-align:center;margin-top:14px;font-size:12px;color:var(--muted)">Per proposte di partnership commerciale con negozi/hotel o reseller, vedi anche le sezioni <a href="#partner" style="color:var(--gold-deep);text-decoration:underline">Per i partner</a> e <a href="#rivenditori" style="color:var(--gold-deep);text-decoration:underline">Reseller</a> più sopra.</p>
+      <p class="sub">Per proposte di partnership commerciale con negozi/hotel o reseller, vedi anche le sezioni <a href="#partner">Per i partner</a> e <a href="#rivenditori">Reseller</a> più sopra.</p>
+    </div>
   </div>
 </section>
 

@@ -309,6 +309,9 @@ button{font-family:inherit;cursor:pointer}
 .booked-title{font-family:var(--display);font-size:21px;font-weight:600;margin-bottom:12px}
 .booked-text{font-size:12.5px;color:var(--text-secondary);line-height:1.7;max-width:34ch;margin:0 auto 14px}
 .booked-note{font-size:10px;color:var(--muted);margin-bottom:24px}
+.paid-total-card{background:var(--good-bg);border:1px solid var(--success-border);padding:18px 20px;margin:4px auto 22px;max-width:280px;text-align:center}
+.paid-total-card .stat-val{font-family:var(--display);font-size:30px;font-weight:600;color:var(--good);line-height:1.1}
+.paid-total-card .stat-lbl{font-size:10.5px;font-weight:700;color:var(--success-text);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
 .qr-card{background:var(--surface);border:1px solid var(--line);padding:20px;margin:0 auto 20px;max-width:220px;text-align:center}
 .qr-img{display:block;width:100%;height:auto;margin-bottom:10px}
 .qr-code{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text);letter-spacing:.06em}
@@ -423,7 +426,11 @@ button{font-family:inherit;cursor:pointer}
 .step-lbl{font-family:var(--body);font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
 .capture-preview{width:100%;max-height:180px;object-fit:cover;margin-bottom:14px;border:1px solid var(--line)}
 .pending-desc{font-family:var(--display);font-size:16px;font-style:italic;color:var(--text);margin-bottom:14px}
-.dest-field{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);padding:11px 14px;margin:0 0 18px}
+/* flex-wrap: fallback per etichette lunghe (es. "Passa a un piano a
+   pagamento") che altrimenti schiaccerebbero il controllo a destra su
+   schermi stretti — sui campi con etichetta breve (la maggioranza) non
+   cambia nulla, perché ci stanno già su una riga sola. */
+.dest-field{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;background:var(--surface);border:1px solid var(--line);padding:11px 14px;margin:0 0 18px}
 .dest-lbl{font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1px}
 .dest-select{border:none;background:none;font-family:var(--body);font-size:12.5px;font-weight:600;color:var(--text);text-align:right}
 .dest-input{border:none;background:none;font-family:var(--body);font-size:12.5px;font-weight:600;color:var(--text);text-align:right;width:55%}
@@ -540,8 +547,22 @@ button{font-family:inherit;cursor:pointer}
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--text-2)}
 .info-row:last-child{border-bottom:none}
 .info-row b{font-family:var(--display);font-weight:600;color:var(--text)}
-.info-row.total{border-top:1px solid var(--ink);margin-top:2px;padding-top:10px;font-weight:700}
-.info-row.total b{font-size:17px}
+/* Il numero finale (prezzo da pagare, credito disponibile, totale
+   complessivo...) è sempre l'informazione più importante della card in cui
+   compare: ingrandito e nel colore d'accento invece del testo neutro usato
+   per le righe sopra, così risalta a colpo d'occhio invece di confondersi
+   con gli altri importi della lista — stesso trattamento in tutte le card
+   che lo usano (prezzo turista, area partner, dashboard). */
+.info-row.total{border-top:1.5px solid var(--ink);margin-top:4px;padding-top:12px;font-weight:700}
+.info-row.total span{color:var(--text);font-weight:600}
+.info-row.total b{font-size:24px;color:var(--gold-deep)}
+
+/* Card che porta il totale "definitivo" da pagare/confermare (non una
+   stima) — barra d'accento in testa, stesso segnale in ResultScreen
+   (prezzo confermato) e ConcludeScreen (pagamento consolidato), così il
+   turista riconosce a colpo d'occhio "questo è il numero che conta". */
+.price-card.final-total{border-top:3px solid var(--gold-deep);padding-top:14px}
+
 .info-line{font-size:11.5px;color:var(--text-secondary);line-height:1.6;padding:6px 0}
 
 /* ---------- Result (v2) ---------- */
@@ -662,6 +683,43 @@ button{font-family:inherit;cursor:pointer}
 .ob-tap-zone.ob-left{left:0}
 .ob-tap-zone.ob-right{right:0}
 .promo-card-inline .btn-primary{background:var(--gold-soft);color:var(--ink)}
+
+/* ---------- Raggruppamento sezioni area partner ----------
+   L'area partner impilava una sequenza di .info-card tutte uguali (stesso
+   grigio, stesso peso visivo) senza alcuna separazione tra blocchi
+   concettualmente diversi (riepilogo, andamento, credito, QR) — lo stesso
+   problema di densità che aveva il CRM prima della sua ristrutturazione.
+   .partner-block-lbl introduce la stessa etichetta già usata altrove
+   (.tg-lbl) ma con un filo superiore che segna l'inizio di un nuovo
+   gruppo, così la dashboard si legge come sezioni distinte invece che
+   come un'unica colonna indifferenziata di card identiche. */
+.partner-block-lbl{border-top:1px solid var(--line);padding-top:18px;margin-top:22px}
+
+/* Riepilogo partner: le due cifre che contano di più (credito disponibile,
+   vendite generate) diventano stat-card ben visibili invece di due righe
+   tra tante altre in un .info-card — riusa .stat-grid/.stat-card, già
+   definite ma non ancora applicate da nessuna schermata. */
+.partner-hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+/* --warn-bg resta chiaro in ogni tema (non è tra i token invertibili, per
+   restare leggibile — vedi nota sui token in cima al file), quindi il
+   testo sopra deve restare scuro a sua volta: --ink invece di --text, che
+   nei temi lime/corallo diventa chiaro e sparirebbe su questo sfondo. */
+.partner-hero-grid .stat-card.highlight{border-color:var(--gold-deep);background:var(--warn-bg)}
+.partner-hero-grid .stat-card.highlight .stat-val{color:var(--gold-deep)}
+.partner-hero-grid .stat-card.highlight .stat-lbl{color:var(--ink)}
+
+/* ---------- Comportamento mobile: gli input con font-size sotto 16px
+   fanno auto-zoom al focus su iOS Safari (bug noto della piattaforma,
+   non dell'app) — scomodo su un form pensato per essere compilato in
+   negozio, in piedi, col telefono. Sopra 16px l'auto-zoom non scatta più;
+   dimensione ripristinata subito dopo su schermi più larghi, dove il
+   problema non esiste, per non alterare la densità visiva del resto
+   dell'app. Non tocca select/checkbox/radio, immuni al bug. */
+@media (max-width:480px){
+  input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="search"],select,textarea{
+    font-size:16px;
+  }
+}
 
 /* Mirino fotocamera custom (TOU-20) — vedi openCameraViewfinder() in app.js.
    Colori lasciati letterali (non tokenizzati): l'overlay della fotocamera

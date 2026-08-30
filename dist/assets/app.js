@@ -1317,21 +1317,34 @@ function PartnerLoginAndHistory() {
           ? "Il tuo piano gratuito è scaduto dopo 12 mesi. Per continuare a vendere servizi Touch&amp;Go e accedere alla tua area, passa a un piano a pagamento."
           : "Il canone del tuo piano non risulta confermato. Contatta Touch&amp;Go o attendi la conferma dello staff per riottenere l'accesso."
       }</div>
-      ${stats.creditBalance > 0 ? `<div class="info-row"><span>Credito già maturato (resta disponibile)</span><b>€${stats.creditBalance.toFixed(2)}</b></div>` : ""}`;
+      ${stats.creditBalance > 0 ? `<div class="info-row total"><span>Credito già maturato (resta disponibile)</span><b>€${stats.creditBalance.toFixed(2)}</b></div>` : ""}`;
     wrap.appendChild(blockCard);
     if (isFreeExpired) wrap.appendChild(PartnerUpgradeSection(stats));
     wrap.appendChild(logoutBtn);
     return wrap;
   }
 
+  // Le due cifre che il partner controlla più spesso — credito già
+  // disponibile e vendite generate — come stat-card ben visibili invece
+  // che perse tra le altre righe di un .info-card indifferenziato.
+  const heroGrid = el("div", "partner-hero-grid");
+  heroGrid.innerHTML = `
+    <div class="stat-card highlight">
+      <div class="stat-val">€${stats.creditBalance.toFixed(2)}</div>
+      <div class="stat-lbl">Credito disponibile</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">${stats.salesCount}</div>
+      <div class="stat-lbl">Vendite registrate</div>
+    </div>`;
+  wrap.appendChild(heroGrid);
+
   const summary = el("div", "info-card");
   summary.innerHTML = `
     <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
     ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
-    <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
     <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
-    <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
-    <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
+    <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 
   // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a
@@ -1340,6 +1353,7 @@ function PartnerLoginAndHistory() {
   // occasione persa). Il countdown avvisa prima che scatti il blocco.
   if (stats.plan === "free" || !stats.plan) {
     const daysLeft = stats.access && typeof stats.access.daysRemaining === "number" ? stats.access.daysRemaining : null;
+    wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "Il tuo piano"));
     const incentive = el("div", "info-card");
     incentive.innerHTML = `
       ${
@@ -1387,7 +1401,7 @@ function PartnerUpgradeSection(stats) {
   ];
   const field = el("div", "dest-field");
   const options = plans.map(([value, label]) => `<option value="${value}" ${state.partnerUpgradePlan === value ? "selected" : ""}>${label}</option>`).join("");
-  field.innerHTML = `<div class="dest-lbl">Passa a un piano a pagamento</div><select class="dest-input" id="partner-upgrade-plan"><option value="">Scegli un piano…</option>${options}</select>`;
+  field.innerHTML = `<div class="dest-lbl">Passa a un piano a pagamento</div><select class="dest-select" id="partner-upgrade-plan"><option value="">Scegli un piano…</option>${options}</select>`;
   wrap.appendChild(field);
 
   if (state.partnerUpgradeError) {
@@ -1470,6 +1484,10 @@ function PartnerTrendSection(stats) {
   const wrap = el("div");
   const months = stats.monthlyBreakdown || [];
 
+  if (months.length || (stats.recentOrders || []).length) {
+    wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "Le tue vendite nel tempo"));
+  }
+
   if (months.length) {
     const current = months[0];
     const previous = months[1] || null;
@@ -1518,6 +1536,7 @@ function PartnerTrendSection(stats) {
 // generare un codice sconto monouso da dare a un cliente.
 function PartnerCreditSection(stats) {
   const wrap = el("div");
+  wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "Credito e sconti"));
 
   if (stats.creditBalance > 0) {
     const redeemBtn = el("button", "btn-secondary", state.partnerCreditRedeeming ? "Applico il credito…" : "Usa credito per il canone");
@@ -1630,6 +1649,7 @@ function qrCodeUrl(data, size) {
 // codice partner in automatico (vedi capturePartnerCode(), non toccata).
 function PartnerQRSection(code) {
   const wrap = el("div");
+  wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "QR del negozio"));
 
   if (!state.showPartnerQr) {
     const qrBtn = el("button", "btn-secondary", "Genera QR per il tuo negozio");
@@ -2539,7 +2559,7 @@ function ResultScreen() {
       : state.isSubscribed
       ? t("result_quote_suffix_subscribed")
       : "";
-    priceCard = el("div", "price-card");
+    priceCard = el("div", "price-card final-total");
     priceCard.innerHTML = `
       <div class="tg-lbl" style="margin-bottom:10px">${t("result_quote_title")} ${quoteSuffix}</div>
       <div class="info-row"><span>${t("result_fee_service")}</span><b>€${fee}</b></div>
@@ -3210,7 +3230,8 @@ function ConcludeScreen() {
   );
   wrap.appendChild(summary);
 
-  const paymentSummary = el("div", "price-card");
+  wrap.appendChild(el("div", "tg-lbl", "Totale e pagamento"));
+  const paymentSummary = el("div", "price-card final-total");
   paymentSummary.innerHTML = `
     <div class="tg-lbl" style="margin-bottom:10px">Totale da confermare e pagare ora</div>
     ${Object.entries(groupPricing)
@@ -3300,6 +3321,15 @@ function ShippedScreen() {
     )
   );
   const paidTotal = (state.shippedGroups || []).reduce((s, g) => s + parseFloat(g.total), 0);
+
+  // Il totale pagato è l'informazione che più conta su questa schermata di
+  // chiusura del percorso — card verde dedicata (stessa coppia --good/
+  // --good-bg già usata da .booked-icon) invece di una riga di testo tra
+  // le altre, così risalta subito sotto la conferma.
+  const paidHero = el("div", "paid-total-card");
+  paidHero.innerHTML = `<div class="stat-val">€${paidTotal.toFixed(2)}</div><div class="stat-lbl">Pagamento registrato (simulato in questo prototipo)</div>`;
+  wrap.appendChild(paidHero);
+
   (state.shippedGroups || []).forEach((g) => {
     const card = el("div", "qr-card");
     card.innerHTML = `<div class="qr-code">${g.code}</div>
@@ -3307,9 +3337,6 @@ function ShippedScreen() {
       <div class="qr-note">Totale €${g.total}</div>`;
     wrap.appendChild(card);
   });
-  wrap.appendChild(
-    el("div", "booked-text", `Pagamento di €${paidTotal.toFixed(2)} registrato (simulato in questo prototipo).`)
-  );
   wrap.appendChild(
     el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere né a un istituto di pagamento.")
   );
