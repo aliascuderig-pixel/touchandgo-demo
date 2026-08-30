@@ -339,6 +339,8 @@ const I18N = {
     result_total_lbl: "Totale",
     result_delivery_note: "Consegna in {eta} · tracciamento incluso · copertura standard inclusa",
     result_discount_lbl: "Sconto codice partner ({code})",
+    result_estimate_badge: "STIMA · spedizione singola",
+    result_estimate_note: "Nessun addebito ora — è solo un'anteprima, non un impegno. Il calcolo definitivo (consolidato se aggiungi altri acquisti verso la stessa destinazione) e il pagamento avvengono solo quando confermi la conclusione del soggiorno.",
     result_qr_btn: "Genera QR code →",
     result_restart_btn: "Classifica un altro oggetto",
     result_partner_discount_link: "Hai un codice sconto partner?",
@@ -568,6 +570,8 @@ const I18N = {
     result_total_lbl: "Total",
     result_delivery_note: "Delivery in {eta} · tracking included · standard coverage included",
     result_discount_lbl: "Partner code discount ({code})",
+    result_estimate_badge: "ESTIMATE · single shipment",
+    result_estimate_note: "No charge now — this is only a preview, not a commitment. The final calculation (consolidated if you add more purchases to the same destination) and the payment only happen when you confirm the end of your stay.",
     result_qr_btn: "Generate QR code →",
     result_restart_btn: "Classify another item",
     result_partner_discount_link: "Have a partner discount code?",
@@ -2464,6 +2468,15 @@ function ResultScreen() {
     }
   }
 
+  // Il prezzo qui è sempre e solo una STIMA per la spedizione di questo
+  // singolo oggetto — nessun addebito reale (o simulato) avviene in questo
+  // punto del flusso. Il calcolo definitivo e il momento del pagamento
+  // (anche solo simulato oggi) sono in ConcludeScreen — vedi il commento lì
+  // e MANUALE.md, sezione "Il momento del pagamento".
+  const estimateNote = el("div", "info-line");
+  estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
+  wrap.appendChild(estimateNote);
+
   const actions = el("div", "result-actions");
   const bookBtn = el("button", "btn-primary", t("result_qr_btn"));
   bookBtn.addEventListener("click", () => {
@@ -3042,7 +3055,7 @@ function ConcludeScreen() {
     el(
       "div",
       "identify-intro",
-      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, invii un unico ordine di ritiro consolidato per ciascuna destinazione."
+      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, paghi ora il totale consolidato (una spedizione per destinazione) e invii l'ordine di ritiro — i prezzi visti finora erano solo stime."
     )
   );
 
@@ -3071,11 +3084,18 @@ function ConcludeScreen() {
   });
   wrap.appendChild(list);
 
+  // Calcolo finale: per ogni destinazione, un solo oggetto paga il prezzo
+  // singolo (che coincide, per costruzione, con lo stesso calcolo applicato
+  // a un gruppo di uno); più oggetti verso la stessa destinazione pagano il
+  // totale consolidato di quel gruppo. Questo è il calcolo che conta
+  // davvero: quello mostrato durante lo shopping (ResultScreen) era solo
+  // una stima per spedizione singola.
   const totalsByDest = {};
   state.pendingItems.forEach((it) => {
     totalsByDest[it.addressLabel] = (totalsByDest[it.addressLabel] || 0) + it.price;
   });
   const groups = Object.keys(totalsByDest).length;
+  const grandTotal = Object.values(totalsByDest).reduce((s, v) => s + v, 0);
   const summary = el(
     "div",
     "info-line",
@@ -3083,10 +3103,31 @@ function ConcludeScreen() {
   );
   wrap.appendChild(summary);
 
-  const confirmBtn = el("button", "btn-primary", "Conferma e invia ordine di ritiro consolidato →");
+  const paymentSummary = el("div", "price-card");
+  paymentSummary.innerHTML = `
+    <div class="tg-lbl" style="margin-bottom:10px">Totale da confermare e pagare ora</div>
+    ${Object.entries(totalsByDest)
+      .map(([dest, total]) => `<div class="info-row"><span>${dest}</span><b>€${total.toFixed(2)}</b></div>`)
+      .join("")}
+    <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
+  wrap.appendChild(paymentSummary);
+
+  // QUI è il punto di integrazione per un pagamento reale futuro — vedi
+  // MANUALE.md, sezione "Il momento del pagamento". Oggi il pagamento è
+  // solo simulato (il setTimeout qui sotto), ma questo è già, a livello
+  // concettuale, l'istante in cui il turista conferma E PAGA il totale
+  // consolidato mostrato sopra — non solo "notifica un ritiro". Quando
+  // arriverà un pagamento reale (es. Stripe), la chiamata al provider va
+  // agganciata qui, prima di marcare gli oggetti come "ritirato" più sotto,
+  // non dopo.
+  const confirmBtn = el(
+    "button",
+    "btn-primary",
+    `Conferma e paga €${grandTotal.toFixed(2)} — ordine di ritiro consolidato →`
+  );
   confirmBtn.addEventListener("click", () => {
     confirmBtn.disabled = true;
-    confirmBtn.textContent = "Invio ordine…";
+    confirmBtn.textContent = "Confermo e pago…";
     setTimeout(() => {
       state.shippedGroups = Object.entries(totalsByDest).map(([dest, total]) => ({
         dest,
@@ -3113,7 +3154,7 @@ function ConcludeScreen() {
 function ShippedScreen() {
   const wrap = el("div", "section booked-screen");
   wrap.appendChild(el("div", "booked-icon", "✓"));
-  wrap.appendChild(el("div", "booked-title", "Ordine di ritiro inviato"));
+  wrap.appendChild(el("div", "booked-title", "Ordine confermato e pagato"));
   wrap.appendChild(
     el(
       "div",
@@ -3121,6 +3162,7 @@ function ShippedScreen() {
       `Il corriere passerà a ritirare tutti gli oggetti lasciati nei negozi entro le prossime 24 ore, consolidati in ${state.shippedGroups.length} spedizion${state.shippedGroups.length === 1 ? "e" : "i"}.`
     )
   );
+  const paidTotal = (state.shippedGroups || []).reduce((s, g) => s + parseFloat(g.total), 0);
   (state.shippedGroups || []).forEach((g) => {
     const card = el("div", "qr-card");
     card.innerHTML = `<div class="qr-code">${g.code}</div>
@@ -3128,7 +3170,10 @@ function ShippedScreen() {
       <div class="qr-note">Totale €${g.total}</div>`;
     wrap.appendChild(card);
   });
-  wrap.appendChild(el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere."));
+  wrap.appendChild(
+    el("div", "booked-text", `Pagamento di €${paidTotal.toFixed(2)} registrato (simulato in questo prototipo).`)
+  );
+  wrap.appendChild(el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere né a un istituto di pagamento."));
   const backBtn = el("button", "btn-primary", "Torna alla home");
   backBtn.addEventListener("click", () => {
     state.screen = "home";
