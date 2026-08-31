@@ -2327,7 +2327,7 @@ function HomeScreen() {
   section.appendChild(galleryCard);
 
   const describeBox = el("div", "describe-box");
-  const describeLbl = el("div", "tg-lbl", t("home_describe_lbl"));
+  const describeLbl = el("div", "tg-lbl centered", t("home_describe_lbl"));
   const input = el("input");
   input.type = "text";
   input.placeholder = t("home_describe_placeholder");

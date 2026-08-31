@@ -626,6 +626,10 @@ button{font-family:inherit;cursor:pointer}
 .gallery-card p,.gallery-card h3{display:none}
 
 .tg-lbl{font-family:var(--body);font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1.5px;margin:6px 0 8px}
+/* Solo per l'etichetta "Non puoi fotografarlo? Descrivilo" in Home
+   (.tg-lbl è condivisa da una ventina di altre etichette, quasi tutte
+   allineate a sinistra di proposito — non va centrata globalmente). */
+.tg-lbl.centered{text-align:center}
 .tg-ex{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);padding:12px 15px;margin-bottom:7px;font-size:12.5px;font-weight:600;color:var(--text-3)}
 .ex-n{font-family:var(--display);color:var(--gold-deep);font-size:13px;font-style:italic}
 .home-foot{font-size:9.5px;color:var(--muted);text-align:center;margin-top:14px}
