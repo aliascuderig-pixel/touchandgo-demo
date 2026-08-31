@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#0F0F0F" />
+<meta name="theme-color" content="#14100B" />
 <title>Touch&amp;Go — Spedisci i tuoi acquisti dall'Italia</title>
 <meta name="description" content="Fotografa l'acquisto, l'AI identifica il codice doganale in 3 secondi. Touch&Go organizza ritiro e spedizione verso 180+ Paesi, con esenzione IVA export automatica." />
 <meta property="og:title" content="Touch&amp;Go — Spedisci i tuoi acquisti dall'Italia" />
@@ -14,59 +14,82 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#0F0F0F; --paper:#FAF8F4; --cream:#F4EFE6;
-  --gold:#C9A96E; --gold-soft:#E8D5B0; --gold-deep:#8B6914; --clay:#7A5C0A;
-  --muted:#6B655A; --line:#EAE4D8;
-  --good:#2E7D32; --good-bg:#EAF3EA;
-  --display:'Cormorant Garamond',serif; --body:'Montserrat',system-ui,sans-serif;
+  /* ---------- Tema "Concierge" (agosto 2026) ----------
+     Sostituisce la vecchia palette carta-chiara/oro-antico con lo sfondo
+     scuro caldo e l'accento ottone di Claude Design "1c" — stessa
+     identità dell'app turista (dist/assets/style.css), qui riscritta
+     come token locali perché questa pagina non condivide quel foglio di
+     stile. Tre toni scuri invece di uno solo (--ink più scuro di --paper,
+     --cream più chiaro ancora) per mantenere il ritmo chiaro/scuro tra le
+     sezioni alternate che il sito aveva già. */
+  --ink:#14100B; --paper:#1C160E; --cream:#241D14;
+  --gold:#D9A441; --gold-soft:#E8C170; --gold-deep:#B8863A; --clay:#D9A441;
+  --muted:#A79C8A; --line:#332A1D;
+  --text:#F2EDE3; --text-faint:#6B6152;
+  --good:#6FAE68; --good-bg:#1C2318; --good-border:#2E4028; --good-text:#9AC98F;
+  --danger:#E5694F;
+  --radius:26px; --radius-sm:16px; --radius-pill:999px;
+  --display:'Familjen Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --body:'Familjen Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 html,body{overflow-x:hidden;max-width:100%}
-body{margin:0;font-family:var(--body);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+body{margin:0;font-family:var(--body);background:var(--paper);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.5}
 img{max-width:100%}
 a{color:inherit}
 .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);font-weight:600;margin-bottom:14px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);font-weight:600;margin-bottom:14px}
 
 /* Nav */
-nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px solid #262219}
+nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px solid var(--line)}
 .nav-inner{max-width:1080px;margin:0 auto;padding:16px 24px;display:flex;justify-content:space-between;align-items:center}
-.brand{font-family:var(--display);font-size:22px;color:var(--cream);letter-spacing:.02em}
+.brand{font-family:var(--display);font-size:22px;color:var(--text);letter-spacing:.02em}
 .brand em{font-style:italic;color:var(--gold)}
-.nav-links{display:flex;gap:28px;font-size:13px;color:#B8B0A0}
+.nav-links{display:flex;gap:28px;font-size:13px;color:var(--muted)}
 .nav-links a{text-decoration:none;transition:color .15s}
 .nav-links a:hover{color:var(--gold-soft)}
-.nav-cta{background:var(--gold);color:var(--ink);padding:10px 20px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em}
+.nav-cta{background:var(--gold);color:var(--ink);padding:10px 20px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em;border-radius:var(--radius-pill)}
 .nav-cta-group{display:flex;align-items:center;gap:10px}
-.nav-cta-secondary{background:transparent;color:var(--cream);border:1px solid #3A362C;padding:9px 16px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em}
+.nav-cta-secondary{background:transparent;color:var(--text);border:1px solid var(--line);padding:9px 16px;font-size:12.5px;font-weight:700;text-decoration:none;letter-spacing:.02em;border-radius:var(--radius-pill)}
 .nav-cta-secondary:hover{border-color:var(--gold-soft);color:var(--gold-soft)}
-.nav-menu-toggle{display:none;background:none;border:none;color:var(--cream);font-size:22px}
+.nav-menu-toggle{display:none;background:none;border:none;color:var(--text);font-size:22px}
 
 /* Hero — due colonne (testo + illustrazione) invece di un blocco centrato
    uniforme: più carattere, in linea con lo stile line-art già usato in
    come-funziona.html (vedi .hero-art sotto) invece di una landing page
    generica. Ricade a singola colonna centrata sotto i 900px. */
-.hero{background:var(--ink);color:var(--cream);padding:90px 0 70px}
+.hero{background:var(--ink);color:var(--text);padding:90px 0 70px}
 .hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:56px;align-items:center}
 .hero-copy{text-align:left}
 .hero-copy .eyebrow{text-align:left}
-.hero h1{font-family:var(--display);font-weight:500;font-size:48px;line-height:1.15;margin:0 0 22px}
-.hero h1 em{font-style:italic;color:var(--gold)}
-.hero p{font-size:16px;color:#C9C2B4;max-width:480px;margin:0 0 34px;line-height:1.7}
+/* Pillola "novità" — segnala che il servizio è appena arrivato prima
+   ancora del titolo, stesso trattamento a pillola morbida (fondo/bordo
+   in tinta accento a bassa opacità) della card prezzo dominante
+   nell'app. */
+.hero-badge{
+  display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:.03em;color:var(--gold-soft);padding:7px 16px;border-radius:var(--radius-pill);margin-bottom:20px;
+  background:color-mix(in srgb, var(--gold) 16%, transparent);
+  border:1px solid color-mix(in srgb, var(--gold) 38%, transparent);
+}
+.hero h1{font-family:var(--display);font-weight:600;font-size:58px;line-height:1.08;margin:0 0 22px;letter-spacing:-.01em}
+.hero h1 em{font-style:normal;color:var(--gold)}
+.hero p{font-size:16px;color:var(--muted);max-width:480px;margin:0 0 34px;line-height:1.7}
 .hero-ctas{display:flex;gap:14px;flex-wrap:wrap}
-.btn-primary{background:var(--gold);color:var(--ink);padding:15px 30px;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.03em;display:inline-block}
-.btn-outline{background:transparent;color:var(--cream);border:1px solid #3A362C;padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
-/* Come .btn-outline ma per le sezioni chiare (--paper): .btn-outline usa
-   testo/bordo chiari pensati solo per lo sfondo scuro dell'hero — su una
-   sezione chiara sarebbe testo quasi bianco su sfondo quasi bianco. */
-.btn-outline-light{background:transparent;color:var(--ink);border:1px solid var(--line);padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
+.btn-primary{background:var(--gold);color:var(--ink);padding:16px 32px;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.03em;display:inline-block;border-radius:var(--radius-pill)}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--line);padding:16px 32px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block;border-radius:var(--radius-pill)}
+/* Come .btn-outline ma per le sezioni chiare (--cream): .btn-outline usa
+   testo/bordo chiari pensati per lo sfondo più scuro dell'hero — su una
+   card chiara (--cream) userebbe un colore troppo simile allo sfondo. */
+.btn-outline-light{background:transparent;color:var(--text);border:1px solid var(--line);padding:16px 32px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block;border-radius:var(--radius-pill)}
 .hero-stats{display:flex;gap:44px;margin-top:56px;flex-wrap:wrap}
-.hero-stat b{display:block;font-family:var(--display);font-size:32px;color:var(--gold);font-weight:500}
-.hero-stat span{font-size:11px;color:#9A9284;text-transform:uppercase;letter-spacing:.08em}
+.hero-stat b{display:block;font-family:var(--display);font-size:32px;color:var(--gold);font-weight:600}
+.hero-stat span{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 
 /* Illustrazione hero — stesso linguaggio line-art (tratti sottili, doppio
    tono oro) delle slide di come-funziona.html: il pacco lasciato in
@@ -78,27 +101,29 @@ nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px sol
 /* Sections */
 section{padding:80px 0}
 .section-head{text-align:center;max-width:600px;margin:0 auto 50px}
-.section-head h2{font-family:var(--display);font-size:34px;font-weight:500;margin:0 0 14px}
+.section-head h2{font-family:var(--display);font-size:34px;font-weight:600;margin:0 0 14px}
 .section-head p{color:var(--muted);font-size:15px;line-height:1.7}
 
 /* Steps (how it works) */
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
 .step-card{background:var(--paper);padding:32px 26px}
-.step-num{font-family:var(--display);font-size:15px;color:var(--gold-deep);font-style:italic;margin-bottom:14px}
+.step-num{font-family:var(--mono);font-size:14px;color:var(--gold-deep);margin-bottom:14px}
 .step-card h3{font-size:15px;font-weight:700;margin:0 0 8px}
 .step-card p{font-size:13px;color:var(--muted);line-height:1.6;margin:0}
 
 /* Feature grid */
-.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
-.feature-card{background:#fff;padding:30px 26px}
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.feature-card{background:var(--cream);padding:30px 26px}
 .feature-icon{font-size:26px;margin-bottom:14px}
 .feature-card h3{font-family:var(--display);font-size:19px;font-weight:600;margin:0 0 8px}
 .feature-card p{font-size:13px;color:var(--muted);line-height:1.7;margin:0}
 
-/* Dark band */
-.dark-band{background:var(--ink);color:var(--cream)}
-.dark-band .section-head h2{color:var(--cream)}
-.dark-band .section-head p{color:#A9A192}
+/* Dark band — sezioni alternate più scure (--ink) rispetto al fondo
+   pagina di default (--paper), per mantenere il ritmo chiaro/scuro tra
+   le sezioni anche ora che l'intero sito è su base scura. */
+.dark-band{background:var(--ink);color:var(--text)}
+.dark-band .section-head h2{color:var(--text)}
+.dark-band .section-head p{color:var(--muted)}
 .dark-band .eyebrow{text-align:center}
 
 /* Trust row */
@@ -106,47 +131,47 @@ section{padding:80px 0}
 .trust-item{text-align:center;max-width:200px}
 .trust-item .ic{font-size:26px;margin-bottom:10px}
 .trust-item h4{font-size:13px;font-weight:700;margin:0 0 6px}
-.trust-item p{font-size:12px;color:#A9A192;margin:0;line-height:1.6}
+.trust-item p{font-size:12px;color:var(--muted);margin:0;line-height:1.6}
 
 /* Pricing / partner — un piano messo in evidenza (stesso pattern
    .highlight già usato nell'app per il prezzo abbonamento) invece di 6
    card tutte identiche: rompe la griglia uniforme e dà un punto di
    partenza a chi non sa quale piano scegliere. */
 .plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
-.plan-card{background:#fff;border:1px solid var(--line);padding:24px 20px;position:relative}
+.plan-card{background:var(--cream);border:1px solid var(--line);padding:24px 20px;position:relative;border-radius:var(--radius-sm)}
 .plan-card h4{font-family:var(--display);font-size:18px;margin:0 0 6px;font-weight:600}
 .plan-card .price{font-size:22px;font-weight:800;color:var(--gold-deep);margin-bottom:10px}
 .plan-card p{font-size:12px;color:var(--muted);margin:0;line-height:1.6}
-.plan-card.featured{border:2px solid var(--gold);background:var(--cream)}
-.plan-card-badge{position:absolute;top:-11px;left:18px;background:var(--gold);color:var(--ink);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px}
+.plan-card.featured{border:2px solid var(--gold);background:color-mix(in srgb, var(--gold) 10%, var(--cream))}
+.plan-card-badge{position:absolute;top:-11px;left:18px;background:var(--gold);color:var(--ink);font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-pill)}
 .commission-note{text-align:center;margin-top:30px;font-size:13px;color:var(--muted)}
-.commission-note b{color:var(--ink)}
+.commission-note b{color:var(--text)}
 
 /* Partner signup form — form più importante del sito (l'unico che genera
    un nuovo partner pagante): stepper a due passi veri (1. Piano → 2. I
    tuoi dati) invece di un unico blocco lineare, stesso linguaggio visivo
    degli indicatori numerati già introdotti nell'app (barra di
    avanzamento del percorso d'acquisto) per coerenza tra le due superfici. */
-.partner-signup{max-width:520px;margin:40px auto 0;background:#fff;border:1px solid var(--line);padding:28px 26px}
+.partner-signup{max-width:520px;margin:40px auto 0;background:var(--cream);border:1px solid var(--line);padding:28px 26px;border-radius:var(--radius)}
 .partner-signup h3{font-family:var(--display);font-size:20px;font-weight:600;margin:0 0 18px;text-align:center}
-.partner-signup label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);font-weight:700;margin-bottom:6px}
+.partner-signup label{display:block;font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);font-weight:700;margin-bottom:6px}
 .partner-signup .field{margin-bottom:16px}
-.partner-signup input,.partner-signup select{width:100%;border:1px solid var(--line);padding:11px 12px;font-size:13.5px;font-family:var(--body);box-sizing:border-box;background:#fff;color:var(--ink)}
-.partner-signup button{width:100%;background:var(--gold);color:var(--ink);border:none;padding:14px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px}
+.partner-signup input,.partner-signup select{width:100%;border:1px solid var(--line);padding:12px 16px;font-size:13.5px;font-family:var(--body);box-sizing:border-box;background:var(--paper);color:var(--text);border-radius:var(--radius-sm)}
+.partner-signup button{width:100%;background:var(--gold);color:var(--ink);border:none;padding:15px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px;border-radius:var(--radius-pill)}
 .partner-signup button:disabled{opacity:.6;cursor:default}
-.partner-signup .form-error{color:#B3261E;font-size:12.5px;margin-top:10px;text-align:center}
+.partner-signup .form-error{color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center}
 
 .signup-stepper{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:26px}
 .signup-step-ind{display:flex;align-items:center;gap:8px}
 .signup-step-num{
-  width:26px;height:26px;border-radius:50%;flex-shrink:0;
-  border:1.5px solid var(--line);color:var(--muted);font-family:var(--body);font-size:12px;font-weight:700;
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  border:1.5px solid var(--line);color:var(--muted);font-family:var(--mono);font-size:12px;font-weight:700;
   display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s,color .15s;
 }
-.signup-step-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
-.signup-step-ind.active .signup-step-num{background:var(--ink);border-color:var(--ink);color:#fff}
-.signup-step-ind.active .signup-step-lbl{color:var(--ink)}
-.signup-step-ind.done .signup-step-num{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+.signup-step-lbl{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.signup-step-ind.active .signup-step-num{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+.signup-step-ind.active .signup-step-lbl{color:var(--text)}
+.signup-step-ind.done .signup-step-num{background:transparent;border-color:var(--gold);color:var(--gold)}
 .signup-step-ind.done .signup-step-lbl{color:var(--gold-deep)}
 .signup-step-line{width:36px;height:1.5px;background:var(--line)}
 
@@ -159,40 +184,40 @@ section{padding:80px 0}
    override erediterebbe il text-transform:uppercase pensato per le
    etichette dei campi di testo sopra ("NOME NEGOZIO / ATTIVITÀ"), non
    adatto al nome del piano in chiaro dentro la card. */
-.partner-signup label.plan-pick{display:flex;text-transform:none;align-items:center;justify-content:space-between;gap:10px;border:1.5px solid var(--line);padding:12px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+.partner-signup label.plan-pick{display:flex;text-transform:none;align-items:center;justify-content:space-between;gap:10px;border:1.5px solid var(--line);padding:13px 18px;cursor:pointer;transition:border-color .15s,background .15s;border-radius:var(--radius-sm)}
 .plan-pick input{position:absolute;opacity:0;width:1px;height:1px}
-.plan-pick-name{font-size:13px;font-weight:600;color:var(--ink)}
-.plan-pick-price{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
-.plan-pick.picked{border-color:var(--gold);background:var(--cream)}
+.plan-pick-name{font-size:13px;font-weight:600;color:var(--text)}
+.plan-pick-price{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+.plan-pick.picked{border-color:var(--gold);background:color-mix(in srgb, var(--gold) 10%, var(--cream))}
 .plan-pick.picked .plan-pick-price{color:var(--gold-deep)}
 .plan-pick:focus-within{outline:2px solid var(--gold);outline-offset:1px}
-.btn-step-next{width:100%;background:var(--ink);color:#fff;border:none;padding:14px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px}
+.btn-step-next{width:100%;background:var(--gold);color:var(--ink);border:none;padding:15px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px;border-radius:var(--radius-pill)}
 
 /* Fattura proforma partner — stessa struttura/classi doc-card/doc-row
    della fattura proforma turista nell'app (dist/assets/app.js). */
-.doc-card{background:#fff;border:1px solid var(--line);padding:14px 16px;margin-top:18px}
+.doc-card{background:var(--paper);border:1px solid var(--line);padding:14px 16px;margin-top:18px;border-radius:var(--radius-sm)}
 .doc-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;gap:16px}
 .doc-row:last-child{border-bottom:none}
 .doc-row span{color:var(--muted)}
-.doc-row b{font-family:var(--display);font-weight:600;color:var(--ink);text-align:right}
+.doc-row b{font-family:var(--display);font-weight:600;color:var(--text);text-align:right}
 .partner-result-code{text-align:center;font-family:var(--display);font-size:26px;font-weight:700;color:var(--gold-deep);margin:0}
 .partner-result-code-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:18px 0 4px}
-.copy-code-btn{background:transparent;border:1px solid var(--gold-deep);color:var(--gold-deep);font-family:var(--body);font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:6px 14px;cursor:pointer;border-radius:2px;white-space:nowrap;transition:background .15s,color .15s}
-.copy-code-btn:hover{background:var(--gold-deep);color:#fff}
-.copy-code-btn.copied{background:var(--good);border-color:var(--good);color:#fff}
+.copy-code-btn{background:transparent;border:1px solid var(--gold-deep);color:var(--gold-deep);font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:7px 16px;cursor:pointer;border-radius:var(--radius-pill);white-space:nowrap;transition:background .15s,color .15s}
+.copy-code-btn:hover{background:var(--gold-deep);color:var(--ink)}
+.copy-code-btn.copied{background:var(--good);border-color:var(--good);color:var(--ink)}
 .partner-result-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:0}
 
 /* IVA banner */
-.iva-banner{background:var(--good-bg);border:1px solid #C9DEC9;padding:26px 30px;display:flex;align-items:center;gap:20px;max-width:760px;margin:0 auto}
+.iva-banner{background:var(--good-bg);border:1px solid var(--good-border);padding:26px 30px;display:flex;align-items:center;gap:20px;max-width:760px;margin:0 auto;border-radius:var(--radius)}
 .iva-banner .ic{font-size:30px}
 .iva-banner h3{margin:0 0 4px;font-size:16px;color:var(--good)}
-.iva-banner p{margin:0;font-size:13px;color:#3C6B3F;line-height:1.6}
+.iva-banner p{margin:0;font-size:13px;color:var(--good-text);line-height:1.6}
 
 /* Contatti — stessa struttura a card con icona già usata per il banner
    IVA sopra, invece della coppia bottone+paragrafo isolata che c'era
    prima: visivamente allineata al resto del sito invece di sembrare
    una sezione ripiegata all'ultimo momento. */
-.contact-card{background:#fff;border:1px solid var(--line);padding:34px 36px;max-width:640px;margin:0 auto;text-align:center}
+.contact-card{background:var(--cream);border:1px solid var(--line);padding:34px 36px;max-width:640px;margin:0 auto;text-align:center;border-radius:var(--radius)}
 .contact-card .ic{font-size:30px;margin-bottom:14px}
 .contact-card p.sub{font-size:12.5px;color:var(--muted);margin:16px 0 0;line-height:1.7}
 .contact-card p.sub a{color:var(--gold-deep);text-decoration:underline}
@@ -201,7 +226,7 @@ section{padding:80px 0}
    nuovo partner — prima era un link isolato, poco distinguibile dal
    resto: ora una piccola card così il turista/partner capisce subito
    che è un percorso alternativo, non parte dello stesso flusso. */
-.partner-login-note{max-width:520px;margin:26px auto 0;background:var(--cream);border:1px solid var(--line);padding:16px 20px;text-align:center}
+.partner-login-note{max-width:520px;margin:26px auto 0;background:var(--cream);border:1px solid var(--line);padding:16px 20px;text-align:center;border-radius:var(--radius-sm)}
 .partner-login-note span{display:block;font-size:11.5px;color:var(--muted);margin-bottom:8px}
 
 /* Focus states — assenti nel form di registrazione partner (unico form
@@ -210,17 +235,17 @@ section{padding:80px 0}
 a:focus-visible,button:focus-visible{outline:2px solid var(--gold-deep);outline-offset:2px}
 
 /* CTA band */
-.cta-band{background:var(--ink);color:var(--cream);text-align:center;padding:90px 0}
-.cta-band h2{font-family:var(--display);font-size:36px;font-weight:500;margin:0 0 16px}
-.cta-band p{color:#B8B0A0;font-size:15px;margin:0 0 32px}
+.cta-band{background:var(--ink);color:var(--text);text-align:center;padding:90px 0}
+.cta-band h2{font-family:var(--display);font-size:36px;font-weight:600;margin:0 0 16px}
+.cta-band p{color:var(--muted);font-size:15px;margin:0 0 32px}
 
 /* Footer */
-footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
+footer{background:var(--ink);color:var(--muted);padding:50px 0 30px;font-size:12.5px;border-top:1px solid var(--line)}
 .footer-grid{display:flex;justify-content:space-between;flex-wrap:wrap;gap:30px;margin-bottom:36px}
-.footer-col h5{color:var(--cream);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 14px}
-.footer-col a{display:block;color:#8A8577;text-decoration:none;margin-bottom:8px}
+.footer-col h5{color:var(--text);font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 14px}
+.footer-col a{display:block;color:var(--muted);text-decoration:none;margin-bottom:8px}
 .footer-col a:hover{color:var(--gold-soft)}
-.footer-bottom{border-top:1px solid #201D16;padding-top:24px;text-align:center;color:#635F53}
+.footer-bottom{border-top:1px solid var(--line);padding-top:24px;text-align:center;color:var(--text-faint)}
 
 /* ---------- Hero due colonne → una colonna (≤900px) ---------- */
 @media (max-width:900px){
@@ -323,6 +348,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
 <header class="hero">
   <div class="wrap hero-grid">
     <div class="hero-copy">
+      <div class="hero-badge">✨ Nuovo · disponibile in tutta Italia</div>
       <div class="eyebrow">Made in Italy · Spedizioni doganali · 180+ Paesi</div>
       <h1>Hai comprato qualcosa di <em>troppo bello</em> per stare in valigia?</h1>
       <p>Fotografa l'oggetto. In pochi secondi la nostra AI identifica il codice doganale, stima peso e dimensioni, e organizza il ritiro. Arriva a casa mentre sei ancora in vacanza.</p>
@@ -330,7 +356,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
         <a class="btn-primary" href="#" id="app-link-hero">Prova l'app →</a>
         <a class="btn-outline" href="#partner">Sono un partner</a>
       </div>
-      <p style="margin-top:16px;margin-bottom:0;font-size:12.5px;color:#C9C2B4">🎁 Prima spedizione senza fee di servizio — paghi solo il corriere</p>
+      <p style="margin-top:16px;margin-bottom:0;font-size:12.5px;color:var(--muted)">🎁 Prima spedizione senza fee di servizio — paghi solo il corriere</p>
       <div class="hero-stats">
         <div class="hero-stat"><b>57,4M</b><span>Turisti/anno in Italia</span></div>
         <div class="hero-stat"><b>0%</b><span>IVA su acquisti export</span></div>
@@ -598,7 +624,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <h2>Digitale nell'esecuzione, autentico nel proposito</h2>
       <p>Touch&amp;Go è un progetto pre-seed sviluppato a Catania, in fase di candidatura a Smart&amp;Start Italia.</p>
     </div>
-    <p style="max-width:640px;margin:0 auto;text-align:center;font-size:14px;color:#B8B0A0;line-height:1.8">Nasce da una convinzione semplice: l'autenticità del prodotto italiano — artigianato, moda, enogastronomia, design — non deve fermarsi alla soglia di un negozio per un problema di valigia piena. La nostra piattaforma è tecnologica nel funzionamento, ma il suo scopo resta lo stesso di sempre: portare a casa, letteralmente, le esperienze che solo l'Italia sa offrire.</p>
+    <p style="max-width:640px;margin:0 auto;text-align:center;font-size:14px;color:var(--muted);line-height:1.8">Nasce da una convinzione semplice: l'autenticità del prodotto italiano — artigianato, moda, enogastronomia, design — non deve fermarsi alla soglia di un negozio per un problema di valigia piena. La nostra piattaforma è tecnologica nel funzionamento, ma il suo scopo resta lo stesso di sempre: portare a casa, letteralmente, le esperienze che solo l'Italia sa offrire.</p>
   </div>
 </section>
 

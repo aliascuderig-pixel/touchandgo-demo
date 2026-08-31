@@ -999,6 +999,12 @@ function GuestModeBanner() {
 
 function render() {
   document.documentElement.lang = state.lang;
+  // Aggancio CSS per il tema "Manifesto" dell'area partner (agosto 2026,
+  // vedi assets/theme-manifesto.css, caricato solo su dist/index.html —
+  // MAI sui design-preview lime/corallo, che restano nel loro tema
+  // esistente anche in modalità Partner). Sopravvive allo svuotamento di
+  // #app qui sotto perché è una classe sull'elemento stesso, non un figlio.
+  app.classList.toggle("mode-partner", state.mode === "partner");
   app.innerHTML = "";
   // Spazio ospite: mostrato PRIMA del controllo onboarding qui sotto (che
   // altrimenti fa uscire da render() subito, senza mai arrivare a
@@ -1386,9 +1392,11 @@ function PartnerLoginAndHistory() {
     return wrap;
   }
 
-  // Le due cifre che il partner controlla più spesso — credito già
-  // disponibile e vendite generate — come stat-card ben visibili invece
-  // che perse tra le altre righe di un .info-card indifferenziato.
+  // Le quattro cifre che contano di più (credito, vendite, valore
+  // generato, commissioni) come KPI ben visibili invece che perse tra le
+  // altre righe di un .info-card indifferenziato — nel tema Manifesto
+  // (area partner) diventano una griglia a 4 colonne con divisori, per
+  // le stesse identiche cifre reali di sempre (nessun nuovo calcolo).
   const heroGrid = el("div", "partner-hero-grid");
   heroGrid.innerHTML = `
     <div class="stat-card highlight">
@@ -1398,6 +1406,14 @@ function PartnerLoginAndHistory() {
     <div class="stat-card">
       <div class="stat-val">${stats.salesCount}</div>
       <div class="stat-lbl">Vendite registrate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">€${stats.totalSalesValue.toFixed(2)}</div>
+      <div class="stat-lbl">Valore generato</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">€${stats.totalCommission.toFixed(2)}</div>
+      <div class="stat-lbl">Commissioni (10%)</div>
     </div>`;
   wrap.appendChild(heroGrid);
 
@@ -1434,9 +1450,7 @@ function PartnerLoginAndHistory() {
     const summary = el("div", "info-card");
     summary.innerHTML = `
       <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
-      ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
-      <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
-      <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
+      ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}`;
     tabContent.appendChild(summary);
 
     // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a

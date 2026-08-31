@@ -1,0 +1,87 @@
+/* Tema "Manifesto" (agosto 2026) — area partner: sfondo nero puro, angoli
+   squadrati, Space Grotesk/IBM Plex Mono, griglia KPI con divisori sottili
+   — tono denso e funzionale, "come un documento doganale", deliberatamente
+   diverso dal tema "Concierge" caldo del resto dell'app turista.
+
+   Attivato SOLO quando #app porta la classe .mode-partner, impostata da
+   render() in app.js quando state.mode === "partner" (mai scritta altrove,
+   sola lettura dello stato esistente — nessuna nuova logica). Caricato
+   SOLO da dist/index.html (il tema di produzione): le pagine
+   /design-preview/lime/ e /design-preview/corallo/ non includono questo
+   file, quindi la loro area partner resta nel tema esistente lime/corallo,
+   invariata — stesso principio di isolamento di theme-lime.css/
+   theme-corallo.css, usato qui al contrario (un file in più solo sulla
+   produzione, invece che sui design-preview). */
+#app.mode-partner{
+  --ink:#0A0806;
+  --ink-soft:#0A0806;
+  --paper:#0A0806;
+  --cream:#120E0A;
+  --surface:#120E0A;
+
+  --gold:#D9A441;
+  --gold-soft:#D9A441;
+  --gold-deep:#B8863A;
+  --gold-hot:#D9A441;
+  --clay:#D9A441;
+
+  --ivory:#F2EDE3;
+  --muted:#8A8071;
+  --line:rgba(242,237,227,.14);
+  --text:#F2EDE3;
+  --text-2:#F2EDE3;
+  --text-3:#F2EDE3;
+  --text-warm:#F2EDE3;
+  --text-secondary:#8A8071;
+  --text-faint:#5F594C;
+  --tip-text:#F2EDE3;
+
+  --muted-on-ink:#8A8071;
+  --label-on-ink:#6E6656;
+  --strike-on-ink:#6E6656;
+  --text-on-ink-soft:#D8D0C0;
+  --ink-border:rgba(242,237,227,.14);
+  --header-border:rgba(242,237,227,.14);
+  --ink-border-soft:rgba(242,237,227,.14);
+
+  --display:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --body:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+
+  /* Nessun angolo arrotondato — unica eccezione i controlli intrinsecamente
+     circolari (avatar, pulsanti icona: usano border-radius:50% letterale,
+     non questi token, quindi restano cerchi anche qui). */
+  --radius:0;
+  --radius-sm:0;
+  --radius-pill:0;
+}
+
+/* Titoli/etichette in maiuscolo con tenuta stretta (letter-spacing
+   negativo) — stesso principio richiesto per il CRM. */
+#app.mode-partner .tg-lbl{letter-spacing:-.01em}
+#app.mode-partner .partner-tab-btn{
+  font-family:var(--mono);text-transform:uppercase;letter-spacing:.02em;font-size:10.5px;
+}
+#app.mode-partner .stat-val{letter-spacing:-.02em}
+#app.mode-partner .stat-lbl{font-family:var(--mono);text-transform:uppercase;letter-spacing:.03em;font-size:9px}
+
+/* KPI a 4 colonne con divisori sottili tra le celle (stessa tecnica già
+   usata da .result-grid: gap di 1px nel colore di --line, sfondo pieno
+   sulla singola cella) invece di card separate con margine tra loro. */
+#app.mode-partner .partner-hero-grid{
+  grid-template-columns:repeat(2,1fr);
+  gap:1px;
+  background:var(--line);
+  border:1px solid var(--line);
+  margin-bottom:0;
+}
+@media (min-width:420px){
+  #app.mode-partner .partner-hero-grid{grid-template-columns:repeat(4,1fr)}
+}
+#app.mode-partner .stat-card{background:var(--ink);border:none}
+#app.mode-partner .stat-card.highlight{background:var(--ink);border:none;border-left:2px solid var(--gold)}
+
+/* Tab bar: sottolineatura netta invece che smussata, campo dati invece
+   di controllo "morbido". */
+#app.mode-partner .partner-tabs{border-bottom:1px solid var(--line)}
+#app.mode-partner .partner-tab-btn.on{border-bottom-color:var(--gold)}

@@ -33,4 +33,16 @@
   --clay:#FF8E73;
 
   --danger:#FF6B6B;
+
+  /* Font e raggio: da agosto 2026 il tema di produzione è passato a un
+     nuovo carattere ("Concierge": Familjen Grotesk, angoli molto
+     arrotondati) — questo tema non lo segue, congelato ai valori di
+     sempre (Cormorant Garamond/Montserrat, angoli piatti), stesso
+     principio di theme-lime.css (vedi commento lì). */
+  --display:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --body:'Montserrat',system-ui,-apple-system,sans-serif;
+  --mono:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --radius:2px;
+  --radius-sm:2px;
+  --radius-pill:2px;
 }

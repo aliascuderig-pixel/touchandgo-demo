@@ -142,6 +142,61 @@ Due bug trovati e corretti durante questa passata:
 - **Listino piani**: il piano "Boutique" (il più accessibile, pensato per il tipo di negozio più comune tra i target) è ora messo in evidenza (`.plan-card.featured`, bordo oro + badge "Consigliato") invece che identico agli altri 5 — stesso pattern `.highlight` già usato nell'app per il prezzo abbonamento. "Consigliato" invece di un'affermazione tipo "il più scelto": nessun dato reale sull'effettiva distribuzione delle registrazioni per suggerire una vera statistica d'uso.
 - **Form di registrazione partner — stepper a due passi veri** (il form più importante del sito, l'unico che genera un nuovo partner pagante): "1. Piano" mostra i 7 piani come card selezionabili (radio input, non più una `<select>`) con lo stesso indicatore numerato a cerchi usato dalla barra di avanzamento dell'app (coerenza visiva tra le due superfici); "2. I tuoi dati" mostra nome/email e il submit. Un "← Cambia piano" riporta al passo 1. I valori dei piani (`value="boutique"`, `"enoteche"`, ecc.) sono rimasti **identici** a quelli della vecchia `<select>` — il contratto con `action: "register-partner"` in `sync.js` non è cambiato, solo il modo in cui il turista/partner sceglie visivamente. Bug trovato e corretto durante la verifica: le card-piano sono `<label>` dentro `.partner-signup`, che aveva già una regola `text-transform:uppercase` pensata per le etichette dei campi di testo ("NOME NEGOZIO / ATTIVITÀ") — ereditata per errore anche dal nome del piano ("BOUTIQUE" invece di "Boutique"), corretto con un override mirato.
 
+### Terza passata — due nuove direzioni visive, "Concierge" e "Manifesto" (agosto 2026)
+
+Le prime due passate erano leggibilità e struttura sullo stesso linguaggio visivo di sempre (superficie chiara, oro antico, angoli piatti). Questa terza sostituisce quel linguaggio con **due direzioni diverse per parti diverse dell'app**, esplorate su Claude Design con i dati reali del progetto (fee €39/€19, margine 25%, commissione 10%, i 7 piani) — scelta intenzionale, non un errore di coerenza:
+
+- **"Concierge"** — app turista (`dist/assets/style.css`, tema base) e sito istituzionale (`dist/site/index.html`): tono caldo e accogliente, sfondo bruno scuro, accento ottone, angoli molto arrotondati.
+- **"Manifesto"** — area partner (dentro la stessa app, `PartnerScreen`): tono denso e funzionale "come un documento doganale", nero puro, angoli squadrati, griglia KPI con divisori. Lo stesso trattamento è stato applicato anche al CRM (repository `touchandgo-internal`, vedi la copia di questo file lì).
+
+**Vincolo guida di tutta questa passata**: i temi lime e corallo (`dist/assets/theme-lime.css`, `theme-corallo.css`, raggiungibili solo da `/design-preview/lime/` e `/design-preview/corallo/`) dovevano restare **esattamente come prima** — non è stata una loro sostituzione, solo un refresh del tema di produzione. Verificato esplicitamente (screenshot + lettura dei valori calcolati via browser) che entrambi i temi mantengono il font (Cormorant Garamond/Montserrat), gli angoli piatti e la propria palette, sia in modalità Turista sia in modalità Partner.
+
+#### Token "Concierge" (`dist/assets/style.css`, `:root`)
+
+| Token | Valore | Uso |
+|---|---|---|
+| `--ink` / `--paper` | `#14100B` | Sfondo pagina e "chrome" — ora coincidono (l'intera app è scura, non solo la chrome su una pagina chiara come prima) |
+| `--cream` / `--surface` | `#241D14` | Sfondo delle card, un tono più chiaro della pagina |
+| `--gold` / `--gold-hot` / `--clay` | `#D9A441` | Accento primario (unico, non più 3 varianti distinte come nel vecchio oro antico) |
+| `--gold-soft` | `#E8C170` | Accento chiaro (testo/icone su fondo `--ink`) |
+| `--gold-deep` | `#B8863A` | Accento scuro (badge, divisori, testo su `--surface`) |
+| `--text` / `--ivory` | `#F2EDE3` | Testo primario |
+| `--muted` | `#A79C8A` | Testo secondario |
+| `--display` / `--body` | `'Familjen Grotesk'` | Titoli e corpo (era Cormorant Garamond/Montserrat) |
+| `--mono` | `'IBM Plex Mono'` | Solo elementi tecnici minori (etichette maiuscole piccole, orari) — era Cormorant Garamond |
+| `--radius` / `--radius-sm` | `28px` / `20px` | Raggio delle card (era `2px`, design piatto) |
+| `--radius-pill` | `999px` (**nuovo token**) | Raggio dei pulsanti — separato da `--radius-sm` apposta: prima i pulsanti riusavano lo stesso token piccolo delle card, che ora deve restare un raggio "da card" e non "da pillola" |
+
+I banner di stato (`--good`/`--good-bg`, `--warn`/`--warn-bg`, `--alert-bg`...) sono stati riscuriti in coppia (sfondo scuro proprio + testo chiaro) invece di lasciarli chiari come nel vecchio tema — nel vecchio tema erano pensati per restare chiari "in ogni tema" perché il resto dell'app era chiaro; ora che il tema di produzione stesso è scuro, un banner chiaro sfondo-panna sarebbe l'elemento più stonato della pagina. **Lime e corallo non seguono questo cambio** (i loro banner di stato restano quelli di sempre, chiari, per lo stesso motivo per cui l'app lì resta chiara).
+
+**Componenti aggiornati per il nuovo linguaggio "molto arrotondato"**: `.btn-primary`/`.btn-secondary` ora pillola (`--radius-pill`) invece del vecchio raggio piccolo condiviso con le card; `.capture-card`/`.hs-block`/`.pack-card` (che usano `--ink` come sfondo, ora identico al fondo pagina) hanno guadagnato un bordo proprio (`var(--ink-border)`) per restare distinguibili dalla pagina, cosa che prima non serviva perché il contrasto chiaro/scuro bastava da solo; una singola regola CSS applica `--radius-sm` a tutta la famiglia di card "utility" (`.info-card`, `.qr-card`, `.dest-field`, `.queue-item`, `.history-item`, `.doc-card`...) che prima non avevano alcun raggio.
+
+**`.price-hero`** (la card prezzo dominante, introdotta nella passata precedente) ora ha il gradiente morbido richiesto: `background-image:linear-gradient(165deg, color-mix(in srgb, var(--gold) 22%, transparent) 0%, color-mix(in srgb, var(--gold) 5%, transparent) 70%)` sopra un fondo `--ink`, bordo `color-mix(in srgb, var(--gold) 34%, transparent)`. Usa `color-mix()` sul token `--gold` invece di un `rgba()` letterale sull'ottone Concierge apposta: così lime/corallo ereditano lo stesso gradiente nella propria tinta (verde/corallo) invece di uno estraneo alla loro identità — la stessa card, letta nei tre temi, resta "quella con lo sfondo caldo che segnala il numero che conta", cambia solo il colore.
+
+**Font**: caricato in `dist/index.html` (Familjen Grotesk + IBM Plex Mono, più Space Grotesk per il tema Manifesto sotto) e in `dist/site/index.html` (Familjen Grotesk + IBM Plex Mono) tramite lo stesso pattern `<link>` già usato per i font precedenti. **`dist/design-preview/lime/index.html` e `corallo/index.html` NON sono stati toccati** — caricano ancora solo Cormorant Garamond/Montserrat, coerente col fatto che quei temi restano sul font di sempre (congelato esplicitamente in `theme-lime.css`/`theme-corallo.css`, vedi sotto).
+
+**Isolamento dei temi lime/corallo**: prima di questa passata, quei due file sovrascrivevano solo colori/accento (font e raggio restavano condivisi col tema base, "non modificati" per scelta esplicita, vedi sezione Temi più sopra). Ora che il tema base cambia radicalmente proprio su font e raggio, quella condivisione avrebbe silenziosamente cambiato anche lime/corallo — corretto aggiungendo a entrambi i file l'esplicito congelamento di `--display`/`--body`/`--mono`/`--radius`/`--radius-sm`/`--radius-pill` ai valori di sempre. I colori restavano già isolati di loro (sovrascrivono già tutti i token che contano), quindi non hanno richiesto alcuna modifica.
+
+**Sito istituzionale**: `dist/site/index.html` ha il proprio blocco `:root` indipendente (non condivide `assets/style.css`), riscritto con la stessa palette Concierge ma tre toni scuri distinti invece di uno (`--ink` più scuro di `--paper`, `--cream` più chiaro ancora) per mantenere il ritmo chiaro/scuro tra le sezioni alternate (`.dark-band` più scura, sezioni normali sul tono medio) che il sito aveva già prima. Aggiunta la pillola "✨ Nuovo · disponibile in tutta Italia" sopra il titolo hero (nuovo elemento, `.hero-badge`), titolo portato a 58px, un piano del listino partner messo in evidenza (già fatto nella passata precedente, qui solo ridipinto). Ogni sfondo card prima hardcoded `#fff`/colori letterali è stato tokenizzato (`var(--cream)`, `var(--paper)`, ecc.) per seguire la stessa palette scura.
+
+#### Token "Manifesto" (area partner — `dist/assets/theme-manifesto.css`, nuovo file)
+
+Non un refactor dei token esistenti in `style.css` come per Concierge, ma un **file separato**, caricato SOLO da `dist/index.html`, che sovrascrive i token invertibili scoped sotto `#app.mode-partner` (classe che `render()` in `app.js` alterna su `#app` in base a `state.mode` — sola lettura dello stato esistente, nessuna nuova logica). Stesso principio di isolamento di `theme-lime.css`/`theme-corallo.css`, usato al contrario: un file in più solo sulla produzione, mai incluso nei design-preview, così l'area partner di lime/corallo resta nel loro tema esistente anche in modalità Partner.
+
+| Token | Valore |
+|---|---|
+| `--ink` / `--paper` / `--cream` / `--surface` | `#0A0806` / `#0A0806` / `#120E0A` / `#120E0A` — nero puro, non il bruno caldo di Concierge |
+| `--gold` (famiglia) | `#D9A441` — stesso accento di Concierge, identità di brand condivisa |
+| `--display` / `--body` | `'Space Grotesk'` |
+| `--mono` | `'IBM Plex Mono'` |
+| `--radius` / `--radius-sm` / `--radius-pill` | `0` — nessun angolo arrotondato, unica eccezione i controlli intrinsecamente circolari (avatar, pulsanti icona) che usano `border-radius:50%` letterale, non questi token |
+
+Perché uno scoping via classe invece di editare `style.css` direttamente (come per Concierge): i colori sono facili da isolare per tema (ogni tema sovrascrive già lo stesso set di token), ma `#app.mode-partner` ha specificità più alta di un semplice `:root` — se i suoi token fossero stati scritti in `style.css` (caricato ovunque), avrebbero vinto sulla `:root` di `theme-lime.css`/`theme-corallo.css` anche lì, rompendo l'area partner di quei due temi. Il file separato, caricato solo in produzione, evita il problema alla radice.
+
+**KPI a 4 colonne**: il riepilogo partner (`.partner-hero-grid`, prima 2 stat-card: credito, vendite) ora mostra 4 cifre reali — aggiunte "Valore generato" e "Commissioni (10%)", rimosse dalla card `.info-card` sottostante dov'erano semplici righe di testo (nessun nuovo dato, solo spostate). La griglia a 4 colonne con divisori sottili (`gap:1px` nel colore di `--line`, stessa tecnica già usata da `.result-grid`) è definita in `theme-manifesto.css`, quindi visibile solo in produzione — su lime/corallo il riepilogo resta a 2 colonne come sempre (il markup JS produce comunque 4 card ovunque, ma senza il file Manifesto la griglia sottostante resta quella di sempre a 2 colonne, quindi le 4 card vanno semplicemente a capo su due righe — nessuna rottura, solo un layout leggermente diverso con più informazione visibile).
+
+**Titoli/numeri**: `.tg-lbl`, `.partner-tab-btn` e `.stat-lbl` guadagnano `letter-spacing` negativo/font mono maiuscolo sotto Manifesto; `.stat-val` (i numeri grandi) tenuta stretta via `letter-spacing:-.02em`. La sottolineatura della scheda attiva nella tab bar usa lo stesso accento oro.
+
 ---
 
 ## CRM interno, area investitori e kit riservato
