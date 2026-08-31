@@ -1016,6 +1016,7 @@ function render() {
   else if (state.screen === "dashboard") app.appendChild(DashboardScreen());
   else if (state.screen === "documents") app.appendChild(DocumentsScreen());
   else if (state.screen === "package-check") app.appendChild(PackageCheckScreen());
+  else if (state.screen === "review") app.appendChild(ReviewScreen());
   if (state.screen === "home") app.appendChild(Footer());
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
@@ -2877,7 +2878,240 @@ function confirmDelivery(item) {
   saveHistory();
   savePending();
   syncPurchaseToCRM(item);
+  // Touch&Go Broadcasting: subito dopo la conferma di consegna, invita il
+  // turista a lasciare una recensione della sua esperienza (privata, mai
+  // pubblicata in automatico — vedi ReviewScreen() sotto) — ma solo se non
+  // ne ha già lasciata una per questo acquisto su questo dispositivo.
+  if (!isReviewed(item.id)) {
+    state.reviewingPurchaseId = item.id;
+    state.reviewReturnTo = "history";
+    state.reviewDraftRating = 0;
+    state.reviewDraftText = "";
+    state.reviewJustSubmitted = false;
+    state.reviewSubmitError = null;
+    state.screen = "review";
+  }
   render();
+}
+
+// ---------------- Recensione post-consegna (Touch&Go Broadcasting) ----------------
+// La recensione è sempre privata: nessuna pubblicazione automatica da
+// nessuna parte, solo lo staff (dal CRM in touchandgo-internal) decide se
+// e quando pubblicarla sui canali social di Touch&Go — vedi MANUALE.md.
+
+const REVIEW_TEXT_MAX_LENGTH = 600;
+
+// Trova un acquisto per id tra quelli già noti al dispositivo (in corso o
+// nello storico) o, se raggiunto da un link/QR di recensione da un altro
+// dispositivo (vedi captureReviewFromUrl()), tra quello recuperato dal
+// server con ensureReviewItem(). Stesso pattern di lookup già usato in
+// PackageCheckScreen().
+function findPurchaseById(id) {
+  return (
+    state.pendingItems.find((it) => it.id === id) ||
+    state.purchaseHistory.find((it) => it.id === id) ||
+    (state.reviewItem && state.reviewItem.id === id ? state.reviewItem : null) ||
+    null
+  );
+}
+
+// Tracciamento locale, solo lato client, di quali acquisti hanno già una
+// recensione inviata da questo dispositivo — evita di ripresentare
+// l'invito/il form dopo l'invio. Deliberatamente NON scritto sul record
+// dell'acquisto in "purchases" (nessuna modifica alla struttura di quello
+// store): la recensione vive per intero nel proprio store "reviews".
+function loadReviewedIds() {
+  try {
+    const raw = localStorage.getItem("tg_reviewed_ids");
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+function markReviewed(purchaseId) {
+  try {
+    const ids = loadReviewedIds();
+    if (!ids.includes(purchaseId)) {
+      ids.push(purchaseId);
+      localStorage.setItem("tg_reviewed_ids", JSON.stringify(ids));
+    }
+  } catch (e) {}
+}
+function isReviewed(purchaseId) {
+  return loadReviewedIds().includes(purchaseId);
+}
+
+// Un link di recensione (?review=<purchaseId>, vedi captureReviewFromUrl())
+// può essere aperto su un dispositivo diverso da quello che ha registrato
+// l'acquisto — in quel caso l'oggetto non è in state.pendingItems/
+// purchaseHistory locali. Lo recupera dal server riusando l'azione
+// "get-purchases" di sync.js (già pensata per prendere acquisti noti per
+// id, mai l'intero elenco) invece di introdurre un nuovo endpoint.
+async function ensureReviewItem() {
+  const id = state.reviewingPurchaseId;
+  if (!id || findPurchaseById(id) || state.reviewItemFetchAttempted) return;
+  state.reviewItemFetchAttempted = true;
+  try {
+    const res = await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get-purchases", ids: [id] }),
+    });
+    const data = await res.json();
+    if (data && Array.isArray(data.items) && data.items[0]) {
+      state.reviewItem = data.items[0];
+      render();
+    }
+  } catch (e) {}
+}
+
+async function submitReview(item) {
+  const rating = state.reviewDraftRating;
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5 || state.reviewSubmitting) return;
+  state.reviewSubmitting = true;
+  state.reviewSubmitError = null;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/save-review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        purchaseId: item.id,
+        shipmentGroupCode: item.shipmentGroupCode || null,
+        partnerCode: item.partnerCode || null,
+        rating,
+        text: (state.reviewDraftText || "").trim(),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Invio non riuscito, riprova.");
+    }
+    markReviewed(item.id);
+    state.reviewJustSubmitted = true;
+    state.reviewDraftRating = 0;
+    state.reviewDraftText = "";
+  } catch (e) {
+    state.reviewSubmitError = e.message || "Invio non riuscito, riprova.";
+  } finally {
+    state.reviewSubmitting = false;
+    render();
+  }
+}
+
+// Link/QR di condivisione per completare la recensione più tardi o da un
+// altro dispositivo — stesso pattern di PartnerQRSection() (parametro in
+// query catturato all'avvio, vedi captureReviewFromUrl()) e stesso
+// generatore qrCodeUrl() già usato per il QR di deposito/negozio.
+async function shareReviewLink(url) {
+  const text = "Lascia la tua recensione della tua esperienza con Touch&Go:";
+  try {
+    if (navigator.share) {
+      await navigator.share({ text, title: "Recensione Touch&Go", url });
+      return;
+    }
+  } catch (e) {
+    // utente ha annullato o condivisione non riuscita — fallback su clipboard
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    alert("Link copiato — incollalo dove preferisci.");
+  } catch (e) {
+    alert("Copia manualmente questo link: " + url);
+  }
+}
+
+function ReviewScreen() {
+  const wrap = el("div", "section review-screen");
+  const back = el("div", "back", "← Torna allo storico");
+  back.addEventListener("click", () => {
+    state.screen = state.reviewReturnTo || "history";
+    render();
+  });
+  wrap.appendChild(back);
+  wrap.appendChild(el("div", "step-lbl", "Com'è andata con Touch&Go?"));
+
+  const purchaseId = state.reviewingPurchaseId;
+  const item = findPurchaseById(purchaseId);
+
+  if (!item) {
+    wrap.appendChild(el("div", "identify-intro", "Stiamo recuperando il tuo acquisto…"));
+    ensureReviewItem();
+    return wrap;
+  }
+
+  wrap.appendChild(
+    el(
+      "div",
+      "review-privacy-note",
+      "La tua recensione resta privata: la vede solo il nostro staff, che decide se e quando pubblicarla sui canali social di Touch&Go."
+    )
+  );
+
+  const alreadyDone = isReviewed(purchaseId) || state.reviewJustSubmitted;
+
+  if (alreadyDone) {
+    wrap.appendChild(el("div", "review-thanks", "✓ Grazie, la tua recensione è stata inviata."));
+  } else {
+    const currentRating = state.reviewDraftRating || 0;
+    const starsRow = el("div", "review-stars");
+    for (let i = 1; i <= 5; i++) {
+      const star = el("button", "review-star" + (i <= currentRating ? " active" : ""), i <= currentRating ? "★" : "☆");
+      star.type = "button";
+      star.setAttribute("aria-label", `${i} stelle`);
+      star.addEventListener("click", () => {
+        state.reviewDraftRating = i;
+        render();
+      });
+      starsRow.appendChild(star);
+    }
+    wrap.appendChild(starsRow);
+
+    const textarea = el("textarea", "review-textarea");
+    textarea.placeholder = "Raccontaci com'è andata (facoltativo)";
+    textarea.maxLength = REVIEW_TEXT_MAX_LENGTH;
+    textarea.value = state.reviewDraftText || "";
+    wrap.appendChild(textarea);
+    addVoiceButton(textarea);
+    // Aggiornato leggendo/scrivendo direttamente il nodo, non con un
+    // render() completo ad ogni tasto premuto — altrimenti la textarea
+    // verrebbe ricreata da zero (app.innerHTML = "" in render()) e perderebbe
+    // focus/posizione del cursore mentre si scrive.
+    const charCount = el("div", "review-char-count", `${(state.reviewDraftText || "").length}/${REVIEW_TEXT_MAX_LENGTH}`);
+    textarea.addEventListener("input", (e) => {
+      state.reviewDraftText = e.target.value;
+      charCount.textContent = `${e.target.value.length}/${REVIEW_TEXT_MAX_LENGTH}`;
+    });
+    wrap.appendChild(charCount);
+
+    if (state.reviewSubmitError) {
+      wrap.appendChild(el("div", "alert", `⚠️ ${state.reviewSubmitError}`));
+    }
+
+    const submitBtn = el(
+      "button",
+      "btn-primary review-submit-btn",
+      state.reviewSubmitting ? "Invio in corso…" : "Invia recensione"
+    );
+    submitBtn.disabled = !currentRating || state.reviewSubmitting;
+    submitBtn.addEventListener("click", () => submitReview(item));
+    wrap.appendChild(submitBtn);
+  }
+
+  const reviewUrl = `${window.location.origin}/?review=${encodeURIComponent(purchaseId)}`;
+  const qrUrl = qrCodeUrl(encodeURIComponent(reviewUrl), 220);
+  wrap.appendChild(el("div", "review-share-note", "Preferisci farlo più tardi o da un altro dispositivo? Scansiona o condividi questo QR/link."));
+  const qrCard = el("div", "qr-card");
+  qrCard.innerHTML = `
+    <img src="${qrUrl}" alt="QR per la recensione" class="qr-img" />
+    <div class="qr-note">Riporta a questa stessa schermata di recensione</div>`;
+  wrap.appendChild(qrCard);
+  const shareBtn = el("button", "btn-secondary", "📤 Condividi il link della recensione");
+  shareBtn.addEventListener("click", () => shareReviewLink(reviewUrl));
+  wrap.appendChild(shareBtn);
+
+  return wrap;
 }
 
 function pickupPointUpdateBanner(item) {
@@ -4641,6 +4875,27 @@ function redeemPromoCode() {
 capturePromoCode();
 if (state.promoCode) checkPromoCode(state.promoCode);
 loadHistory();
+
+// Recensione raggiunta da un link/QR condiviso (?review=<purchaseId>) —
+// stesso pattern di capturePartnerCode()/captureModeFromUrl()/
+// capturePromoCode() sopra: un parametro letto una volta all'avvio. Va
+// dopo loadHistory() così findPurchaseById() può già trovare l'acquisto
+// tra quelli noti a questo dispositivo, prima di ricorrere a
+// ensureReviewItem() (fetch dal server) per il caso "altro dispositivo".
+function captureReviewFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("review");
+    if (fromUrl) {
+      state.reviewingPurchaseId = fromUrl.trim();
+      state.reviewReturnTo = "home";
+      state.screen = "review";
+    }
+  } catch (e) {}
+}
+
+captureReviewFromUrl();
+if (state.reviewingPurchaseId) ensureReviewItem();
 
 // Spazio ospite (continuità operativa, vedi MANUALE.md): GUEST_MODE è una
 // variabile d'ambiente Netlify letta solo dalle Netlify Functions — questo
