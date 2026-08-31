@@ -1,66 +1,73 @@
 :root{
-  --ink:#0F0F0F;
-  --ink-soft:#161616;
-  --cream:#F4EFE6;
-  --paper:#FAF8F4;
-  --gold:#C9A96E;
-  --gold-soft:#E8D5B0;
-  --gold-deep:#8B6914;
-  --gold-hot:#F0C877;
-  --clay:#7A5C0A;
-  --ivory:#F4EFE6;
-  --muted:#777;
-  --line:#EAE4D8;
-  --good:#2E7D32;
-  --good-bg:#EAF3EA;
-  --warn:#7A5C0A;
-  --warn-bg:#FFF8EC;
-  --radius:2px;
-  --radius-sm:2px;
+  /* ---------- Tema base "Concierge" (agosto 2026) ----------
+     Sostituisce la vecchia palette carta-chiara/oro-antico con lo sfondo
+     scuro caldo e l'accento ottone di Claude Design "1c" — stessa identità
+     su tutto il percorso turista e sul sito. I temi lime/corallo restano
+     invariati: non condividono più questi token invertibili (vedi il loro
+     stesso file, che ora li congela ai valori precedenti), quindi questo
+     refresh riguarda solo il tema di produzione. Vedi MANUALE.md, sezione
+     Temi, per il modello completo. */
+  --ink:#14100B;
+  --ink-soft:#1C160E;
+  --cream:#241D14;
+  --paper:#14100B;
+  --gold:#D9A441;
+  --gold-soft:#E8C170;
+  --gold-deep:#B8863A;
+  --gold-hot:#D9A441;
+  --clay:#D9A441;
+  --ivory:#F2EDE3;
+  --muted:#A79C8A;
+  --line:#332A1D;
+  --good:#6FAE68;
+  --good-bg:#1C2318;
+  --warn:#D9A441;
+  --warn-bg:#241D14;
+  --radius:28px;
+  --radius-sm:20px;
+  --radius-pill:999px;
   --shadow:none;
-  --display:'Cormorant Garamond',ui-serif,Georgia,serif;
-  --body:'Montserrat',system-ui,-apple-system,sans-serif;
-  --mono:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --display:'Familjen Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --body:'Familjen Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
 
-  /* ---------- Design tokens aggiunti per i temi lime/corallo (TOU-21) ----------
-     Ogni valore qui sotto è identico al colore letterale che sostituisce: il
-     refactor da solo non cambia un solo pixel della produzione. I temi
-     (assets/theme-lime.css, assets/theme-corallo.css) sovrascrivono solo il
-     sottoinsieme di questi token che ha senso invertire (superficie/testo
-     principali + famiglia accento); banner di stato, badge camera e la
-     "chrome" scura (header, capture-card, hs-block...) restano fissi in
-     tutti i temi — vedi MANUALE.md, sezione Temi, per il modello completo. */
-  --surface:#fff;
-  --text:#0F0F0F;
-  --text-2:#333;
-  --text-3:#222;
-  --text-warm:#33301F;
-  --text-secondary:#444;
-  --text-faint:#999;
-  --tip-text:#333;
-  --danger:#B33;
-  --alert-bg:#FBEAE6;
-  --alert-border:#EFC5BA;
-  --success-border:#C9DEC9;
-  --success-text:#3C6B3F;
-  --tip-bg:#FBF0DA;
-  --tip-border:#E9D5A6;
-  --assistant-tip-bg:#FFFBF3;
-  --offline-bg:#3A2A12;
-  --ink-glow:#241d12;
-  --onboarding-glow:#1a1710;
-  --live-dot:#5FAE6E;
+  /* ---------- Design tokens invertibili (TOU-21, poi Concierge) ----------
+     Sottoinsieme di superficie/testo/accento che ogni tema (produzione,
+     lime, corallo) può sovrascrivere per conto proprio — qui i valori di
+     produzione sono ora lo sfondo scuro caldo Concierge invece della carta
+     chiara di prima. Banner di stato, badge camera e "chrome" restano
+     fissi in tutti i temi — vedi MANUALE.md, sezione Temi. */
+  --surface:#241D14;
+  --text:#F2EDE3;
+  --text-2:#F2EDE3;
+  --text-3:#F2EDE3;
+  --text-warm:#F2EDE3;
+  --text-secondary:#A79C8A;
+  --text-faint:#7A6F5C;
+  --tip-text:#F2EDE3;
+  --danger:#E5694F;
+  --alert-bg:#2B1B14;
+  --alert-border:#5A2E1E;
+  --success-border:#2E4028;
+  --success-text:#9AC98F;
+  --tip-bg:#241D14;
+  --tip-border:#4A3B22;
+  --assistant-tip-bg:#1C160E;
+  --offline-bg:#2B1B14;
+  --ink-glow:#2B2013;
+  --onboarding-glow:#1F180D;
+  --live-dot:#8FCB84;
   /* Puntini/bordo dell'onboarding: stanno sempre sullo sfondo scuro fisso
      di .ob-stage (mai sulla superficie principale invertibile), quindi
      restano chiari in ogni tema — non riusano --line, che invece si scurisce. */
   --line-on-ink:#EAE4D8;
-  --ink-border:#34301F;
-  --header-border:#2A251C;
-  --ink-border-soft:#333;
-  --muted-on-ink:#B8B0A0;
-  --label-on-ink:#7A7568;
+  --ink-border:#332A1D;
+  --header-border:#2B2317;
+  --ink-border-soft:#3A2F1F;
+  --muted-on-ink:#C2B7A3;
+  --label-on-ink:#8C8168;
   --strike-on-ink:#9a9284;
-  --text-on-ink-soft:#d8d2c4;
+  --text-on-ink-soft:#DDD3C2;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -117,6 +124,23 @@ button{font-family:inherit;cursor:pointer}
 .toggle-btn.active{background:var(--gold-soft);color:var(--ink)}
 .toggle-btn:not(.active){background:transparent;border-color:var(--ink-border);color:var(--muted-on-ink)}
 
+/* ---------- Barra di avanzamento percorso d'acquisto ---------- */
+.progress-bar{background:var(--ink);padding:12px 16px 14px;display:flex;align-items:flex-start;border-bottom:1px solid var(--header-border)}
+.progress-step{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 1 auto;min-width:0}
+.progress-dot{
+  width:22px;height:22px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;font-weight:700;
+  border:1.5px solid var(--ink-border);color:var(--muted-on-ink);background:transparent;
+}
+.progress-step.active .progress-dot{background:var(--gold-soft);color:var(--ink);border-color:var(--gold-soft)}
+.progress-step.done .progress-dot{background:transparent;color:var(--gold-soft);border-color:var(--gold-soft)}
+.progress-lbl{font-size:8.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted-on-ink);white-space:nowrap}
+.progress-step.active .progress-lbl{color:var(--ivory)}
+.progress-step.done .progress-lbl{color:var(--gold-soft)}
+.progress-connector{flex:1 1 auto;height:1.5px;background:var(--ink-border);margin:10px 3px 0;min-width:6px}
+.progress-connector.done{background:var(--gold-soft)}
+
 /* ---------- Sections ---------- */
 .section{padding:26px 20px}
 .eyebrow{
@@ -132,14 +156,14 @@ button{font-family:inherit;cursor:pointer}
 .hero p{font-size:14.5px;line-height:1.65;color:var(--muted);margin:0 0 22px;max-width:44ch}
 
 .btn-primary{
-  width:100%;background:var(--ink);color:var(--ivory);border:none;border-radius:var(--radius-sm);
-  padding:16px 18px;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;background:var(--gold);color:var(--ink);border:none;border-radius:var(--radius-pill);
+  padding:16px 22px;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;
   box-shadow:var(--shadow);
 }
 .btn-primary:active{transform:translateY(1px)}
 .btn-secondary{
-  width:100%;background:transparent;color:var(--text);border:1.5px solid var(--line);border-radius:var(--radius-sm);
-  padding:14px 18px;font-size:14px;font-weight:600;margin-top:10px;
+  width:100%;background:transparent;color:var(--text);border:1.5px solid var(--line);border-radius:var(--radius-pill);
+  padding:14px 22px;font-size:14px;font-weight:600;margin-top:10px;
 }
 .btn-ghost{
   background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;padding:10px;
@@ -172,9 +196,14 @@ button{font-family:inherit;cursor:pointer}
 }
 .step-txt{font-size:13px;color:var(--text-warm);line-height:1.55}
 
-/* ---------- Footer ---------- */
-.footer{padding:18px 20px 30px;text-align:center}
-.footer p{font-size:10.5px;color:var(--muted);line-height:1.7;margin:0}
+/* ---------- Footer ----------
+   Compattato (Home, "molta aria per l'azione principale, non per le note
+   a piè di pagina"): meno padding, testo più piccolo/attenuato — resta
+   tutto raggiungibile, solo meno peso visivo. Vedi anche .footer-links e
+   .reset-link più sotto (righe di link unite in una sola, vedi Footer()
+   in app.js) e HomeScreen() per l'ordine delle sezioni. */
+.footer{padding:10px 20px 22px;text-align:center}
+.footer p{font-size:9.5px;color:var(--text-faint);line-height:1.5;margin:0}
 
 /* ---------- Scan screen ---------- */
 .topbar{display:flex;align-items:center;gap:12px;padding:18px 20px 6px}
@@ -238,14 +267,66 @@ button{font-family:inherit;cursor:pointer}
 .analyzing p{font-family:var(--display);font-size:16px;color:var(--text);font-weight:600}
 
 /* ---------- Result screen ---------- */
-.result-card{margin:16px 20px 0;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
-.result-top{padding:20px 20px 16px}
 .confidence{
   font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;
   color:var(--good);float:right;
 }
 .result-title{font-family:var(--display);font-size:19px;font-weight:600;margin:4px 0 4px;line-height:1.3}
 .result-sub{font-size:12px;color:var(--muted);line-height:1.5}
+
+/* Fascia identificazione oggetto — sostituisce la vecchia .result-card:
+   niente più bordo/sfondo proprio, solo un'intestazione minima sopra il
+   prezzo (vedi .price-hero sotto), che è ora l'elemento dominante. */
+.result-identity{padding:16px 20px 4px}
+.result-identity .result-title{font-size:17px}
+
+/* ---------- Prezzo come elemento dominante della schermata ----------
+   Card scura "hero" (stesso linguaggio di promo-card-inline/capture-card/
+   hs-block — dove il resto dell'app usa il fondo scuro per segnalare "è
+   questo che conta"), con il totale come unico numero grande: la
+   scomposizione fee/spedizione/sconto scende in un <details> nativo
+   chiuso di default, così resta un tap di distanza ma non compete
+   visivamente col totale. font-size fluido (clamp) verificato leggibile
+   e su una riga sola fino a 360px di larghezza (vedi test manuale). */
+/* Gradiente/bordo espressi con color-mix() sull'accento del tema attivo
+   (var(--gold)) invece di un rgba() letterale sull'ottone Concierge: così
+   lime/corallo ereditano la stessa "carta con gradiente morbido" nella
+   propria tinta invece di un gradiente color oro estraneo alla loro
+   identità — stesso principio già usato per il resto dei componenti
+   condivisi tra i temi. */
+.price-hero{
+  margin:8px 20px 0;padding:26px 22px 20px;text-align:center;color:var(--ivory);
+  border-radius:var(--radius);
+  background-color:var(--ink);
+  background-image:linear-gradient(165deg, color-mix(in srgb, var(--gold) 22%, transparent) 0%, color-mix(in srgb, var(--gold) 5%, transparent) 70%);
+  border:1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+}
+.price-hero-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-soft);margin-bottom:10px}
+.price-hero-amount{
+  font-family:var(--display);font-weight:700;color:var(--gold-soft);line-height:1;margin:0 0 8px;
+  font-size:clamp(34px,13vw,52px);white-space:nowrap;overflow-wrap:break-word;
+}
+.price-hero-eta{font-size:11.5px;color:var(--muted-on-ink)}
+.price-breakdown{margin-top:16px;text-align:left;border-top:1px solid var(--ink-border-soft);padding-top:12px}
+.price-breakdown summary{
+  cursor:pointer;font-size:10.5px;font-weight:700;color:var(--gold-soft);text-transform:uppercase;
+  letter-spacing:.05em;list-style:none;display:flex;align-items:center;justify-content:space-between;
+}
+.price-breakdown summary::-webkit-details-marker{display:none}
+.price-breakdown summary::after{content:"▸";font-size:10px;color:var(--muted-on-ink)}
+.price-breakdown[open] summary::after{content:"▾"}
+.price-breakdown .breakdown-rows{margin-top:10px}
+.price-breakdown .info-row{border-bottom-color:var(--ink-border-soft);color:var(--text-on-ink-soft)}
+.price-breakdown .info-row b{color:var(--gold-soft)}
+
+/* Dettagli secondari (identificazione completa + dogana): sotto il
+   prezzo, tipograficamente più piccoli — stessi dati di prima, solo
+   ridimensionati e demoted rispetto alla card prezzo sopra. */
+.result-details-secondary{margin-top:4px}
+.result-grid.compact > div{padding:10px 14px}
+.result-grid.compact .result-val{font-size:12px}
+.hs-block.compact{padding:12px 20px}
+.hs-block.compact .hs-code{font-size:17px}
 
 .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
 .result-grid > div{background:var(--paper);padding:12px 16px}
@@ -254,7 +335,7 @@ button{font-family:inherit;cursor:pointer}
 .result-val.warn{color:var(--clay)}
 
 .hs-block{
-  margin:0;padding:16px 20px;background:var(--ink);color:var(--ivory);
+  margin:0;padding:16px 20px;background:var(--ink);color:var(--ivory);border:1px solid var(--ink-border);
   display:flex;align-items:center;justify-content:space-between;gap:12px;
 }
 .hs-block .tile-divider{position:absolute}
@@ -297,7 +378,7 @@ button{font-family:inherit;cursor:pointer}
   .aperture-blade{transition:none}
 }
 .result-title,.hs-code{min-height:1.2em}
-.result-card,.price-card{animation:fadein .35s ease both}
+.price-card,.price-hero{animation:fadein .35s ease both}
 @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .hidden{display:none !important}
 .muted-link{font-size:12px;color:var(--muted);text-align:center;display:block;margin-top:8px}
@@ -309,6 +390,9 @@ button{font-family:inherit;cursor:pointer}
 .booked-title{font-family:var(--display);font-size:21px;font-weight:600;margin-bottom:12px}
 .booked-text{font-size:12.5px;color:var(--text-secondary);line-height:1.7;max-width:34ch;margin:0 auto 14px}
 .booked-note{font-size:10px;color:var(--muted);margin-bottom:24px}
+.paid-total-card{background:var(--good-bg);border:1px solid var(--success-border);padding:18px 20px;margin:4px auto 22px;max-width:280px;text-align:center}
+.paid-total-card .stat-val{font-family:var(--display);font-size:30px;font-weight:600;color:var(--good);line-height:1.1}
+.paid-total-card .stat-lbl{font-size:10.5px;font-weight:700;color:var(--success-text);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
 .qr-card{background:var(--surface);border:1px solid var(--line);padding:20px;margin:0 auto 20px;max-width:220px;text-align:center}
 .qr-img{display:block;width:100%;height:auto;margin-bottom:10px}
 .qr-code{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text);letter-spacing:.06em}
@@ -379,7 +463,11 @@ button{font-family:inherit;cursor:pointer}
 .history-status.requested{background:var(--cream);color:var(--text)}
 .history-status.done{background:var(--good-bg);color:var(--good)}
 .history-meta{font-size:10.5px;color:var(--muted);margin-top:2px}
-.footer-links{display:flex;justify-content:center;gap:14px;margin-top:8px}
+.footer-links{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 12px;margin-top:6px}
+/* Solo nel footer (non altrove, .reset-link è condiviso con Partner/
+   Dashboard): link più piccoli, un filo più attenuati — stessa
+   informazione, meno peso. */
+.footer .reset-link{font-size:9.5px;padding:4px;color:var(--text-faint)}
 
 /* ---------- Pickup point updated banner ---------- */
 .pickup-update-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
@@ -421,9 +509,18 @@ button{font-family:inherit;cursor:pointer}
 
 /* ---------- Cascading steps ---------- */
 .step-lbl{font-family:var(--body);font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
+/* Solo per "Passo 1 · Fotografa l'acquisto" in Home (.step-lbl è
+   condivisa da un'altra decina di etichette in altre schermate —
+   Destination, verifica imballo, Conclude, Identify... — quasi tutte
+   allineate a sinistra di proposito: non va centrata globalmente). */
+.step-lbl.centered{text-align:center}
 .capture-preview{width:100%;max-height:180px;object-fit:cover;margin-bottom:14px;border:1px solid var(--line)}
 .pending-desc{font-family:var(--display);font-size:16px;font-style:italic;color:var(--text);margin-bottom:14px}
-.dest-field{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);padding:11px 14px;margin:0 0 18px}
+/* flex-wrap: fallback per etichette lunghe (es. "Passa a un piano a
+   pagamento") che altrimenti schiaccerebbero il controllo a destra su
+   schermi stretti — sui campi con etichetta breve (la maggioranza) non
+   cambia nulla, perché ci stanno già su una riga sola. */
+.dest-field{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;background:var(--surface);border:1px solid var(--line);padding:11px 14px;margin:0 0 18px}
 .dest-lbl{font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1px}
 .dest-select{border:none;background:none;font-family:var(--body);font-size:12.5px;font-weight:600;color:var(--text);text-align:right}
 .dest-input{border:none;background:none;font-family:var(--body);font-size:12.5px;font-weight:600;color:var(--text);text-align:right;width:55%}
@@ -433,8 +530,8 @@ button{font-family:inherit;cursor:pointer}
 .header{display:flex;justify-content:space-between;align-items:center}
 /* ---------- Header actions / site link / offline ---------- */
 .header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.header-site-link{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);text-decoration:none;border:1px solid var(--ink-border);padding:6px 10px}
-.header-assistant-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--ink);background:var(--gold-soft);border:1px solid var(--gold-soft);padding:6px 10px;cursor:pointer}
+.header-site-link{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);text-decoration:none;border:1px solid var(--ink-border);padding:6px 12px;border-radius:var(--radius-pill)}
+.header-assistant-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--ink);background:var(--gold-soft);border:1px solid var(--gold-soft);padding:6px 12px;cursor:pointer;border-radius:var(--radius-pill)}
 .offline-banner{background:var(--offline-bg);color:var(--gold-soft);font-size:11px;padding:10px 20px;line-height:1.6}
 /* Spazio ospite (continuità operativa) — vedi state.guestMode in app.js.
    Verde "rassicurante" (stessa coppia --good/--good-bg già usata per
@@ -454,7 +551,7 @@ button{font-family:inherit;cursor:pointer}
 .loc-dismiss{background:none;border:none;color:var(--warn);font-size:12px;padding:4px;flex-shrink:0}
 
 .lock-line{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);display:flex;align-items:center;gap:4px}
-.header-reset{background:none;border:1px solid var(--ink-border);color:var(--muted-on-ink);font-size:10px;padding:6px 10px;letter-spacing:.03em}
+.header-reset{background:none;border:1px solid var(--ink-border);color:var(--muted-on-ink);font-size:10px;padding:6px 12px;letter-spacing:.03em;border-radius:var(--radius-pill)}
 
 /* ---------- Assistant tip ---------- */
 .assistant-tip {
@@ -515,18 +612,29 @@ button{font-family:inherit;cursor:pointer}
 .assistant-chat-reply{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);padding:14px 16px;font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap}
 .assistant-chat-reply::before{content:"Touch&Go";display:block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold-deep);margin-bottom:6px}
 
-/* ---------- Trust row ---------- */
-.trust-row{display:flex;background:var(--paper);border-bottom:1px solid var(--line)}
-.trust-item{flex:1;text-align:center;padding:10px 6px;font-size:9.5px;font-weight:600;color:var(--text-secondary);border-right:1px solid var(--line)}
-.trust-item:last-child{border-right:none}
-.trust-ic{display:block;font-size:15px;margin-bottom:3px}
+/* ---------- Trust row ----------
+   Spostata sotto la card fotocamera (era in cima, sopra tutto, prima
+   ancora dell'azione principale) e alleggerita: da banner a piena
+   larghezza con bordi tra le celle a una riga inline di piccoli badge —
+   informazione di contorno, non un blocco con lo stesso peso visivo
+   dell'azione principale. Vedi HomeScreen() in app.js. */
+.trust-row{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin:18px 0 0;padding:0}
+.trust-item{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:var(--text-faint)}
+.trust-ic{font-size:12px}
 
-/* ---------- Capture (v2, light) ---------- */
-.capture-card{background:var(--ink);border:none;border-radius:0;box-shadow:none}
-.gallery-card{border:1px solid var(--line);border-radius:0;padding:13px;text-align:center;font-size:12px;font-weight:700;color:var(--text);margin:0 0 18px;background:var(--surface)}
+/* ---------- Capture (v2) ----------
+   Sotto Concierge la pagina e la "chrome" scura condividono lo stesso
+   sfondo caldo (--ink === --paper): senza un bordo proprio queste card
+   sparirebbero nella pagina invece di segnalarsi come contenitori. */
+.capture-card{background:var(--ink);border:1px solid var(--ink-border);box-shadow:none}
+.gallery-card{border:1px solid var(--line);padding:13px;text-align:center;font-size:12px;font-weight:700;color:var(--text);margin:0 0 18px;background:var(--surface)}
 .gallery-card p,.gallery-card h3{display:none}
 
 .tg-lbl{font-family:var(--body);font-size:9px;font-weight:700;color:var(--clay);text-transform:uppercase;letter-spacing:1.5px;margin:6px 0 8px}
+/* Solo per l'etichetta "Non puoi fotografarlo? Descrivilo" in Home
+   (.tg-lbl è condivisa da una ventina di altre etichette, quasi tutte
+   allineate a sinistra di proposito — non va centrata globalmente). */
+.tg-lbl.centered{text-align:center}
 .tg-ex{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);padding:12px 15px;margin-bottom:7px;font-size:12.5px;font-weight:600;color:var(--text-3)}
 .ex-n{font-family:var(--display);color:var(--gold-deep);font-size:13px;font-style:italic}
 .home-foot{font-size:9.5px;color:var(--muted);text-align:center;margin-top:14px}
@@ -540,13 +648,26 @@ button{font-family:inherit;cursor:pointer}
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--text-2)}
 .info-row:last-child{border-bottom:none}
 .info-row b{font-family:var(--display);font-weight:600;color:var(--text)}
-.info-row.total{border-top:1px solid var(--ink);margin-top:2px;padding-top:10px;font-weight:700}
-.info-row.total b{font-size:17px}
+/* Il numero finale (prezzo da pagare, credito disponibile, totale
+   complessivo...) è sempre l'informazione più importante della card in cui
+   compare: ingrandito e nel colore d'accento invece del testo neutro usato
+   per le righe sopra, così risalta a colpo d'occhio invece di confondersi
+   con gli altri importi della lista — stesso trattamento in tutte le card
+   che lo usano (prezzo turista, area partner, dashboard). */
+.info-row.total{border-top:1.5px solid var(--gold-deep);margin-top:4px;padding-top:12px;font-weight:700}
+.info-row.total span{color:var(--text);font-weight:600}
+.info-row.total b{font-size:24px;color:var(--gold-deep)}
+
+/* Card che porta il totale "definitivo" da pagare/confermare (non una
+   stima) — barra d'accento in testa, stesso segnale in ResultScreen
+   (prezzo confermato) e ConcludeScreen (pagamento consolidato), così il
+   turista riconosce a colpo d'occhio "questo è il numero che conta". */
+.price-card.final-total{border-top:3px solid var(--gold-deep);padding-top:14px}
+
 .info-line{font-size:11.5px;color:var(--text-secondary);line-height:1.6;padding:6px 0}
 
 /* ---------- Result (v2) ---------- */
-.result-card{border-radius:0;box-shadow:none}
-.hs-block{border-radius:0}
+.hs-block{border-radius:var(--radius)}
 .secure-note{margin:14px 20px 0;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:12px 14px;font-size:11.5px;color:var(--warn);line-height:1.6}
 .price-card{margin:16px 20px 0;background:var(--surface);border:1px solid var(--line);padding:16px 18px}
 .confidence{color:var(--good);font-weight:700}
@@ -570,7 +691,7 @@ button{font-family:inherit;cursor:pointer}
 .sig-preview-img{max-width:220px;display:block;border:1px solid var(--line);background:var(--surface);margin-top:8px}
 
 /* ---------- Packaging guidance & validation ---------- */
-.pack-card{background:var(--ink);color:var(--ivory);padding:16px 18px;margin-bottom:14px}
+.pack-card{background:var(--ink);color:var(--ivory);padding:16px 18px;margin-bottom:14px;border:1px solid var(--ink-border);border-radius:var(--radius)}
 .pack-label{font-size:10px;color:var(--gold-soft);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .pack-dims{font-family:var(--display);font-size:22px;color:var(--gold-soft);font-weight:600;margin-bottom:8px}
 .pack-warn{font-size:11.5px;color:var(--muted-on-ink);line-height:1.6}
@@ -592,7 +713,8 @@ button{font-family:inherit;cursor:pointer}
 .price-option{background:var(--surface);border:1px solid var(--line);padding:16px 18px;margin-bottom:12px}
 .price-option.highlight{border-color:var(--gold);background:var(--warn-bg)}
 .price-option-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);margin-bottom:6px}
-.price-option-total{font-family:var(--display);font-size:24px;font-weight:600;color:var(--text);margin-bottom:6px}
+.price-option-total{font-family:var(--display);font-size:30px;font-weight:600;color:var(--text);margin-bottom:6px}
+.price-option.highlight .price-option-total{color:var(--gold-deep)}
 .price-option-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px}
 
 .promo-card-inline{margin:16px 20px 0;background:var(--ink);color:var(--ivory);padding:18px 20px;position:relative;border:1px solid var(--gold-deep)}
@@ -663,6 +785,61 @@ button{font-family:inherit;cursor:pointer}
 .ob-tap-zone.ob-right{right:0}
 .promo-card-inline .btn-primary{background:var(--gold-soft);color:var(--ink)}
 
+/* ---------- Area partner: navigazione a schede ----------
+   L'area partner impilava tutte le sezioni (riepilogo, piano, andamento,
+   credito, QR) in un'unica colonna lunghissima — anche dopo una prima
+   passata di etichette separatorie, restava una pagina che scorreva
+   all'infinito. Vera ristrutturazione: solo il riepilogo hero (le due
+   cifre più controllate) resta sempre visibile; il resto vive in 4 schede
+   (PartnerLoginAndHistory() in app.js, stato in state.partnerActiveTab),
+   una sola sezione a schermo alla volta — stessa logica di
+   semplificazione già applicata al CRM (barra laterale invece delle tab). */
+.partner-tabs{display:flex;gap:6px;margin:14px 0 16px;border-bottom:1px solid var(--line)}
+.partner-tab-btn{
+  flex:1;background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--muted);font-family:var(--body);font-size:11px;font-weight:700;
+  padding:10px 4px 12px;cursor:pointer;white-space:nowrap;
+}
+/* --text, non --ink: la barra vive su .section (fondo --paper, invertibile
+   nei temi lime/corallo) — --ink resterebbe fisso scuro e sparirebbe su
+   un --paper diventato scuro anche lui. Bug trovato e corretto qui
+   durante la verifica sui temi, stesso tipo di errore già capitato una
+   volta con .stat-lbl (vedi nota sopra, PR precedente). */
+.partner-tab-btn.on{color:var(--text);border-bottom-color:var(--gold-deep)}
+.partner-tab-content{animation:fadein .25s ease both}
+
+/* .partner-block-lbl: filo separatore + etichetta (riusa .tg-lbl) per una
+   sotto-sezione ALL'INTERNO di una scheda (es. "Il tuo piano" dentro
+   Panoramica, sotto il riepilogo) — non più per separare le schede stesse,
+   ora sostituite dalla barra sopra. */
+.partner-block-lbl{border-top:1px solid var(--line);padding-top:18px;margin-top:22px}
+
+/* Riepilogo partner: le due cifre che contano di più (credito disponibile,
+   vendite generate) diventano stat-card ben visibili invece di due righe
+   tra tante altre in un .info-card — riusa .stat-grid/.stat-card, già
+   definite ma non ancora applicate da nessuna schermata. */
+.partner-hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+/* --warn-bg resta chiaro in ogni tema (non è tra i token invertibili, per
+   restare leggibile — vedi nota sui token in cima al file), quindi il
+   testo sopra deve restare scuro a sua volta: --ink invece di --text, che
+   nei temi lime/corallo diventa chiaro e sparirebbe su questo sfondo. */
+.partner-hero-grid .stat-card.highlight{border-color:var(--gold-deep);background:var(--warn-bg)}
+.partner-hero-grid .stat-card.highlight .stat-val{color:var(--gold-deep)}
+.partner-hero-grid .stat-card.highlight .stat-lbl{color:var(--ink)}
+
+/* ---------- Comportamento mobile: gli input con font-size sotto 16px
+   fanno auto-zoom al focus su iOS Safari (bug noto della piattaforma,
+   non dell'app) — scomodo su un form pensato per essere compilato in
+   negozio, in piedi, col telefono. Sopra 16px l'auto-zoom non scatta più;
+   dimensione ripristinata subito dopo su schermi più larghi, dove il
+   problema non esiste, per non alterare la densità visiva del resto
+   dell'app. Non tocca select/checkbox/radio, immuni al bug. */
+@media (max-width:480px){
+  input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="search"],select,textarea{
+    font-size:16px;
+  }
+}
+
 /* Mirino fotocamera custom (TOU-20) — vedi openCameraViewfinder() in app.js.
    Colori lasciati letterali (non tokenizzati): l'overlay della fotocamera
    resta identico in tutti i temi, non segue la palette lime/corallo. */
@@ -678,3 +855,15 @@ button{font-family:inherit;cursor:pointer}
 .vf-shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);z-index:2;width:70px;height:70px;border-radius:50%;background:transparent;border:3px solid #fff;cursor:pointer;padding:0}
 .vf-shutter::after{content:"";display:block;width:56px;height:56px;margin:4px auto;border-radius:50%;background:#fff}
 .vf-shutter:active::after{background:var(--gold-hot)}
+
+/* ---------- Concierge: arrotondamento delle card "utility" ----------
+   Una sola regola per l'intera famiglia di piccole card/campi che non
+   avevano già un proprio border-radius (elenchi, campi indirizzo,
+   documenti, upload...), invece di toccare ogni singola dichiarazione —
+   stesso raggio "piccolo" già usato dal resto dei controlli. */
+.info-card,.qr-card,.dest-field,.dest-field-block,.queue-item,.history-item,
+.doc-card,.id-upload-card,.sig-wrap,
+.addr-input,.addr-country,.tg-ex,.price-option,.pack-check-result,
+.assistant-chat-reply,.assistant-tip{
+  border-radius:var(--radius-sm);
+}

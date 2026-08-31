@@ -45,4 +45,18 @@
   /* Errore: reso più chiaro del default per restare leggibile su fondo
      scuro (il rosso scuro originale sparirebbe su un fondo quasi-nero). */
   --danger:#FF6B6B;
+
+  /* Font e raggio: da agosto 2026 il tema di produzione è passato a un
+     nuovo carattere ("Concierge": Familjen Grotesk, angoli molto
+     arrotondati) — questo tema non lo segue, congelato ai valori di
+     sempre (Cormorant Garamond/Montserrat, angoli piatti) così resta
+     "esattamente come oggi" anche per queste due proprietà, non solo per
+     i colori. Se un domani si vorrà un font dedicato per lime, va deciso
+     esplicitamente qui, non ereditato per caso dal tema base. */
+  --display:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --body:'Montserrat',system-ui,-apple-system,sans-serif;
+  --mono:'Cormorant Garamond',ui-serif,Georgia,serif;
+  --radius:2px;
+  --radius-sm:2px;
+  --radius-pill:2px;
 }
