@@ -2284,7 +2284,7 @@ function HomeScreen() {
   if (state.touristName) {
     section.appendChild(el("div", "greeting", `${t("home_greeting")}, ${state.touristName}`));
   }
-  section.appendChild(el("div", "step-lbl", t("home_step1_lbl")));
+  section.appendChild(el("div", "step-lbl centered", t("home_step1_lbl")));
   const captureCard = el("div", "capture-card");
   captureCard.innerHTML = `
     <div class="capture-icon">${apertureIconMarkup()}</div>
