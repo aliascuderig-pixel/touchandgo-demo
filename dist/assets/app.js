@@ -1972,6 +1972,16 @@ function AssistantAvatar(screenKey) {
     e.stopPropagation();
     if (!state.assistantDismissed) state.assistantDismissed = {};
     state.assistantDismissed[screenKey] = true;
+    // Solo il banner di benvenuto in Home è persistito tra una visita e
+    // l'altra (era la richiesta esplicita: non deve ripresentarsi ogni
+    // volta) — gli altri screenKey restano dismissibili solo per la
+    // sessione corrente, comportamento invariato per non toccare
+    // schermate già verificate.
+    if (screenKey === "home") {
+      try {
+        localStorage.setItem("tg_home_tip_dismissed", "1");
+      } catch (e) {}
+    }
     render();
   });
   return wrap;
@@ -2237,7 +2247,6 @@ function apertureIconMarkup() {
 function HomeScreen() {
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("home"));
-  wrap.appendChild(TrustRow());
 
   if (state.pickupSource !== "gps" && !state.locationReminderDismissed) {
     const loc = el("div", "location-reminder");
@@ -2333,6 +2342,13 @@ function HomeScreen() {
   describeBox.appendChild(goBtn);
   section.appendChild(describeLbl);
   section.appendChild(describeBox);
+
+  // Spostata qui sotto (era in cima allo schermo, prima ancora della card
+  // fotocamera): tre badge informativi non sono l'azione da compiere,
+  // quindi non devono più occupare il posto d'onore sopra tutto il resto
+  // — vedi anche .trust-row in style.css, alleggerita in linea con
+  // l'azione principale invece che come un blocco a parte.
+  section.appendChild(TrustRow());
 
   const foot = el("div", "home-foot", t("home_foot"));
   section.appendChild(foot);
@@ -4441,13 +4457,15 @@ function HistoryScreen() {
 
 function Footer() {
   const f = el("div", "footer");
+  // Le due righe di link (azioni account + legale) prima erano separate;
+  // unite in una sola riga che va a capo da sola sotto i 360px
+  // (.footer-links ha flex-wrap) — meno righe, stesse 5 funzionalità
+  // tutte ancora raggiungibili.
   f.innerHTML = `<p>${t("footer_tagline")}</p>
     <div class="footer-links">
       <button class="reset-link" id="dashboard-link">${t("footer_dashboard")}</button>
       <button class="reset-link" id="history-link">${t("footer_history", { count: state.purchaseHistory.length })}</button>
       <button class="reset-link" id="reset-link">${t("footer_reset")}</button>
-    </div>
-    <div class="footer-links">
       <a class="reset-link" href="/site/termini.html">${t("footer_terms")}</a>
       <a class="reset-link" href="/site/privacy.html">${t("footer_privacy")}</a>
     </div>`;
@@ -4699,6 +4717,14 @@ loadPending();
 let hasOnboardedBefore = false;
 try {
   hasOnboardedBefore = localStorage.getItem("tg_onboarded") === "1";
+} catch (e) {}
+// Banner di benvenuto in Home: chiuso una volta, resta chiuso alle visite
+// successive (vedi il dismiss handler in AssistantAvatar()) invece di
+// ripresentarsi ad ogni apertura dell'app.
+try {
+  if (localStorage.getItem("tg_home_tip_dismissed") === "1") {
+    state.assistantDismissed.home = true;
+  }
 } catch (e) {}
 if (!hasOnboardedBefore && !state.touristEmail) {
   state.screen = "onboarding";

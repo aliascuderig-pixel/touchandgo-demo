@@ -196,9 +196,14 @@ button{font-family:inherit;cursor:pointer}
 }
 .step-txt{font-size:13px;color:var(--text-warm);line-height:1.55}
 
-/* ---------- Footer ---------- */
-.footer{padding:18px 20px 30px;text-align:center}
-.footer p{font-size:10.5px;color:var(--muted);line-height:1.7;margin:0}
+/* ---------- Footer ----------
+   Compattato (Home, "molta aria per l'azione principale, non per le note
+   a piè di pagina"): meno padding, testo più piccolo/attenuato — resta
+   tutto raggiungibile, solo meno peso visivo. Vedi anche .footer-links e
+   .reset-link più sotto (righe di link unite in una sola, vedi Footer()
+   in app.js) e HomeScreen() per l'ordine delle sezioni. */
+.footer{padding:10px 20px 22px;text-align:center}
+.footer p{font-size:9.5px;color:var(--text-faint);line-height:1.5;margin:0}
 
 /* ---------- Scan screen ---------- */
 .topbar{display:flex;align-items:center;gap:12px;padding:18px 20px 6px}
@@ -458,7 +463,11 @@ button{font-family:inherit;cursor:pointer}
 .history-status.requested{background:var(--cream);color:var(--text)}
 .history-status.done{background:var(--good-bg);color:var(--good)}
 .history-meta{font-size:10.5px;color:var(--muted);margin-top:2px}
-.footer-links{display:flex;justify-content:center;gap:14px;margin-top:8px}
+.footer-links{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 12px;margin-top:6px}
+/* Solo nel footer (non altrove, .reset-link è condiviso con Partner/
+   Dashboard): link più piccoli, un filo più attenuati — stessa
+   informazione, meno peso. */
+.footer .reset-link{font-size:9.5px;padding:4px;color:var(--text-faint)}
 
 /* ---------- Pickup point updated banner ---------- */
 .pickup-update-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
@@ -598,11 +607,15 @@ button{font-family:inherit;cursor:pointer}
 .assistant-chat-reply{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);padding:14px 16px;font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap}
 .assistant-chat-reply::before{content:"Touch&Go";display:block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold-deep);margin-bottom:6px}
 
-/* ---------- Trust row ---------- */
-.trust-row{display:flex;background:var(--paper);border-bottom:1px solid var(--line)}
-.trust-item{flex:1;text-align:center;padding:10px 6px;font-size:9.5px;font-weight:600;color:var(--text-secondary);border-right:1px solid var(--line)}
-.trust-item:last-child{border-right:none}
-.trust-ic{display:block;font-size:15px;margin-bottom:3px}
+/* ---------- Trust row ----------
+   Spostata sotto la card fotocamera (era in cima, sopra tutto, prima
+   ancora dell'azione principale) e alleggerita: da banner a piena
+   larghezza con bordi tra le celle a una riga inline di piccoli badge —
+   informazione di contorno, non un blocco con lo stesso peso visivo
+   dell'azione principale. Vedi HomeScreen() in app.js. */
+.trust-row{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin:18px 0 0;padding:0}
+.trust-item{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:var(--text-faint)}
+.trust-ic{font-size:12px}
 
 /* ---------- Capture (v2) ----------
    Sotto Concierge la pagina e la "chrome" scura condividono lo stesso

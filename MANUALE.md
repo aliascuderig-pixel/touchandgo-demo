@@ -197,6 +197,17 @@ Perché uno scoping via classe invece di editare `style.css` direttamente (come 
 
 **Titoli/numeri**: `.tg-lbl`, `.partner-tab-btn` e `.stat-lbl` guadagnano `letter-spacing` negativo/font mono maiuscolo sotto Manifesto; `.stat-val` (i numeri grandi) tenuta stretta via `letter-spacing:-.02em`. La sottolineatura della scheda attiva nella tab bar usa lo stesso accento oro.
 
+### Quarta passata — alleggerimento della Home (agosto 2026)
+
+La prima schermata del percorso turista (`HomeScreen()`) era troppo densa per il principio "molta aria, una sola azione principale per schermata" dichiarato dal tema Concierge: prima della card fotocamera (l'azione vera) comparivano in sequenza il banner di benvenuto, la barra di avanzamento, i tre badge Copertura/WhatsApp/Dogana (un intero blocco bordato a piena larghezza) e l'etichetta "Passo 1" — l'azione principale arrivava quinta. Intervento **solo su questa schermata**: `ResultScreen`, `ConcludeScreen`, `ShippedScreen` e l'area partner non sono stati toccati.
+
+- **Tre badge Copertura/WhatsApp/Dogana (`TrustRow()`)**: spostati da sopra tutto (subito sotto l'header) a sotto la card fotocamera, la card galleria e il campo testo alternativo — dopo le vere azioni disponibili, non prima. Alleggeriti in CSS (`.trust-row`/`.trust-item`/`.trust-ic` in `style.css`): da banner a piena larghezza con bordo/divisori tra le celle a una riga inline di piccoli badge senza bordo, colore attenuato (`--text-faint`) — nessun dato tolto, stesso identico testo, solo un peso visivo molto minore.
+- **Banner di benvenuto** (il tip con l'avatar "T&G" e la X, `AssistantAvatar("home")`): la chiusura era già possibile ma solo per la sessione corrente (stato in memoria, mai salvato) — ricompariva ad ogni apertura dell'app. Ora, **solo per lo screenKey `"home"`**, il dismiss scrive anche `localStorage.tg_home_tip_dismissed = "1"`; all'avvio, se il flag è presente, `state.assistantDismissed.home` parte già `true` (stesso pattern già usato per `tg_onboarded`). Gli altri banner contestuali (Destination, Result...) restano dismissibili solo per sessione, comportamento invariato — la persistenza è stata aggiunta in modo mirato al solo caso `"home"`, non al meccanismo condiviso, per non cambiare nulla sulle altre schermate già verificate.
+- **Footer informativo**: reso più compatto (meno padding, testo più piccolo/attenuato, `--text-faint` invece di `--muted`) ma non ridotto in funzionalità — le due righe di link (Dashboard/Storico/Reset, poi Termini/Privacy) sono state unite in una sola riga con `flex-wrap`, che va a capo da sola sui bordi stretti invece di occupare due righe fisse. Tutte e 5 le funzioni restano raggiungibili con lo stesso numero di tap di prima.
+- **Link "Hai un codice invito?"**: lasciato dov'era, nessuna modifica.
+
+Verificato a 360px di larghezza (screenshot + lettura di `localStorage` via browser) che: la card fotocamera è ora il primo elemento con vero peso visivo dopo l'intestazione minima; il banner di benvenuto, chiuso una volta, non ricompare dopo un reload della pagina; tutti i link del footer restano cliccabili e leggibili disposti su una riga sola che va a capo; il tema lime (verificato come spot-check rappresentativo) eredita lo stesso riordino senza alcuna modifica ai propri colori/font/raggio, confermando che l'intervento è di solo markup/CSS condiviso, non di token specifici del tema base.
+
 ---
 
 ## CRM interno, area investitori e kit riservato
