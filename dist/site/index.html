@@ -46,21 +46,34 @@ nav{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:1px sol
 .nav-cta-secondary:hover{border-color:var(--gold-soft);color:var(--gold-soft)}
 .nav-menu-toggle{display:none;background:none;border:none;color:var(--cream);font-size:22px}
 
-/* Hero */
-.hero{background:var(--ink);color:var(--cream);padding:90px 0 70px;text-align:center}
-.hero h1{font-family:var(--display);font-weight:500;font-size:52px;line-height:1.15;margin:0 0 22px;max-width:760px;margin-left:auto;margin-right:auto}
+/* Hero — due colonne (testo + illustrazione) invece di un blocco centrato
+   uniforme: più carattere, in linea con lo stile line-art già usato in
+   come-funziona.html (vedi .hero-art sotto) invece di una landing page
+   generica. Ricade a singola colonna centrata sotto i 900px. */
+.hero{background:var(--ink);color:var(--cream);padding:90px 0 70px}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:56px;align-items:center}
+.hero-copy{text-align:left}
+.hero-copy .eyebrow{text-align:left}
+.hero h1{font-family:var(--display);font-weight:500;font-size:48px;line-height:1.15;margin:0 0 22px}
 .hero h1 em{font-style:italic;color:var(--gold)}
-.hero p{font-size:16px;color:#C9C2B4;max-width:560px;margin:0 auto 34px;line-height:1.7}
-.hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.hero p{font-size:16px;color:#C9C2B4;max-width:480px;margin:0 0 34px;line-height:1.7}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap}
 .btn-primary{background:var(--gold);color:var(--ink);padding:15px 30px;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:.03em;display:inline-block}
 .btn-outline{background:transparent;color:var(--cream);border:1px solid #3A362C;padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
 /* Come .btn-outline ma per le sezioni chiare (--paper): .btn-outline usa
    testo/bordo chiari pensati solo per lo sfondo scuro dell'hero — su una
    sezione chiara sarebbe testo quasi bianco su sfondo quasi bianco. */
 .btn-outline-light{background:transparent;color:var(--ink);border:1px solid var(--line);padding:15px 30px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:.03em;display:inline-block}
-.hero-stats{display:flex;justify-content:center;gap:56px;margin-top:64px;flex-wrap:wrap}
+.hero-stats{display:flex;gap:44px;margin-top:56px;flex-wrap:wrap}
 .hero-stat b{display:block;font-family:var(--display);font-size:32px;color:var(--gold);font-weight:500}
 .hero-stat span{font-size:11px;color:#9A9284;text-transform:uppercase;letter-spacing:.08em}
+
+/* Illustrazione hero — stesso linguaggio line-art (tratti sottili, doppio
+   tono oro) delle slide di come-funziona.html: il pacco lasciato in
+   negozio, il tag QR, il percorso tratteggiato verso casa. Puramente
+   decorativa (aria-hidden), nessuna immagine esterna. */
+.hero-art{display:flex;justify-content:center}
+.hero-art svg{width:100%;max-width:340px;height:auto}
 
 /* Sections */
 section{padding:80px 0}
@@ -95,16 +108,25 @@ section{padding:80px 0}
 .trust-item h4{font-size:13px;font-weight:700;margin:0 0 6px}
 .trust-item p{font-size:12px;color:#A9A192;margin:0;line-height:1.6}
 
-/* Pricing / partner */
+/* Pricing / partner — un piano messo in evidenza (stesso pattern
+   .highlight già usato nell'app per il prezzo abbonamento) invece di 6
+   card tutte identiche: rompe la griglia uniforme e dà un punto di
+   partenza a chi non sa quale piano scegliere. */
 .plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
-.plan-card{background:#fff;border:1px solid var(--line);padding:24px 20px}
+.plan-card{background:#fff;border:1px solid var(--line);padding:24px 20px;position:relative}
 .plan-card h4{font-family:var(--display);font-size:18px;margin:0 0 6px;font-weight:600}
 .plan-card .price{font-size:22px;font-weight:800;color:var(--gold-deep);margin-bottom:10px}
 .plan-card p{font-size:12px;color:var(--muted);margin:0;line-height:1.6}
+.plan-card.featured{border:2px solid var(--gold);background:var(--cream)}
+.plan-card-badge{position:absolute;top:-11px;left:18px;background:var(--gold);color:var(--ink);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px}
 .commission-note{text-align:center;margin-top:30px;font-size:13px;color:var(--muted)}
 .commission-note b{color:var(--ink)}
 
-/* Partner signup form */
+/* Partner signup form — form più importante del sito (l'unico che genera
+   un nuovo partner pagante): stepper a due passi veri (1. Piano → 2. I
+   tuoi dati) invece di un unico blocco lineare, stesso linguaggio visivo
+   degli indicatori numerati già introdotti nell'app (barra di
+   avanzamento del percorso d'acquisto) per coerenza tra le due superfici. */
 .partner-signup{max-width:520px;margin:40px auto 0;background:#fff;border:1px solid var(--line);padding:28px 26px}
 .partner-signup h3{font-family:var(--display);font-size:20px;font-weight:600;margin:0 0 18px;text-align:center}
 .partner-signup label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);font-weight:700;margin-bottom:6px}
@@ -113,6 +135,38 @@ section{padding:80px 0}
 .partner-signup button{width:100%;background:var(--gold);color:var(--ink);border:none;padding:14px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px}
 .partner-signup button:disabled{opacity:.6;cursor:default}
 .partner-signup .form-error{color:#B3261E;font-size:12.5px;margin-top:10px;text-align:center}
+
+.signup-stepper{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:26px}
+.signup-step-ind{display:flex;align-items:center;gap:8px}
+.signup-step-num{
+  width:26px;height:26px;border-radius:50%;flex-shrink:0;
+  border:1.5px solid var(--line);color:var(--muted);font-family:var(--body);font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s,color .15s;
+}
+.signup-step-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.signup-step-ind.active .signup-step-num{background:var(--ink);border-color:var(--ink);color:#fff}
+.signup-step-ind.active .signup-step-lbl{color:var(--ink)}
+.signup-step-ind.done .signup-step-num{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+.signup-step-ind.done .signup-step-lbl{color:var(--gold-deep)}
+.signup-step-line{width:36px;height:1.5px;background:var(--line)}
+
+.signup-panel{display:none}
+.signup-panel.active{display:block}
+.signup-back{background:none;border:none;color:var(--muted);font-size:11.5px;font-weight:600;cursor:pointer;padding:0;margin-bottom:16px;text-decoration:underline}
+
+.plan-pick-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+/* .plan-pick è anch'essa un <label> dentro .partner-signup: senza questo
+   override erediterebbe il text-transform:uppercase pensato per le
+   etichette dei campi di testo sopra ("NOME NEGOZIO / ATTIVITÀ"), non
+   adatto al nome del piano in chiaro dentro la card. */
+.partner-signup label.plan-pick{display:flex;text-transform:none;align-items:center;justify-content:space-between;gap:10px;border:1.5px solid var(--line);padding:12px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+.plan-pick input{position:absolute;opacity:0;width:1px;height:1px}
+.plan-pick-name{font-size:13px;font-weight:600;color:var(--ink)}
+.plan-pick-price{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+.plan-pick.picked{border-color:var(--gold);background:var(--cream)}
+.plan-pick.picked .plan-pick-price{color:var(--gold-deep)}
+.plan-pick:focus-within{outline:2px solid var(--gold);outline-offset:1px}
+.btn-step-next{width:100%;background:var(--ink);color:#fff;border:none;padding:14px;font-size:13px;font-weight:700;letter-spacing:.03em;cursor:pointer;margin-top:4px}
 
 /* Fattura proforma partner — stessa struttura/classi doc-card/doc-row
    della fattura proforma turista nell'app (dist/assets/app.js). */
@@ -167,6 +221,18 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
 .footer-col a{display:block;color:#8A8577;text-decoration:none;margin-bottom:8px}
 .footer-col a:hover{color:var(--gold-soft)}
 .footer-bottom{border-top:1px solid #201D16;padding-top:24px;text-align:center;color:#635F53}
+
+/* ---------- Hero due colonne → una colonna (≤900px) ---------- */
+@media (max-width:900px){
+  .hero-grid{grid-template-columns:1fr;text-align:center}
+  .hero-copy{text-align:center}
+  .hero-copy .eyebrow{text-align:center}
+  .hero p{margin-left:auto;margin-right:auto}
+  .hero-ctas{justify-content:center}
+  .hero-stats{justify-content:center}
+  .hero-art{order:-1;margin-bottom:8px}
+  .hero-art svg{max-width:220px}
+}
 
 /* ---------- Tablet / small desktop (≤768px) ---------- */
 @media (max-width:768px){
@@ -255,19 +321,44 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
 </nav>
 
 <header class="hero">
-  <div class="wrap">
-    <div class="eyebrow" style="text-align:center">Made in Italy · Spedizioni doganali · 180+ Paesi</div>
-    <h1>Hai comprato qualcosa di <em>troppo bello</em> per stare in valigia?</h1>
-    <p>Fotografa l'oggetto. In pochi secondi la nostra AI identifica il codice doganale, stima peso e dimensioni, e organizza il ritiro. Arriva a casa mentre sei ancora in vacanza.</p>
-    <div class="hero-ctas">
-      <a class="btn-primary" href="#" id="app-link-hero">Prova l'app →</a>
-      <a class="btn-outline" href="#partner">Sono un partner</a>
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <div class="eyebrow">Made in Italy · Spedizioni doganali · 180+ Paesi</div>
+      <h1>Hai comprato qualcosa di <em>troppo bello</em> per stare in valigia?</h1>
+      <p>Fotografa l'oggetto. In pochi secondi la nostra AI identifica il codice doganale, stima peso e dimensioni, e organizza il ritiro. Arriva a casa mentre sei ancora in vacanza.</p>
+      <div class="hero-ctas">
+        <a class="btn-primary" href="#" id="app-link-hero">Prova l'app →</a>
+        <a class="btn-outline" href="#partner">Sono un partner</a>
+      </div>
+      <p style="margin-top:16px;margin-bottom:0;font-size:12.5px;color:#C9C2B4">🎁 Prima spedizione senza fee di servizio — paghi solo il corriere</p>
+      <div class="hero-stats">
+        <div class="hero-stat"><b>57,4M</b><span>Turisti/anno in Italia</span></div>
+        <div class="hero-stat"><b>0%</b><span>IVA su acquisti export</span></div>
+        <div class="hero-stat"><b>180+</b><span>Paesi di destinazione</span></div>
+      </div>
     </div>
-    <p style="text-align:center;margin-top:16px;margin-bottom:0;font-size:12.5px;color:#C9C2B4">🎁 Prima spedizione senza fee di servizio — paghi solo il corriere</p>
-    <div class="hero-stats">
-      <div class="hero-stat"><b>57,4M</b><span>Turisti/anno in Italia</span></div>
-      <div class="hero-stat"><b>0%</b><span>IVA su acquisti export</span></div>
-      <div class="hero-stat"><b>180+</b><span>Paesi di destinazione</span></div>
+    <div class="hero-art" aria-hidden="true">
+      <svg viewBox="0 0 260 230" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Pacco lasciato in negozio -->
+        <rect x="72" y="108" width="108" height="88" rx="4" stroke="var(--gold)" stroke-width="1.8"/>
+        <path d="M72 138H180M126 108V196" stroke="var(--gold)" stroke-width="1.2"/>
+        <!-- Etichetta di spedizione con mini pattern QR -->
+        <rect x="140" y="118" width="30" height="30" rx="2" stroke="var(--gold-soft)" stroke-width="1.3"/>
+        <rect x="145" y="123" width="5" height="5" fill="var(--gold-soft)"/>
+        <rect x="160" y="123" width="5" height="5" fill="var(--gold-soft)"/>
+        <rect x="145" y="138" width="5" height="5" fill="var(--gold-soft)"/>
+        <rect x="153" y="131" width="4" height="4" fill="var(--gold-soft)"/>
+        <!-- Percorso tratteggiato verso casa -->
+        <path d="M150 108C168 78 190 58 214 46" stroke="var(--clay)" stroke-width="1.2" stroke-dasharray="3 5"/>
+        <path d="M198 40L214 46L206 60" stroke="var(--clay)" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M196 78C200 72 208 68 216 68C224 68 232 72 236 78C232 90 224 100 216 108C208 100 200 90 196 78Z" stroke="var(--gold-deep)" stroke-width="1.4"/>
+        <circle cx="216" cy="80" r="6" stroke="var(--gold-deep)" stroke-width="1.2"/>
+        <!-- Fotocamera: l'oggetto è stato fotografato prima di essere lasciato -->
+        <path d="M46 74C46 62 55 53 67 53C79 53 88 62 88 74V96H46V74Z" stroke="var(--gold-soft)" stroke-width="1.4"/>
+        <ellipse cx="67" cy="74" rx="12" ry="15" stroke="var(--gold-soft)" stroke-width="1.1" opacity=".75"/>
+        <path d="M60 30L67 36L74 30M60 42L67 36L74 42" stroke="var(--gold-soft)" stroke-width="1.2" opacity=".85"/>
+        <path d="M70 96C78 100 88 104 100 106" stroke="var(--gold-soft)" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>
+      </svg>
     </div>
   </div>
 </header>
@@ -401,7 +492,7 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <p>Un servizio in più da proporre in cassa, con un guadagno su ogni spedizione generata dal tuo codice.</p>
     </div>
     <div class="plan-grid">
-      <div class="plan-card"><h4>Boutique</h4><div class="price">€49<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Negozi di moda, artigianato, oggettistica.</p></div>
+      <div class="plan-card featured"><div class="plan-card-badge">Consigliato</div><h4>Boutique</h4><div class="price">€49<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Negozi di moda, artigianato, oggettistica.</p></div>
       <div class="plan-card"><h4>Enoteche &amp; Cantine</h4><div class="price">€59<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Vino e prodotti alimentari, gestione fragilità inclusa.</p></div>
       <div class="plan-card"><h4>Sport &amp; Attrezzatura</h4><div class="price">€69<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Articoli ingombranti, pensati per bagaglio complicato.</p></div>
       <div class="plan-card"><h4>Hotel</h4><div class="price">€99<span style="font-size:12px;color:var(--muted)">/mese</span></div><p>Ritiro diretto in struttura per gli ospiti.</p></div>
@@ -415,39 +506,56 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       <a class="btn-outline-light" href="#" id="app-link-partner-login" target="_blank" rel="noopener">Accedi alla tua area partner →</a>
     </div>
 
-    <form class="partner-signup" id="partner-signup-form">
-      <h3>Registra il tuo negozio</h3>
-      <div class="field">
-        <label for="ps-name">Nome negozio / attività</label>
-        <input id="ps-name" type="text" required placeholder="Es. Ceramiche Caltagirone" />
+    <div class="partner-signup">
+      <div class="signup-stepper">
+        <div class="signup-step-ind active" data-step-ind="1">
+          <span class="signup-step-num">1</span><span class="signup-step-lbl">Piano</span>
+        </div>
+        <div class="signup-step-line"></div>
+        <div class="signup-step-ind" data-step-ind="2">
+          <span class="signup-step-num">2</span><span class="signup-step-lbl">I tuoi dati</span>
+        </div>
       </div>
-      <div class="field">
-        <label for="ps-email">Email</label>
-        <input id="ps-email" type="email" required placeholder="nome@negozio.it" />
-      </div>
-      <div class="field">
-        <label for="ps-plan">Piano</label>
-        <select id="ps-plan">
-          <option value="boutique">Boutique — €49/mese</option>
-          <option value="enoteche">Enoteche &amp; Cantine — €59/mese</option>
-          <option value="sport">Sport &amp; Attrezzatura — €69/mese</option>
-          <option value="hotel">Hotel — €99/mese</option>
-          <option value="agenzie">Agenzie di Viaggio — €149/mese</option>
-          <option value="touroperator">Tour Operator — €199/mese</option>
-          <option value="free">Gratuito — nessuna commissione</option>
-        </select>
-      </div>
-      <button type="submit" id="ps-submit">Registrati come partner →</button>
-      <div class="form-error" id="ps-error" style="display:none"></div>
-    </form>
 
-    <div id="partner-signup-result" style="display:none">
-      <div class="partner-result-code-row">
-        <div class="partner-result-code" id="ps-result-code"></div>
-        <button type="button" class="copy-code-btn" id="ps-copy-code">Copia</button>
+      <form id="partner-signup-form">
+        <div class="signup-panel active" data-panel="1">
+          <h3>Scegli il tuo piano</h3>
+          <div class="plan-pick-list" id="plan-pick-list">
+            <label class="plan-pick picked"><input type="radio" name="ps-plan" value="boutique" checked><span class="plan-pick-name">Boutique</span><span class="plan-pick-price">€49/mese</span></label>
+            <label class="plan-pick"><input type="radio" name="ps-plan" value="enoteche"><span class="plan-pick-name">Enoteche &amp; Cantine</span><span class="plan-pick-price">€59/mese</span></label>
+            <label class="plan-pick"><input type="radio" name="ps-plan" value="sport"><span class="plan-pick-name">Sport &amp; Attrezzatura</span><span class="plan-pick-price">€69/mese</span></label>
+            <label class="plan-pick"><input type="radio" name="ps-plan" value="hotel"><span class="plan-pick-name">Hotel</span><span class="plan-pick-price">€99/mese</span></label>
+            <label class="plan-pick"><input type="radio" name="ps-plan" value="agenzie"><span class="plan-pick-name">Agenzie di Viaggio</span><span class="plan-pick-price">€149/mese</span></label>
+            <label class="plan-pick"><input type="radio" name="ps-plan" value="touroperator"><span class="plan-pick-name">Tour Operator</span><span class="plan-pick-price">€199/mese</span></label>
+            <label class="plan-pick"><input type="radio" name="ps-plan" value="free"><span class="plan-pick-name">Gratuito</span><span class="plan-pick-price">Nessuna commissione</span></label>
+          </div>
+          <button type="button" class="btn-step-next" id="ps-step1-next">Continua →</button>
+        </div>
+
+        <div class="signup-panel" data-panel="2">
+          <button type="button" class="signup-back" id="ps-step2-back">← Cambia piano</button>
+          <h3>I tuoi dati</h3>
+          <div class="field">
+            <label for="ps-name">Nome negozio / attività</label>
+            <input id="ps-name" type="text" required placeholder="Es. Ceramiche Caltagirone" />
+          </div>
+          <div class="field">
+            <label for="ps-email">Email</label>
+            <input id="ps-email" type="email" required placeholder="nome@negozio.it" />
+          </div>
+          <button type="submit" id="ps-submit">Registrati come partner →</button>
+          <div class="form-error" id="ps-error" style="display:none"></div>
+        </div>
+      </form>
+
+      <div id="partner-signup-result" style="display:none">
+        <div class="partner-result-code-row">
+          <div class="partner-result-code" id="ps-result-code"></div>
+          <button type="button" class="copy-code-btn" id="ps-copy-code">Copia</button>
+        </div>
+        <p class="partner-result-sub">Il tuo codice partner — usalo nell'area partner dell'app per accedere alle vendite e generare il QR del tuo negozio.</p>
+        <div class="doc-card" id="ps-result-invoice"></div>
       </div>
-      <p class="partner-result-sub">Il tuo codice partner — usalo nell'area partner dell'app per accedere alle vendite e generare il QR del tuo negozio.</p>
-      <div class="doc-card" id="ps-result-invoice"></div>
     </div>
   </div>
 </section>
@@ -566,6 +674,43 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
     partnerLoginLink.setAttribute("href", APP_URL + "?mode=partner");
   }
 
+  // Stepper del form di registrazione partner (1. Piano → 2. I tuoi dati)
+  // — puro stato di navigazione UI, nessuna logica di business: allo
+  // submit si legge comunque lo stesso valore "plan" (ora da un radio
+  // selezionabile a card invece che da una <select>) e si chiama la
+  // stessa action "register-partner" di sempre.
+  var signupStepInds = document.querySelectorAll(".signup-step-ind");
+  var signupPanels = document.querySelectorAll(".signup-panel");
+  function goToSignupStep(n) {
+    signupPanels.forEach(function (p) {
+      p.classList.toggle("active", p.dataset.panel === String(n));
+    });
+    signupStepInds.forEach(function (s) {
+      var sn = Number(s.dataset.stepInd);
+      s.classList.toggle("active", sn === n);
+      s.classList.toggle("done", sn < n);
+    });
+  }
+  var step1Next = document.getElementById("ps-step1-next");
+  if (step1Next) step1Next.addEventListener("click", function () { goToSignupStep(2); });
+  var step2Back = document.getElementById("ps-step2-back");
+  if (step2Back) step2Back.addEventListener("click", function () { goToSignupStep(1); });
+
+  // Evidenzia la card del piano selezionato (CSS non può leggere lo stato
+  // "checked" di un fratello senza :has, non usato qui per compatibilità
+  // browser più ampia — vedi .plan-pick.picked).
+  var planPickList = document.getElementById("plan-pick-list");
+  if (planPickList) {
+    planPickList.querySelectorAll('input[name="ps-plan"]').forEach(function (input) {
+      input.addEventListener("change", function () {
+        planPickList.querySelectorAll(".plan-pick").forEach(function (lbl) {
+          lbl.classList.remove("picked");
+        });
+        input.closest(".plan-pick").classList.add("picked");
+      });
+    });
+  }
+
   // Registrazione self-service partner — chiama l'action "register-partner"
   // in netlify/functions/sync.js, che crea il codice, salva il piano e
   // genera subito la prima fattura del canone.
@@ -578,7 +723,8 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
       errorBox.style.display = "none";
       var name = document.getElementById("ps-name").value.trim();
       var email = document.getElementById("ps-email").value.trim();
-      var plan = document.getElementById("ps-plan").value;
+      var planInput = partnerForm.querySelector('input[name="ps-plan"]:checked');
+      var plan = planInput ? planInput.value : "boutique";
       if (!name || !email) return;
 
       submitBtn.disabled = true;
@@ -604,6 +750,8 @@ footer{background:#0A0A08;color:#8A8577;padding:50px 0 30px;font-size:12.5px}
           '<div class="doc-row"><span>Data emissione</span><b>' + dateStr + '</b></div>';
 
         partnerForm.style.display = "none";
+        var stepperHeader = document.querySelector(".signup-stepper");
+        if (stepperHeader) stepperHeader.style.display = "none";
         document.getElementById("partner-signup-result").style.display = "block";
       } catch (err) {
         errorBox.textContent = err.message || "Errore in fase di registrazione. Riprova.";

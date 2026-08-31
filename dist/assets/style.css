@@ -117,6 +117,23 @@ button{font-family:inherit;cursor:pointer}
 .toggle-btn.active{background:var(--gold-soft);color:var(--ink)}
 .toggle-btn:not(.active){background:transparent;border-color:var(--ink-border);color:var(--muted-on-ink)}
 
+/* ---------- Barra di avanzamento percorso d'acquisto ---------- */
+.progress-bar{background:var(--ink);padding:12px 16px 14px;display:flex;align-items:flex-start;border-bottom:1px solid var(--header-border)}
+.progress-step{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 1 auto;min-width:0}
+.progress-dot{
+  width:22px;height:22px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;font-weight:700;
+  border:1.5px solid var(--ink-border);color:var(--muted-on-ink);background:transparent;
+}
+.progress-step.active .progress-dot{background:var(--gold-soft);color:var(--ink);border-color:var(--gold-soft)}
+.progress-step.done .progress-dot{background:transparent;color:var(--gold-soft);border-color:var(--gold-soft)}
+.progress-lbl{font-size:8.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted-on-ink);white-space:nowrap}
+.progress-step.active .progress-lbl{color:var(--ivory)}
+.progress-step.done .progress-lbl{color:var(--gold-soft)}
+.progress-connector{flex:1 1 auto;height:1.5px;background:var(--ink-border);margin:10px 3px 0;min-width:6px}
+.progress-connector.done{background:var(--gold-soft)}
+
 /* ---------- Sections ---------- */
 .section{padding:26px 20px}
 .eyebrow{
@@ -238,14 +255,54 @@ button{font-family:inherit;cursor:pointer}
 .analyzing p{font-family:var(--display);font-size:16px;color:var(--text);font-weight:600}
 
 /* ---------- Result screen ---------- */
-.result-card{margin:16px 20px 0;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
-.result-top{padding:20px 20px 16px}
 .confidence{
   font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;
   color:var(--good);float:right;
 }
 .result-title{font-family:var(--display);font-size:19px;font-weight:600;margin:4px 0 4px;line-height:1.3}
 .result-sub{font-size:12px;color:var(--muted);line-height:1.5}
+
+/* Fascia identificazione oggetto — sostituisce la vecchia .result-card:
+   niente più bordo/sfondo proprio, solo un'intestazione minima sopra il
+   prezzo (vedi .price-hero sotto), che è ora l'elemento dominante. */
+.result-identity{padding:16px 20px 4px}
+.result-identity .result-title{font-size:17px}
+
+/* ---------- Prezzo come elemento dominante della schermata ----------
+   Card scura "hero" (stesso linguaggio di promo-card-inline/capture-card/
+   hs-block — dove il resto dell'app usa il fondo scuro per segnalare "è
+   questo che conta"), con il totale come unico numero grande: la
+   scomposizione fee/spedizione/sconto scende in un <details> nativo
+   chiuso di default, così resta un tap di distanza ma non compete
+   visivamente col totale. font-size fluido (clamp) verificato leggibile
+   e su una riga sola fino a 360px di larghezza (vedi test manuale). */
+.price-hero{margin:8px 20px 0;background:var(--ink);color:var(--ivory);padding:26px 22px 20px;text-align:center;border:1px solid var(--gold-deep)}
+.price-hero-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-soft);margin-bottom:10px}
+.price-hero-amount{
+  font-family:var(--display);font-weight:700;color:var(--gold-soft);line-height:1;margin:0 0 8px;
+  font-size:clamp(34px,13vw,52px);white-space:nowrap;overflow-wrap:break-word;
+}
+.price-hero-eta{font-size:11.5px;color:var(--muted-on-ink)}
+.price-breakdown{margin-top:16px;text-align:left;border-top:1px solid var(--ink-border-soft);padding-top:12px}
+.price-breakdown summary{
+  cursor:pointer;font-size:10.5px;font-weight:700;color:var(--gold-soft);text-transform:uppercase;
+  letter-spacing:.05em;list-style:none;display:flex;align-items:center;justify-content:space-between;
+}
+.price-breakdown summary::-webkit-details-marker{display:none}
+.price-breakdown summary::after{content:"▸";font-size:10px;color:var(--muted-on-ink)}
+.price-breakdown[open] summary::after{content:"▾"}
+.price-breakdown .breakdown-rows{margin-top:10px}
+.price-breakdown .info-row{border-bottom-color:var(--ink-border-soft);color:var(--text-on-ink-soft)}
+.price-breakdown .info-row b{color:var(--gold-soft)}
+
+/* Dettagli secondari (identificazione completa + dogana): sotto il
+   prezzo, tipograficamente più piccoli — stessi dati di prima, solo
+   ridimensionati e demoted rispetto alla card prezzo sopra. */
+.result-details-secondary{margin-top:4px}
+.result-grid.compact > div{padding:10px 14px}
+.result-grid.compact .result-val{font-size:12px}
+.hs-block.compact{padding:12px 20px}
+.hs-block.compact .hs-code{font-size:17px}
 
 .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
 .result-grid > div{background:var(--paper);padding:12px 16px}
@@ -297,7 +354,7 @@ button{font-family:inherit;cursor:pointer}
   .aperture-blade{transition:none}
 }
 .result-title,.hs-code{min-height:1.2em}
-.result-card,.price-card{animation:fadein .35s ease both}
+.price-card,.price-hero{animation:fadein .35s ease both}
 @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .hidden{display:none !important}
 .muted-link{font-size:12px;color:var(--muted);text-align:center;display:block;margin-top:8px}
@@ -566,7 +623,6 @@ button{font-family:inherit;cursor:pointer}
 .info-line{font-size:11.5px;color:var(--text-secondary);line-height:1.6;padding:6px 0}
 
 /* ---------- Result (v2) ---------- */
-.result-card{border-radius:0;box-shadow:none}
 .hs-block{border-radius:0}
 .secure-note{margin:14px 20px 0;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:12px 14px;font-size:11.5px;color:var(--warn);line-height:1.6}
 .price-card{margin:16px 20px 0;background:var(--surface);border:1px solid var(--line);padding:16px 18px}
@@ -613,7 +669,8 @@ button{font-family:inherit;cursor:pointer}
 .price-option{background:var(--surface);border:1px solid var(--line);padding:16px 18px;margin-bottom:12px}
 .price-option.highlight{border-color:var(--gold);background:var(--warn-bg)}
 .price-option-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);margin-bottom:6px}
-.price-option-total{font-family:var(--display);font-size:24px;font-weight:600;color:var(--text);margin-bottom:6px}
+.price-option-total{font-family:var(--display);font-size:30px;font-weight:600;color:var(--text);margin-bottom:6px}
+.price-option.highlight .price-option-total{color:var(--gold-deep)}
 .price-option-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px}
 
 .promo-card-inline{margin:16px 20px 0;background:var(--ink);color:var(--ivory);padding:18px 20px;position:relative;border:1px solid var(--gold-deep)}
@@ -684,15 +741,33 @@ button{font-family:inherit;cursor:pointer}
 .ob-tap-zone.ob-right{right:0}
 .promo-card-inline .btn-primary{background:var(--gold-soft);color:var(--ink)}
 
-/* ---------- Raggruppamento sezioni area partner ----------
-   L'area partner impilava una sequenza di .info-card tutte uguali (stesso
-   grigio, stesso peso visivo) senza alcuna separazione tra blocchi
-   concettualmente diversi (riepilogo, andamento, credito, QR) — lo stesso
-   problema di densità che aveva il CRM prima della sua ristrutturazione.
-   .partner-block-lbl introduce la stessa etichetta già usata altrove
-   (.tg-lbl) ma con un filo superiore che segna l'inizio di un nuovo
-   gruppo, così la dashboard si legge come sezioni distinte invece che
-   come un'unica colonna indifferenziata di card identiche. */
+/* ---------- Area partner: navigazione a schede ----------
+   L'area partner impilava tutte le sezioni (riepilogo, piano, andamento,
+   credito, QR) in un'unica colonna lunghissima — anche dopo una prima
+   passata di etichette separatorie, restava una pagina che scorreva
+   all'infinito. Vera ristrutturazione: solo il riepilogo hero (le due
+   cifre più controllate) resta sempre visibile; il resto vive in 4 schede
+   (PartnerLoginAndHistory() in app.js, stato in state.partnerActiveTab),
+   una sola sezione a schermo alla volta — stessa logica di
+   semplificazione già applicata al CRM (barra laterale invece delle tab). */
+.partner-tabs{display:flex;gap:6px;margin:14px 0 16px;border-bottom:1px solid var(--line)}
+.partner-tab-btn{
+  flex:1;background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--muted);font-family:var(--body);font-size:11px;font-weight:700;
+  padding:10px 4px 12px;cursor:pointer;white-space:nowrap;
+}
+/* --text, non --ink: la barra vive su .section (fondo --paper, invertibile
+   nei temi lime/corallo) — --ink resterebbe fisso scuro e sparirebbe su
+   un --paper diventato scuro anche lui. Bug trovato e corretto qui
+   durante la verifica sui temi, stesso tipo di errore già capitato una
+   volta con .stat-lbl (vedi nota sopra, PR precedente). */
+.partner-tab-btn.on{color:var(--text);border-bottom-color:var(--gold-deep)}
+.partner-tab-content{animation:fadein .25s ease both}
+
+/* .partner-block-lbl: filo separatore + etichetta (riusa .tg-lbl) per una
+   sotto-sezione ALL'INTERNO di una scheda (es. "Il tuo piano" dentro
+   Panoramica, sotto il riepilogo) — non più per separare le schede stesse,
+   ora sostituite dalla barra sopra. */
 .partner-block-lbl{border-top:1px solid var(--line);padding-top:18px;margin-top:22px}
 
 /* Riepilogo partner: le due cifre che contano di più (credito disponibile,

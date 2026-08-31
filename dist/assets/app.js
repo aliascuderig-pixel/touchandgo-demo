@@ -422,6 +422,11 @@ const I18N = {
     result_quote_suffix_breakeven: "· offerta breakeven",
     result_quote_suffix_subscribed: "· prezzo abbonato",
     result_total_lbl: "Totale",
+    result_breakdown_toggle: "Dettaglio del calcolo",
+    progress_step_photo: "Foto",
+    progress_step_confirm: "Conferma",
+    progress_step_conclude: "Concludi",
+    progress_step_done: "Fatto",
     result_delivery_note: "Consegna in {eta} · tracciamento incluso · copertura standard inclusa",
     result_discount_lbl: "Sconto codice partner ({code})",
     result_estimate_badge: "Stima per spedizione singola",
@@ -653,6 +658,11 @@ const I18N = {
     result_quote_suffix_breakeven: "· breakeven offer",
     result_quote_suffix_subscribed: "· subscriber price",
     result_total_lbl: "Total",
+    result_breakdown_toggle: "Price breakdown",
+    progress_step_photo: "Photo",
+    progress_step_confirm: "Confirm",
+    progress_step_conclude: "Wrap up",
+    progress_step_done: "Done",
     result_delivery_note: "Delivery in {eta} · tracking included · standard coverage included",
     result_discount_lbl: "Partner code discount ({code})",
     result_estimate_badge: "Estimate for a single shipment",
@@ -884,6 +894,9 @@ const state = {
   partnerLoginLoading: false,
   partnerLoginError: null,
   partnerStats: null,
+  // Solo UI (quale scheda dell'area partner è aperta) — mai persistito,
+  // mai letto da nessuna function backend. Vedi PartnerLoginAndHistory().
+  partnerActiveTab: "overview",
   partnerUpgradePlan: null,
   partnerUpgradeLoading: false,
   partnerUpgradeError: null,
@@ -997,6 +1010,9 @@ function render() {
     return;
   }
   app.appendChild(Header());
+  if (state.mode === "turista" && PURCHASE_STEP_SCREENS[state.screen]) {
+    app.appendChild(PurchaseProgressBar(PURCHASE_STEP_SCREENS[state.screen]));
+  }
   if (state.mode === "partner") app.appendChild(PartnerScreen());
   else if (state.screen === "biometric-lock") app.appendChild(BiometricLockScreen());
   else if (state.screen === "cover") app.appendChild(CoverScreen());
@@ -1075,6 +1091,51 @@ function Header() {
     })
   );
   wrap.appendChild(toggle);
+  return wrap;
+}
+
+// ---------------- Barra di avanzamento del percorso d'acquisto ----------------
+//
+// Prima di questo il percorso (Home → foto → classificazione → conferma
+// ritiro/destinazione → conclusione → QR) non aveva alcun indicatore
+// persistente di "a che punto sono" — solo un'etichetta diversa per
+// schermata (es. "Step 3 · Risultato"), senza contesto sul totale dei
+// passi. PURCHASE_STEP_SCREENS mappa ogni schermata del percorso
+// principale a una delle 4 tappe; le schermate accessorie (storico,
+// dashboard, documenti, modifica indirizzo, verifica imballo, foto
+// oggetto...) non ci sono — restano fuori dalla barra apposta, per non
+// far pensare a un turista che sta guardando il proprio storico di
+// essere "tornato indietro" nel percorso di un nuovo acquisto.
+// Sola lettura di state.screen: nessuna scrittura, nessun impatto sulla
+// macchina a stati esistente in render().
+const PURCHASE_STEP_SCREENS = {
+  home: 1,
+  destination: 1,
+  analyzing: 1,
+  result: 2,
+  "choose-address": 2,
+  "add-address": 2,
+  queued: 2,
+  conclude: 3,
+  shipped: 4,
+};
+const PURCHASE_STEPS = [
+  { n: 1, key: "progress_step_photo" },
+  { n: 2, key: "progress_step_confirm" },
+  { n: 3, key: "progress_step_conclude" },
+  { n: 4, key: "progress_step_done" },
+];
+function PurchaseProgressBar(activeStep) {
+  const wrap = el("div", "progress-bar");
+  PURCHASE_STEPS.forEach((step, i) => {
+    const state_ = step.n === activeStep ? "active" : step.n < activeStep ? "done" : "upcoming";
+    const item = el("div", "progress-step " + state_);
+    item.innerHTML = `<span class="progress-dot">${step.n < activeStep ? "✓" : step.n}</span><span class="progress-lbl">${t(step.key)}</span>`;
+    wrap.appendChild(item);
+    if (i < PURCHASE_STEPS.length - 1) {
+      wrap.appendChild(el("div", "progress-connector" + (step.n < activeStep ? " done" : "")));
+    }
+  });
   return wrap;
 }
 
@@ -1300,6 +1361,7 @@ function PartnerLoginAndHistory() {
     state.partnerUpgradePlan = null;
     state.partnerUpgradeLoading = false;
     state.partnerUpgradeError = null;
+    state.partnerActiveTab = "overview";
     render();
   });
 
@@ -1339,45 +1401,77 @@ function PartnerLoginAndHistory() {
     </div>`;
   wrap.appendChild(heroGrid);
 
-  const summary = el("div", "info-card");
-  summary.innerHTML = `
-    <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
-    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
-    <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
-    <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
-  wrap.appendChild(summary);
+  // Navigazione a schede: prima le sezioni sotto (piano, andamento,
+  // credito, QR) scorrevano tutte impilate in un'unica pagina lunghissima
+  // — stessa logica di semplificazione già applicata al CRM (barra
+  // laterale invece delle tab). Il riepilogo hero sopra (credito/vendite)
+  // resta sempre visibile perché è l'informazione più importante; il
+  // resto vive dentro una scheda alla volta. Stato puramente di UI
+  // (state.partnerActiveTab), mai letto da nessuna function backend.
+  const TABS = [
+    { key: "overview", lbl: "Panoramica" },
+    { key: "trend", lbl: "Andamento" },
+    { key: "credit", lbl: "Credito" },
+    { key: "qr", lbl: "QR negozio" },
+  ];
+  if (!TABS.some((tb) => tb.key === state.partnerActiveTab)) state.partnerActiveTab = "overview";
 
-  // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a
-  // pagamento — quanto avrebbe già generato di commissione se fosse stato
-  // abbonato (stesso 10% di totalCommission sopra, qui riletto come
-  // occasione persa). Il countdown avvisa prima che scatti il blocco.
-  if (stats.plan === "free" || !stats.plan) {
-    const daysLeft = stats.access && typeof stats.access.daysRemaining === "number" ? stats.access.daysRemaining : null;
-    wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "Il tuo piano"));
-    const incentive = el("div", "info-card");
-    incentive.innerHTML = `
-      ${
-        stats.totalCommission > 0
-          ? `<div class="info-row"><span>Se fossi abbonato, avresti già maturato</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`
-          : ""
-      }
-      ${
-        daysLeft != null
-          ? `<div class="info-row"><span>Piano gratuito</span><b>${
-              daysLeft > 30 ? `${Math.ceil(daysLeft / 30)} mesi rimasti` : `${daysLeft} giorni rimasti`
-            }</b></div>`
-          : ""
-      }`;
-    wrap.appendChild(incentive);
-    wrap.appendChild(PartnerUpgradeSection(stats));
+  const tabBar = el("div", "partner-tabs");
+  TABS.forEach((tb) => {
+    const btn = el("button", "partner-tab-btn" + (state.partnerActiveTab === tb.key ? " on" : ""), tb.lbl);
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      state.partnerActiveTab = tb.key;
+      render();
+    });
+    tabBar.appendChild(btn);
+  });
+  wrap.appendChild(tabBar);
+
+  const tabContent = el("div", "partner-tab-content");
+
+  if (state.partnerActiveTab === "overview") {
+    const summary = el("div", "info-card");
+    summary.innerHTML = `
+      <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
+      ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
+      <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
+      <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`;
+    tabContent.appendChild(summary);
+
+    // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a
+    // pagamento — quanto avrebbe già generato di commissione se fosse stato
+    // abbonato (stesso 10% di totalCommission sopra, qui riletto come
+    // occasione persa). Il countdown avvisa prima che scatti il blocco.
+    if (stats.plan === "free" || !stats.plan) {
+      const daysLeft = stats.access && typeof stats.access.daysRemaining === "number" ? stats.access.daysRemaining : null;
+      tabContent.appendChild(el("div", "tg-lbl partner-block-lbl", "Il tuo piano"));
+      const incentive = el("div", "info-card");
+      incentive.innerHTML = `
+        ${
+          stats.totalCommission > 0
+            ? `<div class="info-row"><span>Se fossi abbonato, avresti già maturato</span><b>€${stats.totalCommission.toFixed(2)}</b></div>`
+            : ""
+        }
+        ${
+          daysLeft != null
+            ? `<div class="info-row"><span>Piano gratuito</span><b>${
+                daysLeft > 30 ? `${Math.ceil(daysLeft / 30)} mesi rimasti` : `${daysLeft} giorni rimasti`
+              }</b></div>`
+            : ""
+        }`;
+      tabContent.appendChild(incentive);
+      tabContent.appendChild(PartnerUpgradeSection(stats));
+    }
+  } else if (state.partnerActiveTab === "trend") {
+    tabContent.appendChild(PartnerTrendSection(stats));
+  } else if (state.partnerActiveTab === "credit") {
+    tabContent.appendChild(PartnerCreditSection(stats));
+  } else if (state.partnerActiveTab === "qr") {
+    tabContent.appendChild(PartnerQRSection(state.partnerLoggedCode));
   }
 
-  wrap.appendChild(PartnerTrendSection(stats));
-
-  wrap.appendChild(PartnerCreditSection(stats));
-
-  wrap.appendChild(PartnerQRSection(state.partnerLoggedCode));
-
+  wrap.appendChild(tabContent);
   wrap.appendChild(logoutBtn);
 
   return wrap;
@@ -1483,9 +1577,14 @@ async function refreshPartnerStats() {
 function PartnerTrendSection(stats) {
   const wrap = el("div");
   const months = stats.monthlyBreakdown || [];
+  const hasContent = months.length || (stats.recentOrders || []).length;
 
-  if (months.length || (stats.recentOrders || []).length) {
-    wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "Le tue vendite nel tempo"));
+  // La scheda "Andamento" non scorre più tra le altre nella stessa pagina
+  // — se non c'è ancora nessuna vendita va detto esplicitamente, altrimenti
+  // la scheda risulterebbe vuota e sembrerebbe rotta.
+  if (!hasContent) {
+    wrap.appendChild(el("div", "identify-intro", "Nessuna vendita registrata ancora — l'andamento mensile e gli ultimi ordini compariranno qui non appena arriva la prima vendita."));
+    return wrap;
   }
 
   if (months.length) {
@@ -1536,7 +1635,6 @@ function PartnerTrendSection(stats) {
 // generare un codice sconto monouso da dare a un cliente.
 function PartnerCreditSection(stats) {
   const wrap = el("div");
-  wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "Credito e sconti"));
 
   if (stats.creditBalance > 0) {
     const redeemBtn = el("button", "btn-secondary", state.partnerCreditRedeeming ? "Applico il credito…" : "Usa credito per il canone");
@@ -1649,7 +1747,6 @@ function qrCodeUrl(data, size) {
 // codice partner in automatico (vedi capturePartnerCode(), non toccata).
 function PartnerQRSection(code) {
   const wrap = el("div");
-  wrap.appendChild(el("div", "tg-lbl partner-block-lbl", "QR del negozio"));
 
   if (!state.showPartnerQr) {
     const qrBtn = el("button", "btn-secondary", "Genera QR per il tuo negozio");
@@ -2431,45 +2528,16 @@ function ResultScreen() {
   topbar.appendChild(el("h2", null, t("result_step3_lbl")));
   wrap.appendChild(topbar);
 
-  const card = el("div", "result-card");
-  const top = el("div", "result-top");
-  top.innerHTML = `
+  // Identificazione oggetto: fascia compatta, non più una card grande —
+  // il prezzo (sotto) è ora l'elemento dominante della schermata, questa
+  // resta un'intestazione minima ma con gli stessi id (res-title/res-sub)
+  // che animateResult() continua a popolare via typewriter, invariato.
+  const identity = el("div", "result-identity");
+  identity.innerHTML = `
     <span class="confidence">${t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) })}</span>
     <div class="result-title" id="res-title"></div>
     <div class="result-sub" id="res-sub"></div>`;
-  card.appendChild(top);
-
-  const grid = el("div", "result-grid");
-  const pkg = packagedDimensions(r);
-  const objDims = r.length_cm && r.width_cm && r.height_cm ? formatDims(r.length_cm, r.width_cm, r.height_cm) : "—";
-  grid.innerHTML = `
-    <div><div class="result-lbl">${t("result_lbl_weight")}</div><div class="result-val">${r.weight_kg ?? "—"} kg</div></div>
-    <div><div class="result-lbl">${t("result_lbl_obj_dims")}</div><div class="result-val">${objDims}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_pkg_dims")}</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${state.pickupPoint}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
-      getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—"
-    }</div></div>`;
-  card.appendChild(grid);
-
-  const hs = el("div", "hs-block");
-  hs.innerHTML = `
-    <div class="hs-left"><div class="hs-lbl">${t("result_lbl_hs_code")}</div><div class="hs-code" id="res-hscode"></div></div>
-    <div class="hs-desc" id="res-desc"></div>`;
-  card.appendChild(hs);
-  wrap.appendChild(card);
-
-  const shippingNote = localizeShippingNote(r);
-  if (shippingNote) {
-    const tip = el("div", "tip", `💡 ${shippingNote}`);
-    wrap.appendChild(tip);
-  }
-
-  if (r.value_eur > 500 || r.confidence === "bassa") {
-    const secure = el("div", "secure-note", t("result_secure_note"));
-    wrap.appendChild(secure);
-  }
+  wrap.appendChild(identity);
 
   let priceCard;
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
@@ -2559,19 +2627,66 @@ function ResultScreen() {
       : state.isSubscribed
       ? t("result_quote_suffix_subscribed")
       : "";
-    priceCard = el("div", "price-card final-total");
+    // Card scura "hero", stesso linguaggio visivo già usato altrove per i
+    // momenti che contano di più (promo-card-inline, capture-card, hs-block)
+    // invece della card chiara neutra di prima: il totale è il solo numero
+    // in grande, la scomposizione (fee/spedizione/sconto) scende dentro un
+    // <details> nativo, chiuso di default — nessun JS in più, "meno
+    // prominente" senza nascondere l'informazione, solo un tap per aprirla.
+    priceCard = el("div", "price-hero");
     priceCard.innerHTML = `
-      <div class="tg-lbl" style="margin-bottom:10px">${t("result_quote_title")} ${quoteSuffix}</div>
-      <div class="info-row"><span>${t("result_fee_service")}</span><b>€${fee}</b></div>
-      ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: state.partnerDiscountCode })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
-      <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
-      <div class="info-row total"><span>${t("result_total_lbl")}</span><b id="res-total">€0</b></div>
-      <div class="info-line" style="margin-top:8px">${t("result_delivery_note", { eta: localizeEta(q.eta) })}</div>`;
+      <div class="price-hero-lbl">${t("result_quote_title")} ${quoteSuffix}</div>
+      <div class="price-hero-amount" id="res-total">€0</div>
+      <div class="price-hero-eta">${t("result_delivery_note", { eta: localizeEta(q.eta) })}</div>
+      <details class="price-breakdown">
+        <summary>${t("result_breakdown_toggle")}</summary>
+        <div class="breakdown-rows">
+          <div class="info-row"><span>${t("result_fee_service")}</span><b>€${fee}</b></div>
+          ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: state.partnerDiscountCode })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
+          <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
+        </div>
+      </details>`;
     wrap.appendChild(priceCard);
     if (fee > 0) {
       wrap.appendChild(PartnerDiscountField(fee));
     }
   }
+
+  // Dettagli secondari: identificazione completa (griglia peso/dimensioni/
+  // ritiro/destinazione) e codice doganale — spostati sotto il prezzo e
+  // ridimensionati (classi "compact"), così il prezzo resta l'unico
+  // elemento dominante della schermata invece di competere con un'altra
+  // card scura di pari peso visivo. Nessun dato in meno: stessi identici
+  // valori/funzioni di prima, solo posizione e dimensione tipografica.
+  const details = el("div", "result-details-secondary");
+  const grid = el("div", "result-grid compact");
+  const pkg = packagedDimensions(r);
+  const objDims = r.length_cm && r.width_cm && r.height_cm ? formatDims(r.length_cm, r.width_cm, r.height_cm) : "—";
+  grid.innerHTML = `
+    <div><div class="result-lbl">${t("result_lbl_weight")}</div><div class="result-val">${r.weight_kg ?? "—"} kg</div></div>
+    <div><div class="result-lbl">${t("result_lbl_obj_dims")}</div><div class="result-val">${objDims}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_pkg_dims")}</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${state.pickupPoint}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
+      getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—"
+    }</div></div>`;
+  details.appendChild(grid);
+
+  const hs = el("div", "hs-block compact");
+  hs.innerHTML = `
+    <div class="hs-left"><div class="hs-lbl">${t("result_lbl_hs_code")}</div><div class="hs-code" id="res-hscode"></div></div>
+    <div class="hs-desc" id="res-desc"></div>`;
+  details.appendChild(hs);
+
+  const shippingNote = localizeShippingNote(r);
+  if (shippingNote) {
+    details.appendChild(el("div", "tip", `💡 ${shippingNote}`));
+  }
+  if (r.value_eur > 500 || r.confidence === "bassa") {
+    details.appendChild(el("div", "secure-note", t("result_secure_note")));
+  }
+  wrap.appendChild(details);
 
   // Il prezzo qui è sempre e solo una STIMA per la spedizione di questo
   // singolo oggetto — nessun addebito reale (o simulato) avviene in questo
