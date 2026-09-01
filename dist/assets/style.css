@@ -361,6 +361,13 @@ button{font-family:inherit;cursor:pointer}
 .pending-banner{margin:0 20px 16px;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:14px 16px}
 .pending-count{font-family:var(--display);font-size:15px;font-weight:600;color:var(--ink)}
 .pending-sub{font-size:11px;color:var(--warn);margin:3px 0 10px}
+
+/* Indicatore non invasivo per la coda di ritentativo sync CRM (vedi
+   PendingSyncBanner in app.js) — stessa palette "attenzione" di
+   .pending-banner ma più discreto (una riga di testo), coerente col fatto
+   che non richiede alcuna azione nella maggior parte dei casi. */
+.sync-pending-banner{margin:0 20px 16px;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:10px 14px;font-size:11px;color:var(--warn);line-height:1.5}
+.sync-pending-banner.attention{border-color:var(--warn)}
 .queue-list{margin-bottom:14px}
 .queue-item{background:var(--surface);border:1px solid var(--line);padding:12px 14px;margin-bottom:8px}
 .queue-item-name{font-family:var(--display);font-size:14px;font-weight:600;color:var(--text)}
