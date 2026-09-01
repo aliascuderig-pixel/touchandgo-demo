@@ -368,6 +368,20 @@ button{font-family:inherit;cursor:pointer}
    che non richiede alcuna azione nella maggior parte dei casi. */
 .sync-pending-banner{margin:0 20px 16px;background:var(--warn-bg);border:1px solid var(--gold-soft);padding:10px 14px;font-size:11px;color:var(--warn);line-height:1.5}
 .sync-pending-banner.attention{border-color:var(--warn)}
+
+/* Invito proattivo in Home a recensire un acquisto già consegnato ma non
+   ancora recensito su questo dispositivo (vedi ReviewInviteBanner in
+   app.js) — a differenza dei banner "attenzione" sopra (warn-bg/gold-soft),
+   qui è un invito positivo: stessa palette oro piena già usata per
+   .pickup-update-banner, un solo tap porta dritto a ReviewScreen. */
+.review-invite-banner{display:flex;align-items:center;gap:12px;margin:0 20px 16px;background:var(--gold);color:var(--ink);border:1px solid var(--gold-deep);padding:14px 16px;cursor:pointer}
+.review-invite-banner:active{background:var(--gold-soft)}
+.review-invite-icon{font-size:22px;flex-shrink:0}
+.review-invite-body{flex:1;min-width:0}
+.review-invite-title{font-family:var(--display);font-size:14px;font-weight:600;line-height:1.3}
+.review-invite-sub{font-size:11px;color:var(--ink);opacity:.75;margin-top:2px}
+.review-invite-arrow{font-size:18px;flex-shrink:0}
+
 .queue-list{margin-bottom:14px}
 .queue-item{background:var(--surface);border:1px solid var(--line);padding:12px 14px;margin-bottom:8px}
 .queue-item-name{font-family:var(--display);font-size:14px;font-weight:600;color:var(--text)}
@@ -386,7 +400,7 @@ button{font-family:inherit;cursor:pointer}
 .history-status.requested{background:var(--cream);color:var(--text)}
 .history-status.done{background:var(--good-bg);color:var(--good)}
 .history-meta{font-size:10.5px;color:var(--muted);margin-top:2px}
-.footer-links{display:flex;justify-content:center;gap:14px;margin-top:8px}
+.footer-links{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;row-gap:4px;margin-top:8px}
 
 /* ---------- Pickup point updated banner ---------- */
 .pickup-update-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
@@ -400,9 +414,15 @@ button{font-family:inherit;cursor:pointer}
 .delivery-confirmed-note{font-size:10.5px;color:var(--good);font-weight:600;margin-top:8px}
 
 /* ---------- Recensione post-consegna (Touch&Go Broadcasting) ---------- */
-.review-stars{display:flex;gap:8px;margin:4px 0 16px}
-.review-star{background:none;border:none;font-size:30px;line-height:1;color:var(--line);cursor:pointer;padding:0}
+/* Stelle ingrandite (30px -> 42px) con più spazio tra loro e un padding
+   proprio (non solo il glifo) per un tocco più preciso su mobile. */
+.review-stars{display:flex;gap:12px;margin:4px 0 6px}
+.review-star{background:none;border:none;font-size:42px;line-height:1;color:var(--line);cursor:pointer;padding:6px}
 .review-star.active{color:var(--gold)}
+/* Etichetta testuale sotto le stelle ("Ottimo!", "Così così"...) mentre si
+   sceglie il voto — min-height riservata così il layout sotto non "salta"
+   quando compare al primo tap. Vedi REVIEW_RATING_LABELS in app.js. */
+.review-rating-label{font-size:13px;font-weight:700;color:var(--clay);min-height:18px;margin:0 0 16px}
 .review-textarea{
   display:block;width:100%;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;
   font-size:13px;font-family:inherit;background:var(--paper);color:var(--text);resize:vertical;min-height:90px;box-sizing:border-box;
@@ -410,7 +430,13 @@ button{font-family:inherit;cursor:pointer}
 .review-char-count{font-size:10px;color:var(--text-secondary);text-align:right;margin:4px 0 16px}
 .review-thanks{margin:6px 0 20px;background:var(--good-bg);border:1px solid var(--success-border);border-radius:var(--radius-sm);padding:14px 16px;color:var(--good);font-weight:600;font-size:13px}
 .review-privacy-note{font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:18px}
-.review-submit-btn{margin-bottom:22px}
+/* Wrapper invece del margine diretto sul bottone: così il suggerimento
+   sotto (quando disabilitato) resta agganciato visivamente al bottone
+   invece di un margine fisso indipendente dal contenuto. */
+.review-submit-wrap{margin-bottom:22px}
+.review-submit-btn{margin-bottom:0}
+.review-submit-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.review-submit-hint{font-size:11.5px;color:var(--text-secondary);text-align:center;margin-top:8px}
 .review-share-note{font-size:11.5px;color:var(--text-secondary);line-height:1.6;margin:18px 0 10px}
 
 /* ---------- Punto di ritiro: rilevamento manuale/automatico, città recenti ---------- */
@@ -424,7 +450,11 @@ button{font-family:inherit;cursor:pointer}
 .pickup-chip:active{background:var(--warn-bg);border-color:var(--gold)}
 
 /* ---------- Reset ---------- */
-.reset-link{display:inline-block;margin:0;background:none;border:none;font-size:10px;color:var(--muted);text-decoration:underline;padding:6px}
+/* Link secondari del footer — restano visivamente discreti (muted,
+   underline) ma con testo leggibile e un'area di tocco reale vicina ai
+   ~44px minimi da linee guida mobile (13px*1.3 di line-height + 13px di
+   padding verticale per lato ≈ 44px), non solo il testo visibile. */
+.reset-link{display:inline-block;margin:0;background:none;border:none;font-family:var(--body);font-size:14px;line-height:1.3;color:var(--muted);text-decoration:underline;text-underline-offset:2px;padding:13px 12px}
 .identify-intro{font-size:12.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:18px}
 .greeting{font-family:var(--display);font-style:italic;font-size:15px;color:var(--clay);margin-bottom:6px}
 

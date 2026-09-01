@@ -2117,6 +2117,9 @@ function HomeScreen() {
   wrap.appendChild(AssistantAvatar("home"));
   wrap.appendChild(TrustRow());
 
+  const reviewBanner = ReviewInviteBanner();
+  if (reviewBanner) wrap.appendChild(reviewBanner);
+
   const syncBanner = PendingSyncBanner();
   if (syncBanner) wrap.appendChild(syncBanner);
 
@@ -3097,6 +3100,54 @@ function isReviewed(purchaseId) {
   return loadReviewedIds().includes(purchaseId);
 }
 
+// Acquisti "ritirato" con consegna già confermata (deliveryConfirmedAt,
+// sincronizzato dal server) ma non ancora recensiti su QUESTO dispositivo
+// (tg_reviewed_ids è solo locale) — capita non solo se il turista è
+// tornato indietro da ReviewScreen senza inviare (confirmDelivery() lo
+// porta lì automaticamente, ma non lo obbliga), ma anche cambiando
+// dispositivo: la conferma di consegna arriva sincronizzata, la recensione
+// già fatta no. Ordinati per data così il più vecchio (quello "dimenticato"
+// da più tempo) è il primo a comparire nell'invito qui sotto.
+function pendingReviewItems() {
+  return state.purchaseHistory
+    .filter((it) => it.status === "ritirato" && it.deliveryConfirmedAt && !isReviewed(it.id))
+    .sort((a, b) => new Date(a.deliveryConfirmedAt) - new Date(b.deliveryConfirmedAt));
+}
+
+// Invito proattivo in HomeScreen — oggi l'unico modo per scoprire che c'è
+// una recensione in sospeso è aprire "I tuoi acquisti" e trovare la riga
+// giusta. Stesso principio non invasivo di PendingSyncBanner: un solo tap
+// porta direttamente a ReviewScreen per l'acquisto più vecchio in sospeso,
+// senza passare dallo storico.
+function ReviewInviteBanner() {
+  const items = pendingReviewItems();
+  if (!items.length) return null;
+  const item = items[0];
+  const banner = el("div", "review-invite-banner");
+  banner.innerHTML = `
+    <div class="review-invite-icon">⭐</div>
+    <div class="review-invite-body">
+      <div class="review-invite-title">Com'è andata con "${item.objectName}"?</div>
+      <div class="review-invite-sub">${
+        items.length > 1
+          ? `Lascia una recensione — ne hai ${items.length} in sospeso`
+          : "Lascia una recensione, bastano 30 secondi"
+      }</div>
+    </div>
+    <div class="review-invite-arrow">→</div>`;
+  banner.addEventListener("click", () => {
+    state.reviewingPurchaseId = item.id;
+    state.reviewReturnTo = "home";
+    state.reviewDraftRating = 0;
+    state.reviewDraftText = "";
+    state.reviewJustSubmitted = false;
+    state.reviewSubmitError = null;
+    state.screen = "review";
+    render();
+  });
+  return banner;
+}
+
 // Un link di recensione (?review=<purchaseId>, vedi captureReviewFromUrl())
 // può essere aperto su un dispositivo diverso da quello che ha registrato
 // l'acquisto — in quel caso l'oggetto non è in state.pendingItems/
@@ -3177,9 +3228,17 @@ async function shareReviewLink(url) {
   }
 }
 
+// Etichetta mostrata sotto le stelle mentre si sceglie il voto (Problema
+// 2b) — aiuta a capire cosa si sta selezionando invece di lasciare solo il
+// numero di stelle a parlare da sé.
+const REVIEW_RATING_LABELS = { 1: "Pessimo", 2: "Così così", 3: "Buono", 4: "Ottimo!", 5: "Eccellente!" };
+
 function ReviewScreen() {
   const wrap = el("div", "section review-screen");
-  const back = el("div", "back", "← Torna allo storico");
+  // Il testo cambia in base a come si è arrivati qui (dallo storico, come
+  // sempre, oppure — vedi ReviewInviteBanner in HomeScreen — direttamente
+  // dalla home): "Torna allo storico" sarebbe fuorviante nel secondo caso.
+  const back = el("div", "back", state.reviewReturnTo === "home" ? "← Torna alla home" : "← Torna allo storico");
   back.addEventListener("click", () => {
     state.screen = state.reviewReturnTo || "history";
     render();
@@ -3222,6 +3281,7 @@ function ReviewScreen() {
       starsRow.appendChild(star);
     }
     wrap.appendChild(starsRow);
+    wrap.appendChild(el("div", "review-rating-label", currentRating ? REVIEW_RATING_LABELS[currentRating] : ""));
 
     const textarea = el("textarea", "review-textarea");
     textarea.placeholder = "Raccontaci com'è andata (facoltativo)";
@@ -3251,7 +3311,14 @@ function ReviewScreen() {
     );
     submitBtn.disabled = !currentRating || state.reviewSubmitting;
     submitBtn.addEventListener("click", () => submitReview(item));
-    wrap.appendChild(submitBtn);
+    const submitWrap = el("div", "review-submit-wrap");
+    submitWrap.appendChild(submitBtn);
+    // Il solo grigiore del bottone disabilitato è facile da non notare —
+    // un testo esplicito toglie ogni dubbio sul perché "non succede nulla".
+    if (!currentRating && !state.reviewSubmitting) {
+      submitWrap.appendChild(el("div", "review-submit-hint", "Scegli un voto qui sopra per continuare"));
+    }
+    wrap.appendChild(submitWrap);
   }
 
   const reviewUrl = `${window.location.origin}/?review=${encodeURIComponent(purchaseId)}`;
