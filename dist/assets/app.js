@@ -295,6 +295,10 @@ const I18N = {
     header_reset_label: "Reset",
     offline_banner: "📡 Sei offline — la classificazione AI e le foto delle città non sono disponibili finché non torni online. I tuoi acquisti, indirizzi e dashboard restano comunque consultabili.",
     guest_mode_banner: "🛟 Stai usando la versione di continuità di Touch&amp;Go. I tuoi acquisti sono al sicuro e verranno sincronizzati automaticamente.",
+    sync_pending_item_singular: "sincronizzazione",
+    sync_pending_item_plural: "sincronizzazioni",
+    sync_pending_suffix: "in sospeso col CRM — verranno ritentate automaticamente",
+    sync_pending_suffix_attention: "in sospeso col CRM da tempo — potrebbe richiedere attenzione",
     mode_tourist: "Turista",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Chiedi a Touch&Go",
@@ -526,6 +530,10 @@ const I18N = {
     header_reset_label: "Reset",
     offline_banner: "📡 You're offline — AI classification and city photos aren't available until you're back online. Your purchases, addresses and dashboard are still available.",
     guest_mode_banner: "🛟 You're using Touch&amp;Go's continuity space. Your purchases are safe and will sync automatically.",
+    sync_pending_item_singular: "sync",
+    sync_pending_item_plural: "syncs",
+    sync_pending_suffix: "pending with the CRM — will be retried automatically",
+    sync_pending_suffix_attention: "pending with the CRM for a while — may need attention",
     mode_tourist: "Tourist",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Ask Touch&Go",
@@ -2109,6 +2117,9 @@ function HomeScreen() {
   wrap.appendChild(AssistantAvatar("home"));
   wrap.appendChild(TrustRow());
 
+  const syncBanner = PendingSyncBanner();
+  if (syncBanner) wrap.appendChild(syncBanner);
+
   if (state.pickupSource !== "gps" && !state.locationReminderDismissed) {
     const loc = el("div", "location-reminder");
     loc.innerHTML = `
@@ -2727,30 +2738,174 @@ async function animateResult(r, p) {
   if (total) await countUp(total, p.grandTotal, 700);
 }
 
+// ---------------- Coda di ritentativo sync CRM ----------------
+//
+// syncPurchaseToCRM() e saveShipmentGroupToCRM() sotto restano "fire and
+// forget" verso il turista (non devono mai bloccare/rallentare l'acquisto),
+// ma un fallimento non può più sparire in un .catch(() => {}) silenzioso:
+// ogni tentativo fallito (rete instabile, timeout, errore transitorio del
+// server — anche una risposta non-ok, non solo un errore di fetch) finisce
+// in questa coda persistita in localStorage, ritentata da
+// processPendingSyncQueue() all'avvio, al ritorno online e periodicamente
+// mentre l'app resta aperta (vedi i punti di chiamata in fondo al file).
+const SYNC_QUEUE_KEY = "tg_pending_sync_queue";
+// 5 tentativi combinati con un tetto di 48h: coprono ampiamente un blip di
+// rete o un'interruzione temporanea del server (ogni avvio app/ritorno
+// online è già un tentativo), senza continuare a martellare per giorni un
+// endpoint che fallisce per un motivo non transitorio (es. payload
+// corrotto) — oltre la soglia l'elemento resta in coda con needsAttention
+// ma non viene più ritentato automaticamente.
+const SYNC_MAX_ATTEMPTS = 5;
+const SYNC_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+// L'indicatore (vedi PendingSyncBanner) compare solo se un elemento è in
+// coda da almeno 2 minuti: un singolo blip risolto al tentativo successivo
+// non deve mai far comparire un avviso non necessario.
+const SYNC_INDICATOR_DELAY_MS = 2 * 60 * 1000;
+
+const SYNC_ENDPOINTS = {
+  purchase: "/.netlify/functions/save-purchase",
+  "shipment-group": "/.netlify/functions/save-shipment-group",
+};
+
+function loadSyncQueue() {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    const items = raw ? JSON.parse(raw) : [];
+    return Array.isArray(items) ? items : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveSyncQueue(queue) {
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {}
+}
+
+function enqueueFailedSync(type, payload) {
+  const queue = loadSyncQueue();
+  queue.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    payload,
+    createdAt: Date.now(),
+    attempts: 0,
+    lastAttemptAt: null,
+    needsAttention: false,
+  });
+  saveSyncQueue(queue);
+}
+
+let syncQueueProcessing = false;
+
+// Ritenta ogni elemento in coda (tranne quelli già oltre il limite di
+// tentativi/tempo, marcati needsAttention). Non sovrappone esecuzioni
+// concorrenti (syncQueueProcessing) così due trigger ravvicinati (es. load
+// + evento "online" quasi in contemporanea) non inviano due volte lo
+// stesso elemento. Se il device risulta offline non tenta nemmeno la
+// fetch, per non consumare il budget di tentativi su qualcosa che non è
+// realmente un fallimento del server.
+async function processPendingSyncQueue() {
+  if (syncQueueProcessing) return;
+  if (typeof navigator !== "undefined" && "onLine" in navigator && !navigator.onLine) return;
+  const queue = loadSyncQueue();
+  if (!queue.length) return;
+  syncQueueProcessing = true;
+  let changed = false;
+  try {
+    const remaining = [];
+    for (const item of queue) {
+      if (item.needsAttention) {
+        remaining.push(item);
+        continue;
+      }
+      const endpoint = SYNC_ENDPOINTS[item.type];
+      if (!endpoint) {
+        remaining.push(item);
+        continue;
+      }
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item.payload),
+        });
+        if (!res.ok) throw new Error("sync failed: " + res.status);
+        changed = true; // successo: l'elemento non torna in remaining, esce dalla coda
+      } catch (e) {
+        item.attempts += 1;
+        item.lastAttemptAt = Date.now();
+        if (item.attempts >= SYNC_MAX_ATTEMPTS || Date.now() - item.createdAt >= SYNC_MAX_AGE_MS) {
+          item.needsAttention = true;
+        }
+        changed = true;
+        remaining.push(item);
+      }
+    }
+    saveSyncQueue(remaining);
+  } finally {
+    syncQueueProcessing = false;
+  }
+  if (changed) render();
+}
+
+// Elementi da mostrare nell'indicatore non invasivo (HomeScreen/HistoryScreen):
+// solo quelli in coda da almeno SYNC_INDICATOR_DELAY_MS, o già segnalati
+// needsAttention — mai al primo fallimento, per non allarmare per un blip
+// che si risolve da solo al tentativo successivo.
+function visiblePendingSyncItems() {
+  const queue = loadSyncQueue();
+  const now = Date.now();
+  return queue.filter((it) => it.needsAttention || now - it.createdAt >= SYNC_INDICATOR_DELAY_MS);
+}
+
+function PendingSyncBanner() {
+  const items = visiblePendingSyncItems();
+  if (!items.length) return null;
+  const attention = items.some((it) => it.needsAttention);
+  const banner = el("div", "sync-pending-banner" + (attention ? " attention" : ""));
+  const word = items.length === 1 ? t("sync_pending_item_singular") : t("sync_pending_item_plural");
+  const suffix = attention ? t("sync_pending_suffix_attention") : t("sync_pending_suffix");
+  banner.innerHTML = `🔄 ${items.length} ${word} ${suffix}`;
+  return banner;
+}
+
 function syncPurchaseToCRM(item) {
   const payload = item.touristEmail ? item : Object.assign({}, item, { touristEmail: state.touristEmail });
   fetch("/.netlify/functions/save-purchase", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  }).catch(() => {
-    // Offline or server unavailable — the purchase still lives in the
-    // tourist's local history; it just won't appear centrally until
-    // the next successful sync attempt.
-  });
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("save-purchase failed: " + res.status);
+    })
+    .catch(() => {
+      // Offline, server irraggiungibile o errore transitorio — l'acquisto
+      // resta comunque nello storico locale del turista; il vero
+      // ritentativo lo fa processPendingSyncQueue() (vedi sopra), non qui.
+      enqueueFailedSync("purchase", payload);
+    });
 }
 
 // Registra centralmente il record del gruppo di spedizione consolidato
-// (ConcludeScreen, save-shipment-group.js) — stesso pattern "fire and
-// forget" di syncPurchaseToCRM: un fallimento di rete non deve bloccare il
-// flusso del turista, il gruppo resta comunque visibile localmente in
-// ShippedScreen.
+// (ConcludeScreen, save-shipment-group.js) — stesso pattern di
+// syncPurchaseToCRM sopra: non blocca mai il flusso del turista (il
+// gruppo resta comunque visibile localmente in ShippedScreen), ma un
+// fallimento finisce comunque in coda di ritentativo invece di sparire.
 function saveShipmentGroupToCRM(group) {
   fetch("/.netlify/functions/save-shipment-group", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(group),
-  }).catch(() => {});
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("save-shipment-group failed: " + res.status);
+    })
+    .catch(() => {
+      enqueueFailedSync("shipment-group", group);
+    });
 }
 
 function historyStatusClass(status) {
@@ -4511,6 +4666,8 @@ function HistoryScreen() {
   });
   wrap.appendChild(back);
   wrap.appendChild(el("div", "step-lbl", "I tuoi acquisti"));
+  const syncBanner = PendingSyncBanner();
+  if (syncBanner) wrap.appendChild(syncBanner);
   wrap.appendChild(PurchaseHistoryList(state.purchaseHistory, "Non hai ancora registrato nessun acquisto.", true));
   return wrap;
 }
@@ -4936,15 +5093,25 @@ if (!manualPickupAtStartup) loadLocation();
 syncPurchaseUpdatesFromCRM();
 discoverPurchasesByEmail();
 checkGuestMode();
+processPendingSyncQueue();
 
 window.addEventListener("online", () => {
   state.isOffline = false;
   render();
+  processPendingSyncQueue();
 });
 window.addEventListener("offline", () => {
   state.isOffline = true;
   render();
 });
+// Rete "connessa" non significa "il precedente tentativo andrà a buon
+// fine adesso" (un blip può risolversi senza mai attraversare gli eventi
+// online/offline, es. un singolo errore 5xx transitorio) — un controllo
+// periodico leggero mentre l'app resta aperta intercetta questi casi
+// senza bisogno di un riavvio. processPendingSyncQueue() esce subito se
+// la coda è vuota o offline, quindi il costo quando non c'è nulla in
+// sospeso è trascurabile.
+setInterval(processPendingSyncQueue, 3 * 60 * 1000);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
