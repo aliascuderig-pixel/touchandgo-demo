@@ -1042,6 +1042,27 @@ function el(tag, cls, html) {
   return e;
 }
 
+// Difesa contro XSS: qualunque campo scritto/modificabile dal turista (nome
+// oggetto, nome turista, punto di ritiro manuale, etichetta/testo di un
+// indirizzo, descrizione libera dell'oggetto...) può finire, più avanti nel
+// flusso, in un innerHTML o in un template literal iniettato nel DOM — un
+// nodo creato via el(tag, cls, testo) qui sopra include SEMPRE un passaggio
+// da innerHTML, mai testContent puro. Stesso comportamento standard già in
+// uso in touchandgo-internal per lo stesso tipo di fix: sostituisce solo i
+// caratteri che permettono di uscire dal testo/attributo HTML corrente.
+// Va chiamata ESCLUSIVAMENTE nel punto di rendering (dove il valore entra
+// nell'HTML), mai alla scrittura/salvataggio del dato — altrimenti lo
+// storico locale e i record inviati al CRM finirebbero con entità HTML al
+// posto del testo originale (vedi MANUALE.md per l'elenco dei punti).
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function Header() {
   const wrap = el("div");
   const header = el("div", "header");
@@ -1228,7 +1249,7 @@ function PartnerLoginAndHistory() {
     wrap.appendChild(intro);
 
     const field = el("div", "dest-field");
-    field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${state.activePartnerCode || ""}" />`;
+    field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${escapeHtml(state.activePartnerCode || "")}" />`;
     wrap.appendChild(field);
     addVoiceButton(field.querySelector("#partner-code-input"));
 
@@ -1335,8 +1356,8 @@ function PartnerLoginAndHistory() {
 
   const summary = el("div", "info-card");
   summary.innerHTML = `
-    <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
-    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
+    <div class="info-row"><span>Codice partner</span><b>${escapeHtml(state.partnerLoggedCode)}</b></div>
+    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${escapeHtml(stats.partnerName)}</b></div>` : ""}
     <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
     <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
     <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
@@ -1400,7 +1421,7 @@ function PartnerUpgradeSection(stats) {
   wrap.appendChild(field);
 
   if (state.partnerUpgradeError) {
-    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerUpgradeError}`));
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerUpgradeError)}`));
   }
 
   const upgradeBtn = el("button", "btn-primary", state.partnerUpgradeLoading ? "Attivo il piano…" : "Attiva piano a pagamento");
@@ -1514,7 +1535,7 @@ function PartnerTrendSection(stats) {
       .map((o) => {
         const d = new Date(o.date);
         const dateStr = isNaN(d) ? "—" : d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
-        return `<div class="info-row"><span>${dateStr} · ${o.objectName || "—"}</span><b>€${o.commission.toFixed(2)}</b></div>`;
+        return `<div class="info-row"><span>${dateStr} · ${escapeHtml(o.objectName || "—")}</span><b>€${o.commission.toFixed(2)}</b></div>`;
       })
       .join("");
     wrap.appendChild(ordersList);
@@ -1568,7 +1589,7 @@ function PartnerCreditSection(stats) {
     wrap.appendChild(note);
   }
   if (state.partnerCreditRedeemError) {
-    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerCreditRedeemError}`));
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerCreditRedeemError)}`));
   }
 
   const genBtn = el("button", "btn-secondary", state.partnerDiscountGenerating ? "Genero il codice…" : "Genera codice sconto per un cliente");
@@ -1602,7 +1623,7 @@ function PartnerCreditSection(stats) {
       el(
         "div",
         "promo-active-note",
-        `✓ Codice sconto generato: ${state.partnerGeneratedDiscountCode} — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
+        `✓ Codice sconto generato: ${escapeHtml(state.partnerGeneratedDiscountCode)} — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
       )
     );
   }
@@ -1657,7 +1678,7 @@ function PartnerQRSection(code) {
   const card = el("div", "qr-card");
   card.innerHTML = `
     <img src="${qrUrl}" alt="QR del tuo negozio" class="qr-img" />
-    <div class="qr-code">${code}</div>
+    <div class="qr-code">${escapeHtml(code)}</div>
     <div class="qr-note">Chi lo scansiona apre Touch&amp;Go con il tuo codice partner già applicato — ogni spedizione generata da questo QR viene attribuita a te.</div>`;
   wrap.appendChild(card);
 
@@ -2085,7 +2106,7 @@ function CoverScreen() {
   } else {
     wrap.classList.add("no-photo");
   }
-  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${state.pickupPoint}</span>`));
+  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${escapeHtml(state.pickupPoint)}</span>`));
   wrap.appendChild(el("div", "cover-tap", t("cover_tap")));
   wrap.addEventListener("click", () => {
     state.screen = "home";
@@ -2157,7 +2178,7 @@ function HomeScreen() {
 
   const section = el("div", "section");
   if (state.touristName) {
-    section.appendChild(el("div", "greeting", `${t("home_greeting")}, ${state.touristName}`));
+    section.appendChild(el("div", "greeting", `${t("home_greeting")}, ${escapeHtml(state.touristName)}`));
   }
   section.appendChild(el("div", "step-lbl", t("home_step1_lbl")));
   const captureCard = el("div", "capture-card");
@@ -2250,7 +2271,7 @@ function HomeScreen() {
       }
     }
   } else {
-    section.appendChild(el("div", "promo-active-note", t("home_promo_active", { code: state.promoCode })));
+    section.appendChild(el("div", "promo-active-note", t("home_promo_active", { code: escapeHtml(state.promoCode) })));
   }
 
   wrap.appendChild(section);
@@ -2280,7 +2301,7 @@ function DestinationScreen() {
     preview.src = state.pendingInput.dataUrl;
     wrap.appendChild(preview);
   } else if (state.pendingInput && state.pendingInput.type === "text") {
-    wrap.appendChild(el("div", "pending-desc", `"${state.pendingInput.label}"`));
+    wrap.appendChild(el("div", "pending-desc", `"${escapeHtml(state.pendingInput.label)}"`));
   }
 
   wrap.appendChild(PickupField());
@@ -2319,7 +2340,7 @@ function PickupField() {
       : t("pickup_lbl_default");
   field.innerHTML = `
     <div class="dest-lbl">${label}</div>
-    <input class="dest-input" id="pickup-input" value="${state.pickupPoint}" />`;
+    <input class="dest-input" id="pickup-input" value="${escapeHtml(state.pickupPoint)}" />`;
   const input = field.querySelector("#pickup-input");
   input.addEventListener("input", (e) => {
     state.pickupPoint = e.target.value;
@@ -2429,7 +2450,7 @@ function ResultScreen() {
   const card = el("div", "result-card");
   const top = el("div", "result-top");
   top.innerHTML = `
-    <span class="confidence">${t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) })}</span>
+    <span class="confidence">${escapeHtml(t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) }))}</span>
     <div class="result-title" id="res-title"></div>
     <div class="result-sub" id="res-sub"></div>`;
   card.appendChild(top);
@@ -2442,9 +2463,9 @@ function ResultScreen() {
     <div><div class="result-lbl">${t("result_lbl_obj_dims")}</div><div class="result-val">${objDims}</div></div>
     <div><div class="result-lbl">${t("result_lbl_pkg_dims")}</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
     <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${state.pickupPoint}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${escapeHtml(state.pickupPoint)}</div></div>
     <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
-      getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—"
+      getSelectedAddress() ? escapeHtml(formatAddress(getSelectedAddress())) : destinationDisplayName(state.guestDestinationCountry) || "—"
     }</div></div>`;
   card.appendChild(grid);
 
@@ -2457,7 +2478,7 @@ function ResultScreen() {
 
   const shippingNote = localizeShippingNote(r);
   if (shippingNote) {
-    const tip = el("div", "tip", `💡 ${shippingNote}`);
+    const tip = el("div", "tip", `💡 ${escapeHtml(shippingNote)}`);
     wrap.appendChild(tip);
   }
 
@@ -2474,7 +2495,7 @@ function ResultScreen() {
   if (onBreakeven && !state.priceConfirmedForThisResult) {
     const promo = el("div", "promo-card-inline");
     promo.innerHTML = `
-      <div class="promo-badge">${t("result_promo_badge_breakeven", { code: state.promoCode })}</div>
+      <div class="promo-badge">${t("result_promo_badge_breakeven", { code: escapeHtml(state.promoCode) })}</div>
       <div class="promo-headline-inline">${t("result_promo_headline_breakeven")}</div>
       <div class="promo-price-row">
         <span class="promo-price-new">€${q.breakeven.toFixed(2)}</span>
@@ -2558,7 +2579,7 @@ function ResultScreen() {
     priceCard.innerHTML = `
       <div class="tg-lbl" style="margin-bottom:10px">${t("result_quote_title")} ${quoteSuffix}</div>
       <div class="info-row"><span>${t("result_fee_service")}</span><b>€${fee}</b></div>
-      ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: state.partnerDiscountCode })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
+      ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: escapeHtml(state.partnerDiscountCode) })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
       <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="info-row total"><span>${t("result_total_lbl")}</span><b id="res-total">€0</b></div>
       <div class="info-line" style="margin-top:8px">${t("result_delivery_note", { eta: localizeEta(q.eta) })}</div>`;
@@ -3127,7 +3148,7 @@ function ReviewInviteBanner() {
   banner.innerHTML = `
     <div class="review-invite-icon">⭐</div>
     <div class="review-invite-body">
-      <div class="review-invite-title">Com'è andata con "${item.objectName}"?</div>
+      <div class="review-invite-title">Com'è andata con "${escapeHtml(item.objectName)}"?</div>
       <div class="review-invite-sub">${
         items.length > 1
           ? `Lascia una recensione — ne hai ${items.length} in sospeso`
@@ -3301,7 +3322,7 @@ function ReviewScreen() {
     wrap.appendChild(charCount);
 
     if (state.reviewSubmitError) {
-      wrap.appendChild(el("div", "alert", `⚠️ ${state.reviewSubmitError}`));
+      wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.reviewSubmitError)}`));
     }
 
     const submitBtn = el(
@@ -3339,7 +3360,7 @@ function ReviewScreen() {
 function pickupPointUpdateBanner(item) {
   if (!item.pickupPointChanged) return null;
   const banner = el("div", "pickup-update-banner");
-  banner.innerHTML = `📍 Punto di ritiro aggiornato: ${item.pickupPoint}<div class="pickup-update-note">Tocca per confermare di aver visto l'aggiornamento</div>`;
+  banner.innerHTML = `📍 Punto di ritiro aggiornato: ${escapeHtml(item.pickupPoint)}<div class="pickup-update-note">Tocca per confermare di aver visto l'aggiornamento</div>`;
   banner.addEventListener("click", (e) => {
     e.stopPropagation();
     markPickupPointSeen(item);
@@ -3423,7 +3444,7 @@ function renderPackageCheckResult(check) {
   box.innerHTML = `
     <div class="pack-check-title">${check.oversized ? t("pkgcheck_oversized") : t("pkgcheck_ok")}</div>
     <div class="pack-check-dims">${t("pkgcheck_detected_dims", { dims: formatDims(check.length_cm, check.width_cm, check.height_cm) })}</div>
-    <div class="pack-check-note">${check.note || ""}</div>`;
+    <div class="pack-check-note">${escapeHtml(check.note || "")}</div>`;
   return box;
 }
 
@@ -3558,12 +3579,12 @@ function DocumentsScreen() {
   const waybill = el("div", "doc-card");
   waybill.innerHTML = `
     <div class="doc-row"><span>${t("docs_row_reference")}</span><b>${item.id}</b></div>
-    <div class="doc-row"><span>${t("docs_row_sender")}</span><b>${item.touristName || "—"}</b></div>
-    <div class="doc-row"><span>${t("docs_row_pickup")}</span><b>${item.pickupPoint}</b></div>
-    <div class="doc-row"><span>${t("docs_row_recipient")}</span><b>${item.touristName || "—"}</b></div>
-    <div class="doc-row"><span>${t("docs_row_delivery_address")}</span><b>${item.addressLabel}</b></div>
-    <div class="doc-row"><span>${t("docs_row_content")}</span><b>${item.objectName}</b></div>
-    <div class="doc-row"><span>${t("result_lbl_hs_code")}</span><b>${item.hsCode}</b></div>
+    <div class="doc-row"><span>${t("docs_row_sender")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
+    <div class="doc-row"><span>${t("docs_row_pickup")}</span><b>${escapeHtml(item.pickupPoint)}</b></div>
+    <div class="doc-row"><span>${t("docs_row_recipient")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
+    <div class="doc-row"><span>${t("docs_row_delivery_address")}</span><b>${escapeHtml(item.addressLabel)}</b></div>
+    <div class="doc-row"><span>${t("docs_row_content")}</span><b>${escapeHtml(item.objectName)}</b></div>
+    <div class="doc-row"><span>${t("result_lbl_hs_code")}</span><b>${escapeHtml(item.hsCode)}</b></div>
     <div class="doc-row"><span>${t("docs_row_weight")}</span><b>${item.weightKg} kg</b></div>
     <div class="doc-row"><span>${t("docs_row_pkg_dims")}</span><b>${item.packageDims ? formatDims(item.packageDims.l, item.packageDims.w, item.packageDims.h) : "—"}</b></div>
     <div class="doc-row"><span>${t("docs_row_issue_date")}</span><b>${dateStr}</b></div>`;
@@ -3574,8 +3595,8 @@ function DocumentsScreen() {
   invoice.innerHTML = `
     <div class="doc-row"><span>${t("docs_row_invoice_number")}</span><b>PF-${item.id}</b></div>
     <div class="doc-row"><span>${t("docs_row_seller")}</span><b>${t("docs_seller_value")}</b></div>
-    <div class="doc-row"><span>${t("docs_row_buyer")}</span><b>${item.touristName || "—"}</b></div>
-    <div class="doc-row"><span>${t("docs_row_goods_desc")}</span><b>${item.objectName}</b></div>
+    <div class="doc-row"><span>${t("docs_row_buyer")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
+    <div class="doc-row"><span>${t("docs_row_goods_desc")}</span><b>${escapeHtml(item.objectName)}</b></div>
     <div class="doc-row"><span>${t("docs_row_declared_value")}</span><b>€${(item.itemValue || 0).toFixed(2)}</b></div>
     <div class="doc-row"><span>${t("docs_row_vat_exempt")}</span><b>Art. 8 DPR 633/72</b></div>
     <div class="doc-row"><span>${t("docs_row_shipping_cost")}</span><b>€${item.price}</b></div>`;
@@ -3583,7 +3604,7 @@ function DocumentsScreen() {
 
   const sigBlock = el("div", "sig-block");
   if (item.hasSignedInvoice) {
-    sigBlock.innerHTML = `<div class="tg-lbl">${t("docs_signature_lbl")}</div><div class="identify-intro">${t("docs_signature_yes", { name: item.touristName || t("docs_signature_fallback_name") })}</div>`;
+    sigBlock.innerHTML = `<div class="tg-lbl">${t("docs_signature_lbl")}</div><div class="identify-intro">${t("docs_signature_yes", { name: escapeHtml(item.touristName || t("docs_signature_fallback_name")) })}</div>`;
   } else {
     sigBlock.innerHTML = `<div class="tg-lbl">${t("docs_signature_lbl")}</div><div class="identify-intro">${t("docs_signature_no")}</div>`;
   }
@@ -3620,9 +3641,9 @@ function ConcludeScreen() {
   const list = el("div", "queue-list");
   state.pendingItems.forEach((it) => {
     const row = el("div", "queue-item clickable");
-    row.innerHTML = `<div class="queue-item-name">${it.objectName}</div>
-      <div class="queue-item-meta">Negozio: ${it.pickupPoint} · HS ${it.hsCode}</div>
-      <div class="queue-item-meta">→ ${it.addressLabel} · stima €${it.price}</div>`;
+    row.innerHTML = `<div class="queue-item-name">${escapeHtml(it.objectName)}</div>
+      <div class="queue-item-meta">Negozio: ${escapeHtml(it.pickupPoint)} · HS ${escapeHtml(it.hsCode)}</div>
+      <div class="queue-item-meta">→ ${escapeHtml(it.addressLabel)} · stima €${it.price}</div>`;
     row.addEventListener("click", () => {
       state.viewingItemId = it.id;
       state.viewItemReturnTo = "conclude";
@@ -3672,7 +3693,7 @@ function ConcludeScreen() {
     ${Object.entries(groupPricing)
       .map(
         ([dest, g]) =>
-          `<div class="info-row"><span>${dest} (${g.weightKg} kg fatturabili)</span><b>€${g.total.toFixed(2)}</b></div>`
+          `<div class="info-row"><span>${escapeHtml(dest)} (${g.weightKg} kg fatturabili)</span><b>€${g.total.toFixed(2)}</b></div>`
       )
       .join("")}
     <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
@@ -3759,7 +3780,7 @@ function ShippedScreen() {
   (state.shippedGroups || []).forEach((g) => {
     const card = el("div", "qr-card");
     card.innerHTML = `<div class="qr-code">${g.code}</div>
-      <div class="qr-note">${g.count} oggett${g.count === 1 ? "o" : "i"} → ${g.dest}</div>
+      <div class="qr-note">${g.count} oggett${g.count === 1 ? "o" : "i"} → ${escapeHtml(g.dest)}</div>
       <div class="qr-note">Totale €${g.total}</div>`;
     wrap.appendChild(card);
   });
@@ -4098,12 +4119,12 @@ function DestinationField() {
   const label = state.destinationFromProfile ? t("dest_field_from_profile") : t("dest_field_selected");
   const current = getSelectedAddress();
   wrap.innerHTML = `<div class="dest-lbl">${label}</div>
-    <div class="addr-summary">${current ? `<b>${current.label || t("dest_default_label")}</b> · ${formatAddress(current)}` : t("dest_no_address")}</div>`;
+    <div class="addr-summary">${current ? `<b>${escapeHtml(current.label || t("dest_default_label"))}</b> · ${escapeHtml(formatAddress(current))}` : t("dest_no_address")}</div>`;
 
   const list = el("div", "addr-list");
   state.addresses.forEach((a) => {
     const row = el("div", "addr-option" + (a.id === state.selectedAddressId ? " selected" : ""));
-    row.innerHTML = `<span>${a.label || t("dest_default_label")} — ${formatAddress(a)}</span>`;
+    row.innerHTML = `<span>${escapeHtml(a.label || t("dest_default_label"))} — ${escapeHtml(formatAddress(a))}</span>`;
     row.addEventListener("click", () => {
       state.selectedAddressId = a.id;
       state.destinationFromProfile = false;
@@ -4171,7 +4192,7 @@ function ChooseAddressScreen() {
 
   wrap.appendChild(el("div", "step-lbl", "A quale indirizzo destiniamo questo acquisto?"));
   wrap.appendChild(
-    el("div", "identify-intro", `${localizeObjectName(state.result)} — scegli l'indirizzo per questa spedizione.`)
+    el("div", "identify-intro", `${escapeHtml(localizeObjectName(state.result))} — scegli l'indirizzo per questa spedizione.`)
   );
 
   if (state.addresses.length === 0) {
@@ -4186,7 +4207,7 @@ function ChooseAddressScreen() {
     const list = el("div", "addr-list");
     state.addresses.forEach((a) => {
       const row = el("div", "addr-option" + (a.id === state.selectedAddressId ? " selected" : ""));
-      row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
+      row.innerHTML = `<span>${escapeHtml(a.label || "Indirizzo")} — ${escapeHtml(formatAddress(a))}</span>`;
       row.addEventListener("click", () => {
         state.selectedAddressId = a.id;
         state.destinationFromProfile = false;
@@ -4207,7 +4228,7 @@ function ChooseAddressScreen() {
 
   wrap.appendChild(el("div", "tg-lbl", "Punto di ritiro per questo acquisto"));
   const pickupField = el("div", "dest-field");
-  pickupField.innerHTML = `<div class="dest-lbl">Se diverso dal punto vendita rilevato</div><input class="dest-input" id="item-pickup-input" value="${state.pickupPoint}" />`;
+  pickupField.innerHTML = `<div class="dest-lbl">Se diverso dal punto vendita rilevato</div><input class="dest-input" id="item-pickup-input" value="${escapeHtml(state.pickupPoint)}" />`;
   wrap.appendChild(pickupField);
   wrap.appendChild(
     el("div", "home-foot", "Utile se chi imballa/consegna l'oggetto non è lo stesso negozio dove hai fatto l'acquisto.")
@@ -4304,12 +4325,12 @@ function EditItemAddressScreen() {
   }
 
   wrap.appendChild(el("div", "step-lbl", "Cambia destinazione"));
-  wrap.appendChild(el("div", "identify-intro", `${item.objectName} — attualmente verso: ${item.addressLabel}`));
+  wrap.appendChild(el("div", "identify-intro", `${escapeHtml(item.objectName)} — attualmente verso: ${escapeHtml(item.addressLabel)}`));
 
   const list = el("div", "addr-list");
   state.addresses.forEach((a) => {
     const row = el("div", "addr-option" + (a.id === item.addressId ? " selected" : ""));
-    row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
+    row.innerHTML = `<span>${escapeHtml(a.label || "Indirizzo")} — ${escapeHtml(formatAddress(a))}</span>`;
     row.addEventListener("click", () => {
       item.addressId = a.id;
       item.addressLabel = `${a.label || "Indirizzo"} — ${formatAddress(a)}`;
@@ -4384,7 +4405,7 @@ function ViewItemPhotoScreen() {
     img.src = item.photo;
     wrap.appendChild(img);
   } else if (item.textDescription) {
-    wrap.appendChild(el("div", "pending-desc", `"${item.textDescription}"`));
+    wrap.appendChild(el("div", "pending-desc", `"${escapeHtml(item.textDescription)}"`));
     wrap.appendChild(el("div", "identify-intro", "Questo acquisto è stato descritto a testo, senza foto."));
   } else {
     wrap.appendChild(el("div", "identify-intro", "Nessuna foto disponibile per questo acquisto."));
@@ -4392,10 +4413,10 @@ function ViewItemPhotoScreen() {
 
   const info = el("div", "info-card");
   info.innerHTML = `
-    <div class="info-row"><span>Oggetto</span><b>${item.objectName}</b></div>
-    <div class="info-row"><span>Codice HS</span><b>${item.hsCode}</b></div>
-    <div class="info-row"><span>Ritiro</span><b>${item.pickupPoint}</b></div>
-    <div class="info-row"><span>Destinazione</span><b>${item.addressLabel}</b></div>`;
+    <div class="info-row"><span>Oggetto</span><b>${escapeHtml(item.objectName)}</b></div>
+    <div class="info-row"><span>Codice HS</span><b>${escapeHtml(item.hsCode)}</b></div>
+    <div class="info-row"><span>Ritiro</span><b>${escapeHtml(item.pickupPoint)}</b></div>
+    <div class="info-row"><span>Destinazione</span><b>${escapeHtml(item.addressLabel)}</b></div>`;
   wrap.appendChild(info);
 
   return wrap;
@@ -4446,7 +4467,7 @@ function DashboardScreen() {
         if (banner) list.appendChild(banner);
         const row = el("div", "history-item");
         row.innerHTML = `
-          <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
+          <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
           <div class="history-meta">Valore oggetto: €${(it.itemValue || 0).toFixed(2)} · Servizio Touch&amp;Go: €${it.price}</div>`;
         list.appendChild(row);
       });
@@ -4538,7 +4559,7 @@ function BiometricLockScreen() {
   wrap.innerHTML = `
     <div class="biometric-icon">🔒</div>
     <div class="step-lbl" style="justify-content:center;text-align:center">Sblocca Touch&amp;Go</div>
-    <div class="identify-intro" style="text-align:center">Ciao ${state.touristName || ""} — verifica la tua identità per continuare.</div>`;
+    <div class="identify-intro" style="text-align:center">Ciao ${escapeHtml(state.touristName || "")} — verifica la tua identità per continuare.</div>`;
   const unlockBtn = el("button", "btn-primary", "🔓 Sblocca con Face ID / Touch ID / impronta");
   const errBox = el("div", "alert hidden");
   unlockBtn.addEventListener("click", async () => {
@@ -4655,10 +4676,10 @@ function PurchaseHistoryList(items, emptyText, editable) {
       const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
       const sourceLbl = it.pickupSource === "gps" ? "GPS" : it.pickupSource === "ip" ? "rete" : "manuale";
       row.innerHTML = `
-        <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
-        <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${it.pickupPoint}</b> · HS ${it.hsCode}</div>
-        <div class="history-meta">→ ${it.addressLabel} · €${it.price}</div>
-        <div class="history-meta">${it.touristName ? it.touristName + " · " : ""}${dateStr}</div>`;
+        <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
+        <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${escapeHtml(it.pickupPoint)}</b> · HS ${escapeHtml(it.hsCode)}</div>
+        <div class="history-meta">→ ${escapeHtml(it.addressLabel)} · €${it.price}</div>
+        <div class="history-meta">${it.touristName ? escapeHtml(it.touristName) + " · " : ""}${dateStr}</div>`;
       if (editable) {
         row.classList.add("clickable");
         row.addEventListener("click", () => {
