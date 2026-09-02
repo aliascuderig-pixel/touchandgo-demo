@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<!--
+  Ripristino manuale del router dopo un failover automatico — vedi
+  MANUALE.md, "Router di continuità" -> "Ripristino manuale (solo umano)".
+  Stessa filosofia di dist/index.html: nessuna dipendenza esterna (niente
+  font, niente chiamate di rete se non a reset.js, nessuno script di terze
+  parti), deve restare semplicissima e funzionare anche col resto del
+  sistema giù. Unica azione possibile: azzerare failoverActive.
+-->
+<title>Touch&amp;Go — Router</title>
+<style>
+  :root{ --ink:#0F0F0F; --paper:#FAF8F4; --gold:#C9A96E; --muted:#777; --err:#B3261E; --ok:#2E7D32; }
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px; background:var(--paper); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    text-align:center;
+  }
+  .wrap{ max-width:360px; width:100% }
+  .brand{ font-size:22px; font-weight:600; letter-spacing:.01em; margin-bottom:6px }
+  .brand em{ font-style:normal; color:var(--gold) }
+  .sub{ font-size:13px; color:var(--muted); margin-bottom:22px }
+  .msg{ font-size:14px; color:var(--muted); line-height:1.6; margin-bottom:18px; text-align:left }
+  form{ display:flex; flex-direction:column; gap:10px }
+  input[type=password]{
+    font-size:15px; padding:10px 12px; border:1px solid #DDD5C4; border-radius:8px;
+    background:#fff; color:var(--ink);
+  }
+  button{
+    font-size:14px; font-weight:600; padding:11px 12px; border-radius:8px; border:none;
+    background:var(--ink); color:var(--paper); cursor:pointer;
+  }
+  button:disabled{ opacity:.6; cursor:default }
+  .result{ margin-top:16px; font-size:13px; line-height:1.5; min-height:1.2em }
+  .result.ok{ color:var(--ok) }
+  .result.err{ color:var(--err) }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">Touch<em>&amp;</em>Go</div>
+    <div class="sub">Router — ripristino manuale</div>
+    <p class="msg">Questa pagina fa una sola cosa: azzera il passaggio automatico allo spazio ospite, così la prossima visita torna a controllare la salute del sito principale. Usala solo dopo aver verificato che il sito principale funzioni di nuovo.</p>
+    <form id="reset-form">
+      <input type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit" id="submit-btn">Ripristina sito principale</button>
+    </form>
+    <div class="result" id="result" role="status" aria-live="polite"></div>
+  </div>
+  <script>
+    var form = document.getElementById("reset-form");
+    var btn = document.getElementById("submit-btn");
+    var result = document.getElementById("result");
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var password = document.getElementById("password").value;
+      btn.disabled = true;
+      result.className = "result";
+      result.textContent = "Verifica in corso…";
+      fetch("/.netlify/functions/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: password }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) { return { status: res.status, data: data }; });
+        })
+        .then(function (r) {
+          if (r.status === 200 && r.data && r.data.ok) {
+            result.className = "result ok";
+            result.textContent = "Fatto — il router tornerà a controllare la salute del sito principale alla prossima visita.";
+          } else {
+            result.className = "result err";
+            result.textContent = (r.data && r.data.error) || "Errore imprevisto.";
+          }
+        })
+        .catch(function () {
+          result.className = "result err";
+          result.textContent = "Impossibile contattare il router — riprova.";
+        })
+        .finally(function () {
+          btn.disabled = false;
+        });
+    });
+  </script>
+</body>
+</html>

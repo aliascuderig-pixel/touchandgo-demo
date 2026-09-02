@@ -5,6 +5,10 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@netlify/blobs": "^8.1.0"
+    "@netlify/blobs": "^8.1.0",
+    "@netlify/functions": "^6.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   }
 }

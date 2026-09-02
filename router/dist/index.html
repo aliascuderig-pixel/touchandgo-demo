@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<!--
+  Pagina di fallback statica, non il percorso normale (che è la function
+  go.js, invocata direttamente su "/" via netlify.toml). Serve solo per i
+  casi limite in cui qualcuno finisca su questo file senza passare dal
+  redirect della function — o come schermata di caricamento nel breve
+  istante prima che il redirect avvenga. Deve restare semplicissima e
+  senza alcuna dipendenza esterna (nessun font, nessuna chiamata di rete,
+  nessuno script di terze parti): è pensata per non poter rompersi da
+  sola, qualunque cosa succeda al resto del sistema.
+-->
+<meta http-equiv="refresh" content="0; url=/.netlify/functions/go" />
+<title>Touch&amp;Go</title>
+<style>
+  :root{ --ink:#0F0F0F; --paper:#FAF8F4; --gold:#C9A96E; --muted:#777; }
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px; background:var(--paper); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    text-align:center;
+  }
+  .wrap{ max-width:360px }
+  .brand{ font-size:22px; font-weight:600; letter-spacing:.01em; margin-bottom:14px }
+  .brand em{ font-style:normal; color:var(--gold) }
+  .msg{ font-size:14px; color:var(--muted); line-height:1.6; margin-bottom:22px }
+  .spinner{
+    width:22px; height:22px; margin:0 auto 22px; border-radius:50%;
+    border:2px solid #EAE4D8; border-top-color:var(--gold);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+  .link{
+    display:inline-block; font-size:13px; color:var(--ink); text-decoration:none;
+    border-bottom:1px solid var(--gold); padding-bottom:2px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner" aria-hidden="true"></div>
+    <div class="brand">Touch<em>&amp;</em>Go</div>
+    <p class="msg">Ti stiamo indirizzando al sito giusto…</p>
+    <a class="link" href="/.netlify/functions/go">Continua manualmente →</a>
+  </div>
+  <script>
+    // Ridondante rispetto al meta refresh sopra (browser molto vecchi o
+    // con meta refresh disabilitato) — stesso identico bersaglio, nessuna
+    // logica propria: la decisione main/ospite resta solo dentro go.js.
+    window.location.replace("/.netlify/functions/go");
+  </script>
+</body>
+</html>

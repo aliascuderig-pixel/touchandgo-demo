@@ -17,7 +17,16 @@ const STEPS = [
   "Tracking live fino alla consegna a casa",
 ];
 
-const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
+// "material" (TOU-*, archivio di riferimento doganale) — aggiunto per
+// popolare netlify/functions/save-purchase.js -> store Blobs
+// "customs-reference" con dati reali (materiale costruttivo dichiarato/
+// rilevato dall'AI), non prima disponibile: senza questo campo l'archivio
+// non avrebbe potuto registrare il materiale come richiesto, e inventarlo
+// altrove (es. da una regex sul nome oggetto) sarebbe stata l'euristica
+// fragile che si voleva evitare. Testo libero breve, stesso stile di
+// hs_description_it — non un enum, i materiali variano troppo per
+// categoria per un elenco fisso utile.
+const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
 
 // L'imballo non è un margine fisso: più l'oggetto è grande, più materiale
 // serve in termini assoluti (stessa percentuale); se è fragile, il
@@ -142,6 +151,91 @@ function priceFor(weightKg, destinationName, dims) {
   return { grandTotal, eta: q.eta, quotes: q };
 }
 
+// Paese di destinazione di un item già in coda: risolto dall'indirizzo
+// salvato (state.addresses, tramite l'addressId già presente su ogni item
+// da sempre), non da un nuovo campo — così funziona anche per gli item già
+// in localStorage prima di questa modifica. Fallback all'indirizzo/paese
+// correntemente selezionato solo nel caso limite in cui quell'indirizzo
+// non esista più (non c'è oggi alcuna funzione per cancellare un
+// indirizzo, quindi in pratica capita solo con dati di test manomessi).
+function destinationCountryForItem(it) {
+  const addr = state.addresses.find((a) => a.id === it.addressId);
+  return addr ? addr.country : currentDestinationName();
+}
+
+// Ricalcolo del prezzo per un INTERO gruppo di oggetti consolidati verso la
+// stessa destinazione (stessa addressLabel) — usato solo in ConcludeScreen,
+// al momento della conferma/pagamento finale. Vedi MANUALE.md, sezione
+// "Prezzo consolidato per gruppo di spedizione".
+//
+// Non è la somma dei prezzi individuali già mostrati durante lo shopping
+// (quelli restano solo stime per spedizione singola, calcolate da
+// priceFor/priceQuotes/shippingCost — INVARIATE, mai richiamate da qui):
+// qui si ricalcola da zero il costo di spedizione UNA SOLA VOLTA sul
+// peso/volume dell'intero gruppo, con UNA SOLA fee di servizio — esattamente
+// come farebbe un vero corriere con un unico collo consolidato, invece di
+// sommare più preventivi (ognuno con la propria fee) già calcolati sui
+// singoli oggetti.
+//
+// Un gruppo con un solo oggetto deve produrre esattamente lo stesso prezzo
+// di priceFor(item.weightKg, ...).grandTotal per quell'oggetto — vedi il
+// commento riga per riga sotto: stessa soglia minima di 0.3kg, stesso peso
+// volumetrico, stessa fascia tariffaria, stessa fee, stesso eventuale sconto
+// codice partner. Nessuna regressione sul caso più comune (un solo acquisto
+// verso una destinazione).
+function consolidatedGroupPrice(items) {
+  const destinationName = destinationCountryForItem(items[0]);
+  const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[DESTINATIONS.length - 1];
+  const zone = SHIPPING_RATES[dest.zone];
+
+  // Peso reale combinato: somma dei pesi reali dei singoli oggetti. Ogni
+  // oggetto resta comunque mai sotto lo 0.3kg minimo fatturabile — la
+  // stessa soglia già applicata oggi al singolo oggetto in shippingCost() —
+  // quindi per un gruppo di uno questo è letteralmente lo stesso numero
+  // usato oggi; per un gruppo di più oggetti non si perde mai il minimo di
+  // fatturazione per collo che un corriere applicherebbe comunque a
+  // ciascun pezzo.
+  const combinedRealWeight = items.reduce((sum, it) => sum + Math.max(0.3, parseFloat(it.weightKg) || 1), 0);
+
+  // Peso volumetrico combinato: SOMMA dei pesi volumetrici individuali — non
+  // un unico volume "ottimizzato" come se gli oggetti si annidassero
+  // perfettamente in una scatola più piccola. Approssimazione deliberatamente
+  // conservativa: gli oggetti vengono lasciati in negozi spesso diversi e
+  // restano colli distinti fino al consolidamento fisico vero e proprio, non
+  // sottostimare mai il costo assumendolo diversamente.
+  const combinedVolumetricWeight = items.reduce((sum, it) => sum + volumetricWeight(it.dims), 0);
+
+  const billableWeight = Math.max(combinedRealWeight, combinedVolumetricWeight);
+  const rawCost = bracketPrice(zone, billableWeight);
+  const shipping = parseFloat((rawCost * (1 + SHIPPING_MARGIN)).toFixed(2));
+
+  // Una sola fee di servizio per l'intero gruppo, non una per oggetto: se
+  // anche un solo oggetto del gruppo era in breakeven/promo quando è stato
+  // aggiunto, l'intero ordine consolidato eredita quella condizione (è
+  // comunque un solo "ordine" che il turista sta confermando e pagando
+  // ora); altrimenti conta l'abbonamento se anche un solo oggetto lo è.
+  const onBreakeven = items.some((it) => it.pricingTier === "breakeven");
+  const isSubscribed = items.some((it) => it.pricingTier === "abbonato");
+  const fee = onBreakeven ? 0 : isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+
+  // Eventuali sconti codice partner già applicati ai singoli oggetti in
+  // ResultScreen restano validi e si sommano (nella pratica quasi sempre un
+  // solo oggetto del gruppo ne ha uno) — stessa logica di sottrazione dalla
+  // fee già usata lì, qui portata a livello di gruppo.
+  const totalPartnerDiscount = items.reduce((sum, it) => sum + (it.partnerDiscountAmount || 0), 0);
+  const total = Math.max(0, Math.round((shipping + fee - totalPartnerDiscount) * 100) / 100);
+
+  return {
+    destinationCountry: destinationName,
+    weightKg: parseFloat(billableWeight.toFixed(2)),
+    shipping,
+    fee,
+    partnerDiscount: totalPartnerDiscount,
+    eta: zone.eta,
+    total,
+  };
+}
+
 async function classify(messages) {
   const res = await fetch("/.netlify/functions/classify", {
     method: "POST",
@@ -200,6 +294,11 @@ const I18N = {
     header_reset_title: "Resetta profilo e ricomincia",
     header_reset_label: "Reset",
     offline_banner: "📡 Sei offline — la classificazione AI e le foto delle città non sono disponibili finché non torni online. I tuoi acquisti, indirizzi e dashboard restano comunque consultabili.",
+    guest_mode_banner: "🛟 Stai usando la versione di continuità di Touch&amp;Go. I tuoi acquisti sono al sicuro e verranno sincronizzati automaticamente.",
+    sync_pending_item_singular: "sincronizzazione",
+    sync_pending_item_plural: "sincronizzazioni",
+    sync_pending_suffix: "in sospeso col CRM — verranno ritentate automaticamente",
+    sync_pending_suffix_attention: "in sospeso col CRM da tempo — potrebbe richiedere attenzione",
     mode_tourist: "Turista",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Chiedi a Touch&Go",
@@ -329,6 +428,8 @@ const I18N = {
     result_total_lbl: "Totale",
     result_delivery_note: "Consegna in {eta} · tracciamento incluso · copertura standard inclusa",
     result_discount_lbl: "Sconto codice partner ({code})",
+    result_estimate_badge: "Stima per spedizione singola",
+    result_estimate_note: "Il totale finale dipende da eventuali altri acquisti consolidati verso la stessa destinazione — nessun addebito ora, questa è solo un'anteprima. Il calcolo definitivo e il pagamento avvengono solo quando confermi la conclusione del soggiorno.",
     result_qr_btn: "Genera QR code →",
     result_restart_btn: "Classifica un altro oggetto",
     result_partner_discount_link: "Hai un codice sconto partner?",
@@ -436,6 +537,11 @@ const I18N = {
     header_reset_title: "Reset profile and start over",
     header_reset_label: "Reset",
     offline_banner: "📡 You're offline — AI classification and city photos aren't available until you're back online. Your purchases, addresses and dashboard are still available.",
+    guest_mode_banner: "🛟 You're using Touch&amp;Go's continuity space. Your purchases are safe and will sync automatically.",
+    sync_pending_item_singular: "sync",
+    sync_pending_item_plural: "syncs",
+    sync_pending_suffix: "pending with the CRM — will be retried automatically",
+    sync_pending_suffix_attention: "pending with the CRM for a while — may need attention",
     mode_tourist: "Tourist",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Ask Touch&Go",
@@ -565,6 +671,8 @@ const I18N = {
     result_total_lbl: "Total",
     result_delivery_note: "Delivery in {eta} · tracking included · standard coverage included",
     result_discount_lbl: "Partner code discount ({code})",
+    result_estimate_badge: "Estimate for a single shipment",
+    result_estimate_note: "The final total depends on any other purchases consolidated toward the same destination — no charge now, this is only a preview. The final calculation and payment only happen when you confirm the end of your stay.",
     result_qr_btn: "Generate QR code →",
     result_restart_btn: "Classify another item",
     result_partner_discount_link: "Have a partner discount code?",
@@ -784,6 +892,11 @@ const state = {
   pickupPoint: "Catania",
   pickupSource: null,
   isOffline: typeof navigator !== "undefined" && "onLine" in navigator ? !navigator.onLine : false,
+  // Spazio ospite (continuità operativa) — vedi checkGuestMode() più sotto
+  // e MANUALE.md. Sempre false finché /.netlify/functions/guest-status non
+  // risponde guestMode:true, cosa che succede solo sul deploy con la
+  // variabile d'ambiente GUEST_MODE=true (mai su produzione).
+  guestMode: false,
   locationReminderDismissed: false,
   bookingCode: null,
   pendingItems: [],
@@ -886,9 +999,23 @@ function injectSketchFilter() {
 }
 injectSketchFilter();
 
+// Banner "spazio ospite" (continuità operativa) — vedi checkGuestMode()
+// più sotto e MANUALE.md. Nascosto di default: compare SOLO se
+// state.guestMode è true, cioè solo quando /.netlify/functions/guest-status
+// risponde guestMode:true — cosa che succede solo sul deploy con la
+// variabile d'ambiente GUEST_MODE=true, mai su produzione.
+function GuestModeBanner() {
+  return el("div", "guest-mode-banner", t("guest_mode_banner"));
+}
+
 function render() {
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
+  // Spazio ospite: mostrato PRIMA del controllo onboarding qui sotto (che
+  // altrimenti fa uscire da render() subito, senza mai arrivare a
+  // Header()) — così il banner è visibile fin dalla primissima schermata
+  // vista da un turista nuovo, non solo dopo l'onboarding.
+  if (state.guestMode) app.appendChild(GuestModeBanner());
   if (state.screen === "onboarding") {
     app.appendChild(OnboardingScreen());
     return;
@@ -913,6 +1040,7 @@ function render() {
   else if (state.screen === "dashboard") app.appendChild(DashboardScreen());
   else if (state.screen === "documents") app.appendChild(DocumentsScreen());
   else if (state.screen === "package-check") app.appendChild(PackageCheckScreen());
+  else if (state.screen === "review") app.appendChild(ReviewScreen());
   if (state.screen === "home") app.appendChild(Footer());
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
@@ -928,6 +1056,27 @@ function el(tag, cls, html) {
   if (cls) e.className = cls;
   if (html !== undefined) e.innerHTML = html;
   return e;
+}
+
+// Difesa contro XSS: qualunque campo scritto/modificabile dal turista (nome
+// oggetto, nome turista, punto di ritiro manuale, etichetta/testo di un
+// indirizzo, descrizione libera dell'oggetto...) può finire, più avanti nel
+// flusso, in un innerHTML o in un template literal iniettato nel DOM — un
+// nodo creato via el(tag, cls, testo) qui sopra include SEMPRE un passaggio
+// da innerHTML, mai testContent puro. Stesso comportamento standard già in
+// uso in touchandgo-internal per lo stesso tipo di fix: sostituisce solo i
+// caratteri che permettono di uscire dal testo/attributo HTML corrente.
+// Va chiamata ESCLUSIVAMENTE nel punto di rendering (dove il valore entra
+// nell'HTML), mai alla scrittura/salvataggio del dato — altrimenti lo
+// storico locale e i record inviati al CRM finirebbero con entità HTML al
+// posto del testo originale (vedi MANUALE.md per l'elenco dei punti).
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function Header() {
@@ -1203,7 +1352,7 @@ function PartnerLoginAndHistory() {
     wrap.appendChild(intro);
 
     const field = el("div", "dest-field");
-    field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${state.activePartnerCode || ""}" />`;
+    field.innerHTML = `<div class="dest-lbl">Codice partner</div><input class="dest-input" id="partner-code-input" placeholder="Es. NEGOZIO123" value="${escapeHtml(state.activePartnerCode || "")}" />`;
     wrap.appendChild(field);
     addVoiceButton(field.querySelector("#partner-code-input"));
 
@@ -1310,8 +1459,8 @@ function PartnerLoginAndHistory() {
 
   const summary = el("div", "info-card");
   summary.innerHTML = `
-    <div class="info-row"><span>Codice partner</span><b>${state.partnerLoggedCode}</b></div>
-    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${stats.partnerName}</b></div>` : ""}
+    <div class="info-row"><span>Codice partner</span><b>${escapeHtml(state.partnerLoggedCode)}</b></div>
+    ${stats.partnerName ? `<div class="info-row"><span>Nome registrato</span><b>${escapeHtml(stats.partnerName)}</b></div>` : ""}
     <div class="info-row"><span>Vendite registrate</span><b>${stats.salesCount}</b></div>
     <div class="info-row"><span>Valore generato tramite il tuo negozio</span><b>€${stats.totalSalesValue.toFixed(2)}</b></div>
     <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
@@ -1375,7 +1524,7 @@ function PartnerUpgradeSection(stats) {
   wrap.appendChild(field);
 
   if (state.partnerUpgradeError) {
-    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerUpgradeError}`));
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerUpgradeError)}`));
   }
 
   const upgradeBtn = el("button", "btn-primary", state.partnerUpgradeLoading ? "Attivo il piano…" : "Attiva piano a pagamento");
@@ -1464,7 +1613,7 @@ function PartnerTrendSection(stats) {
         ? ""
         : commissionDelta >= 0
         ? `<span style="color:var(--good)">▲ +€${commissionDelta.toFixed(2)} vs mese precedente</span>`
-        : `<span style="color:#B3261E">▼ €${commissionDelta.toFixed(2)} vs mese precedente</span>`;
+        : `<span style="color:var(--danger)">▼ €${commissionDelta.toFixed(2)} vs mese precedente</span>`;
     compare.innerHTML = `
       <div class="info-row"><span>Questo mese (${current.label})</span><b>${current.orders} ordini · €${current.commission.toFixed(2)} commissioni</b></div>
       ${previous ? `<div class="info-row"><span>Mese precedente (${previous.label})</span><b>${previous.orders} ordini · €${previous.commission.toFixed(2)} commissioni</b></div>` : ""}
@@ -1489,7 +1638,7 @@ function PartnerTrendSection(stats) {
       .map((o) => {
         const d = new Date(o.date);
         const dateStr = isNaN(d) ? "—" : d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
-        return `<div class="info-row"><span>${dateStr} · ${o.objectName || "—"}</span><b>€${o.commission.toFixed(2)}</b></div>`;
+        return `<div class="info-row"><span>${dateStr} · ${escapeHtml(o.objectName || "—")}</span><b>€${o.commission.toFixed(2)}</b></div>`;
       })
       .join("");
     wrap.appendChild(ordersList);
@@ -1543,7 +1692,7 @@ function PartnerCreditSection(stats) {
     wrap.appendChild(note);
   }
   if (state.partnerCreditRedeemError) {
-    wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerCreditRedeemError}`));
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerCreditRedeemError)}`));
   }
 
   const genBtn = el("button", "btn-secondary", state.partnerDiscountGenerating ? "Genero il codice…" : "Genera codice sconto per un cliente");
@@ -1573,10 +1722,14 @@ function PartnerCreditSection(stats) {
   wrap.appendChild(genBtn);
 
   if (state.partnerGeneratedDiscountCode) {
+    // escapeHtml() sul codice mantenuto (PR #28, fix XSS) anche col nuovo
+    // wrapper <b class="discount-code-value"> introdotto qui per i bottoni
+    // Copia/Condividi sotto — il wrapper cambia solo la struttura del DOM,
+    // non deve mai riaprire la porta a HTML non escapato nel contenuto.
     const discountNote = el(
       "div",
       "promo-active-note",
-      `✓ Codice sconto generato: <b class="discount-code-value">${state.partnerGeneratedDiscountCode}</b> — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
+      `✓ Codice sconto generato: <b class="discount-code-value">${escapeHtml(state.partnerGeneratedDiscountCode)}</b> — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
     );
     wrap.appendChild(discountNote);
     // Passa solo l'elemento col codice (non l'intera frase) al fallback di
@@ -1589,6 +1742,27 @@ function PartnerCreditSection(stats) {
   }
 
   return wrap;
+}
+
+// Il QR è un'immagine raster generata da un servizio esterno (api.qrserver.com,
+// vedi qrCodeUrl() sotto) — i suoi colori sono quindi "cotti" nel PNG stesso,
+// non CSS: non seguirebbero altrimenti i temi lime/corallo (TOU-21), lasciando
+// un riquadro dal vecchio colore fisso dentro una .qr-card ormai scura. Letti
+// qui a runtime da --ink/--paper (gli stessi token usati da .qr-card) così il
+// QR resta coerente col tema attivo in tutti e tre (produzione + lime/corallo).
+function hexToDashRgb(hex) {
+  hex = (hex || "").trim().replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  const r = parseInt(hex.slice(0, 2), 16) || 0;
+  const g = parseInt(hex.slice(2, 4), 16) || 0;
+  const b = parseInt(hex.slice(4, 6), 16) || 0;
+  return `${r}-${g}-${b}`;
+}
+function qrCodeUrl(data, size) {
+  const style = getComputedStyle(document.documentElement);
+  const color = hexToDashRgb(style.getPropertyValue("--ink") || "#0F0F0F");
+  const bgcolor = hexToDashRgb(style.getPropertyValue("--paper") || "#FAF8F4");
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&color=${color}&bgcolor=${bgcolor}&data=${data}`;
 }
 
 // QR che incorpora l'URL dell'app con ?partner=CODICE già impostato —
@@ -1609,12 +1783,12 @@ function PartnerQRSection(code) {
 
   const partnerUrl = `${window.location.origin}/?partner=${encodeURIComponent(code)}`;
   const qrData = encodeURIComponent(partnerUrl);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
+  const qrUrl = qrCodeUrl(qrData, 220);
 
   const card = el("div", "qr-card");
   card.innerHTML = `
     <img src="${qrUrl}" alt="QR del tuo negozio" class="qr-img" />
-    <div class="qr-code">${code}</div>
+    <div class="qr-code">${escapeHtml(code)}</div>
     <div class="qr-note">Chi lo scansiona apre Touch&amp;Go con il tuo codice partner già applicato — ogni spedizione generata da questo QR viene attribuita a te.</div>`;
   wrap.appendChild(card);
 
@@ -2042,7 +2216,7 @@ function CoverScreen() {
   } else {
     wrap.classList.add("no-photo");
   }
-  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${state.pickupPoint}</span>`));
+  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${escapeHtml(state.pickupPoint)}</span>`));
   wrap.appendChild(el("div", "cover-tap", t("cover_tap")));
   wrap.addEventListener("click", () => {
     state.screen = "home";
@@ -2051,10 +2225,34 @@ function CoverScreen() {
   return wrap;
 }
 
+// Icona a iride/diaframma fotografico (TOU-20, sostituisce la vecchia
+// emoji 📷 nel riquadro placeholder pre-tap) — 6 lamelle reali (non
+// un'immagine raster), ognuna un <path> identico ruotato in slot da 60°
+// via l'attributo SVG transform (posizione fissa). L'apertura/chiusura è
+// invece un secondo transform CSS sul singolo <path>, con transform-origin
+// sulla punta esterna della lamella (non sul centro dell'icona): è quello
+// il perno su cui una lamella reale ruota, così la punta interna spazza
+// verso il centro invece che l'intera lamella ruotare rigidamente attorno
+// al centro come farebbe una girandola. Vedi .aperture-icon/.aperture-blade
+// in style.css per l'animazione (classe "closing" aggiunta via JS).
+const APERTURE_BLADE_D = "M 50,4 L 93.2,34.3 L 66.1,27.1 Z";
+function apertureIconMarkup() {
+  const blades = [0, 60, 120, 180, 240, 300]
+    .map((deg) => `<g transform="rotate(${deg} 50 50)"><path class="aperture-blade" d="${APERTURE_BLADE_D}"/></g>`)
+    .join("");
+  return `<svg class="aperture-icon" viewBox="0 0 100 100" aria-hidden="true">${blades}</svg>`;
+}
+
 function HomeScreen() {
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("home"));
   wrap.appendChild(TrustRow());
+
+  const reviewBanner = ReviewInviteBanner();
+  if (reviewBanner) wrap.appendChild(reviewBanner);
+
+  const syncBanner = PendingSyncBanner();
+  if (syncBanner) wrap.appendChild(syncBanner);
 
   if (state.pickupSource !== "gps" && !state.locationReminderDismissed) {
     const loc = el("div", "location-reminder");
@@ -2090,12 +2288,12 @@ function HomeScreen() {
 
   const section = el("div", "section");
   if (state.touristName) {
-    section.appendChild(el("div", "greeting", `${t("home_greeting")}, ${state.touristName}`));
+    section.appendChild(el("div", "greeting", `${t("home_greeting")}, ${escapeHtml(state.touristName)}`));
   }
   section.appendChild(el("div", "step-lbl", t("home_step1_lbl")));
   const captureCard = el("div", "capture-card");
   captureCard.innerHTML = `
-    <div class="capture-icon">📷</div>
+    <div class="capture-icon">${apertureIconMarkup()}</div>
     <h3>${t("home_capture_title")}</h3>
     <p>${t("capture_tap_camera")}</p>`;
   const cameraInput = el("input");
@@ -2105,7 +2303,22 @@ function HomeScreen() {
   cameraInput.style.display = "none";
   cameraInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
   captureCard.appendChild(cameraInput);
-  captureCard.addEventListener("click", () => openCameraViewfinder(handleImageDataUrl, cameraInput));
+  // TOU-20 (Giuseppe): l'iride va mostrata aperta prima del tap e chiudersi
+  // "nel momento dello scatto", in sincrono col rumore dell'otturatore.
+  // L'unico "scatto" che questo riquadro placeholder può davvero mostrare è
+  // il tap che lo apre (il vero pulsante di scatto vive dentro l'overlay a
+  // schermo intero del mirino, dove questa icona non è più visibile) — Code
+  // interpreta quindi "lo scatto" come questo tap: chiude l'iride e riproduce
+  // il suono qui, poi apre la fotocamera come "passo successivo del flusso",
+  // esattamente come descritto da Giuseppe. Il ritardo (uguale alla durata
+  // della transizione CSS, .aperture-icon.closing) lascia vedere l'animazione
+  // prima di passare al mirino vero e proprio.
+  captureCard.addEventListener("click", () => {
+    const icon = captureCard.querySelector(".aperture-icon");
+    if (icon) icon.classList.add("closing");
+    playShutterSound();
+    setTimeout(() => openCameraViewfinder(handleImageDataUrl, cameraInput), 230);
+  });
   section.appendChild(captureCard);
 
   const galleryCard = el("div", "gallery-card");
@@ -2168,7 +2381,7 @@ function HomeScreen() {
       }
     }
   } else {
-    section.appendChild(el("div", "promo-active-note", t("home_promo_active", { code: state.promoCode })));
+    section.appendChild(el("div", "promo-active-note", t("home_promo_active", { code: escapeHtml(state.promoCode) })));
   }
 
   wrap.appendChild(section);
@@ -2198,7 +2411,7 @@ function DestinationScreen() {
     preview.src = state.pendingInput.dataUrl;
     wrap.appendChild(preview);
   } else if (state.pendingInput && state.pendingInput.type === "text") {
-    wrap.appendChild(el("div", "pending-desc", `"${state.pendingInput.label}"`));
+    wrap.appendChild(el("div", "pending-desc", `"${escapeHtml(state.pendingInput.label)}"`));
   }
 
   wrap.appendChild(PickupField());
@@ -2237,7 +2450,7 @@ function PickupField() {
       : t("pickup_lbl_default");
   field.innerHTML = `
     <div class="dest-lbl">${label}</div>
-    <input class="dest-input" id="pickup-input" value="${state.pickupPoint}" />`;
+    <input class="dest-input" id="pickup-input" value="${escapeHtml(state.pickupPoint)}" />`;
   const input = field.querySelector("#pickup-input");
   input.addEventListener("input", (e) => {
     state.pickupPoint = e.target.value;
@@ -2347,7 +2560,7 @@ function ResultScreen() {
   const card = el("div", "result-card");
   const top = el("div", "result-top");
   top.innerHTML = `
-    <span class="confidence">${t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) })}</span>
+    <span class="confidence">${escapeHtml(t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) }))}</span>
     <div class="result-title" id="res-title"></div>
     <div class="result-sub" id="res-sub"></div>`;
   card.appendChild(top);
@@ -2360,9 +2573,9 @@ function ResultScreen() {
     <div><div class="result-lbl">${t("result_lbl_obj_dims")}</div><div class="result-val">${objDims}</div></div>
     <div><div class="result-lbl">${t("result_lbl_pkg_dims")}</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
     <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${state.pickupPoint}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${escapeHtml(state.pickupPoint)}</div></div>
     <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
-      getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—"
+      getSelectedAddress() ? escapeHtml(formatAddress(getSelectedAddress())) : destinationDisplayName(state.guestDestinationCountry) || "—"
     }</div></div>`;
   card.appendChild(grid);
 
@@ -2375,7 +2588,7 @@ function ResultScreen() {
 
   const shippingNote = localizeShippingNote(r);
   if (shippingNote) {
-    const tip = el("div", "tip", `💡 ${shippingNote}`);
+    const tip = el("div", "tip", `💡 ${escapeHtml(shippingNote)}`);
     wrap.appendChild(tip);
   }
 
@@ -2392,7 +2605,7 @@ function ResultScreen() {
   if (onBreakeven && !state.priceConfirmedForThisResult) {
     const promo = el("div", "promo-card-inline");
     promo.innerHTML = `
-      <div class="promo-badge">${t("result_promo_badge_breakeven", { code: state.promoCode })}</div>
+      <div class="promo-badge">${t("result_promo_badge_breakeven", { code: escapeHtml(state.promoCode) })}</div>
       <div class="promo-headline-inline">${t("result_promo_headline_breakeven")}</div>
       <div class="promo-price-row">
         <span class="promo-price-new">€${q.breakeven.toFixed(2)}</span>
@@ -2476,7 +2689,7 @@ function ResultScreen() {
     priceCard.innerHTML = `
       <div class="tg-lbl" style="margin-bottom:10px">${t("result_quote_title")} ${quoteSuffix}</div>
       <div class="info-row"><span>${t("result_fee_service")}</span><b>€${fee}</b></div>
-      ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: state.partnerDiscountCode })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
+      ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: escapeHtml(state.partnerDiscountCode) })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
       <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
       <div class="info-row total"><span>${t("result_total_lbl")}</span><b id="res-total">€0</b></div>
       <div class="info-line" style="margin-top:8px">${t("result_delivery_note", { eta: localizeEta(q.eta) })}</div>`;
@@ -2485,6 +2698,19 @@ function ResultScreen() {
       wrap.appendChild(PartnerDiscountField(fee));
     }
   }
+
+  // Il prezzo qui è sempre e solo una STIMA per la spedizione di questo
+  // singolo oggetto — nessun addebito reale (o simulato) avviene in questo
+  // punto del flusso, qualunque sia il ramo di prezzo mostrato sopra (dual
+  // pricing, breakeven, prima spedizione gratuita). Il calcolo definitivo
+  // (consolidato se il turista aggiunge altri oggetti verso la stessa
+  // destinazione — vedi consolidatedGroupPrice()) e il momento del
+  // pagamento (anche solo simulato oggi) sono SOLO in ConcludeScreen — vedi
+  // il commento lì sopra confirmBtn e MANUALE.md, sezione "Punto di
+  // integrazione pagamento futuro".
+  const estimateNote = el("div", "info-line");
+  estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
+  wrap.appendChild(estimateNote);
 
   const actions = el("div", "result-actions");
   const bookBtn = el("button", "btn-primary", t("result_qr_btn"));
@@ -2646,17 +2872,174 @@ async function animateResult(r, p) {
   if (total) await countUp(total, p.grandTotal, 700);
 }
 
+// ---------------- Coda di ritentativo sync CRM ----------------
+//
+// syncPurchaseToCRM() e saveShipmentGroupToCRM() sotto restano "fire and
+// forget" verso il turista (non devono mai bloccare/rallentare l'acquisto),
+// ma un fallimento non può più sparire in un .catch(() => {}) silenzioso:
+// ogni tentativo fallito (rete instabile, timeout, errore transitorio del
+// server — anche una risposta non-ok, non solo un errore di fetch) finisce
+// in questa coda persistita in localStorage, ritentata da
+// processPendingSyncQueue() all'avvio, al ritorno online e periodicamente
+// mentre l'app resta aperta (vedi i punti di chiamata in fondo al file).
+const SYNC_QUEUE_KEY = "tg_pending_sync_queue";
+// 5 tentativi combinati con un tetto di 48h: coprono ampiamente un blip di
+// rete o un'interruzione temporanea del server (ogni avvio app/ritorno
+// online è già un tentativo), senza continuare a martellare per giorni un
+// endpoint che fallisce per un motivo non transitorio (es. payload
+// corrotto) — oltre la soglia l'elemento resta in coda con needsAttention
+// ma non viene più ritentato automaticamente.
+const SYNC_MAX_ATTEMPTS = 5;
+const SYNC_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+// L'indicatore (vedi PendingSyncBanner) compare solo se un elemento è in
+// coda da almeno 2 minuti: un singolo blip risolto al tentativo successivo
+// non deve mai far comparire un avviso non necessario.
+const SYNC_INDICATOR_DELAY_MS = 2 * 60 * 1000;
+
+const SYNC_ENDPOINTS = {
+  purchase: "/.netlify/functions/save-purchase",
+  "shipment-group": "/.netlify/functions/save-shipment-group",
+};
+
+function loadSyncQueue() {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    const items = raw ? JSON.parse(raw) : [];
+    return Array.isArray(items) ? items : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveSyncQueue(queue) {
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {}
+}
+
+function enqueueFailedSync(type, payload) {
+  const queue = loadSyncQueue();
+  queue.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    payload,
+    createdAt: Date.now(),
+    attempts: 0,
+    lastAttemptAt: null,
+    needsAttention: false,
+  });
+  saveSyncQueue(queue);
+}
+
+let syncQueueProcessing = false;
+
+// Ritenta ogni elemento in coda (tranne quelli già oltre il limite di
+// tentativi/tempo, marcati needsAttention). Non sovrappone esecuzioni
+// concorrenti (syncQueueProcessing) così due trigger ravvicinati (es. load
+// + evento "online" quasi in contemporanea) non inviano due volte lo
+// stesso elemento. Se il device risulta offline non tenta nemmeno la
+// fetch, per non consumare il budget di tentativi su qualcosa che non è
+// realmente un fallimento del server.
+async function processPendingSyncQueue() {
+  if (syncQueueProcessing) return;
+  if (typeof navigator !== "undefined" && "onLine" in navigator && !navigator.onLine) return;
+  const queue = loadSyncQueue();
+  if (!queue.length) return;
+  syncQueueProcessing = true;
+  let changed = false;
+  try {
+    const remaining = [];
+    for (const item of queue) {
+      if (item.needsAttention) {
+        remaining.push(item);
+        continue;
+      }
+      const endpoint = SYNC_ENDPOINTS[item.type];
+      if (!endpoint) {
+        remaining.push(item);
+        continue;
+      }
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item.payload),
+        });
+        if (!res.ok) throw new Error("sync failed: " + res.status);
+        changed = true; // successo: l'elemento non torna in remaining, esce dalla coda
+      } catch (e) {
+        item.attempts += 1;
+        item.lastAttemptAt = Date.now();
+        if (item.attempts >= SYNC_MAX_ATTEMPTS || Date.now() - item.createdAt >= SYNC_MAX_AGE_MS) {
+          item.needsAttention = true;
+        }
+        changed = true;
+        remaining.push(item);
+      }
+    }
+    saveSyncQueue(remaining);
+  } finally {
+    syncQueueProcessing = false;
+  }
+  if (changed) render();
+}
+
+// Elementi da mostrare nell'indicatore non invasivo (HomeScreen/HistoryScreen):
+// solo quelli in coda da almeno SYNC_INDICATOR_DELAY_MS, o già segnalati
+// needsAttention — mai al primo fallimento, per non allarmare per un blip
+// che si risolve da solo al tentativo successivo.
+function visiblePendingSyncItems() {
+  const queue = loadSyncQueue();
+  const now = Date.now();
+  return queue.filter((it) => it.needsAttention || now - it.createdAt >= SYNC_INDICATOR_DELAY_MS);
+}
+
+function PendingSyncBanner() {
+  const items = visiblePendingSyncItems();
+  if (!items.length) return null;
+  const attention = items.some((it) => it.needsAttention);
+  const banner = el("div", "sync-pending-banner" + (attention ? " attention" : ""));
+  const word = items.length === 1 ? t("sync_pending_item_singular") : t("sync_pending_item_plural");
+  const suffix = attention ? t("sync_pending_suffix_attention") : t("sync_pending_suffix");
+  banner.innerHTML = `🔄 ${items.length} ${word} ${suffix}`;
+  return banner;
+}
+
 function syncPurchaseToCRM(item) {
   const payload = item.touristEmail ? item : Object.assign({}, item, { touristEmail: state.touristEmail });
   fetch("/.netlify/functions/save-purchase", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  }).catch(() => {
-    // Offline or server unavailable — the purchase still lives in the
-    // tourist's local history; it just won't appear centrally until
-    // the next successful sync attempt.
-  });
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("save-purchase failed: " + res.status);
+    })
+    .catch(() => {
+      // Offline, server irraggiungibile o errore transitorio — l'acquisto
+      // resta comunque nello storico locale del turista; il vero
+      // ritentativo lo fa processPendingSyncQueue() (vedi sopra), non qui.
+      enqueueFailedSync("purchase", payload);
+    });
+}
+
+// Registra centralmente il record del gruppo di spedizione consolidato
+// (ConcludeScreen, save-shipment-group.js) — stesso pattern di
+// syncPurchaseToCRM sopra: non blocca mai il flusso del turista (il
+// gruppo resta comunque visibile localmente in ShippedScreen), ma un
+// fallimento finisce comunque in coda di ritentativo invece di sparire.
+function saveShipmentGroupToCRM(group) {
+  fetch("/.netlify/functions/save-shipment-group", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(group),
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("save-shipment-group failed: " + res.status);
+    })
+    .catch(() => {
+      enqueueFailedSync("shipment-group", group);
+    });
 }
 
 function historyStatusClass(status) {
@@ -2672,7 +3055,7 @@ function historyStatusClass(status) {
 // cambiato, per sapere se salvare/ri-renderizzare.
 function applyRemotePurchaseUpdate(local, remote) {
   let changed = false;
-  ["status", "pickupPoint", "pickupPointChanged", "pickupPointChangedAt", "previousPickupPoint", "packagingDispatch", "pickupRequestedAt"].forEach((key) => {
+  ["status", "pickupPoint", "pickupPointChanged", "pickupPointChangedAt", "previousPickupPoint", "packagingDispatch", "pickupRequestedAt", "deliveryConfirmedAt"].forEach((key) => {
     if (remote[key] !== undefined && JSON.stringify(remote[key]) !== JSON.stringify(local[key])) {
       local[key] = remote[key];
       changed = true;
@@ -2771,10 +3154,323 @@ function markPickupPointSeen(item) {
   render();
 }
 
+// Conferma di consegna del turista, indipendente dallo stato "ritirato"
+// (che indica solo che il corriere lo ha ritirato dal negozio, non che sia
+// arrivato a casa). Mostrata sempre per ogni oggetto "ritirato" finché non
+// confermato — nessuna soglia di giorni: un ritardo del corriere non deve
+// nascondere la domanda proprio nel momento in cui servirebbe di più, e un
+// singolo tap è comunque a costo zero per il turista se il pacco non è
+// ancora arrivato (può semplicemente ignorarla finché non lo riceve).
+// Un solo tap è prova sufficiente, nessun altro dato richiesto.
+function confirmDelivery(item) {
+  item.deliveryConfirmedAt = new Date().toISOString();
+  saveHistory();
+  savePending();
+  syncPurchaseToCRM(item);
+  // Touch&Go Broadcasting: subito dopo la conferma di consegna, invita il
+  // turista a lasciare una recensione della sua esperienza (privata, mai
+  // pubblicata in automatico — vedi ReviewScreen() sotto) — ma solo se non
+  // ne ha già lasciata una per questo acquisto su questo dispositivo.
+  if (!isReviewed(item.id)) {
+    state.reviewingPurchaseId = item.id;
+    state.reviewReturnTo = "history";
+    state.reviewDraftRating = 0;
+    state.reviewDraftText = "";
+    state.reviewJustSubmitted = false;
+    state.reviewSubmitError = null;
+    state.screen = "review";
+  }
+  render();
+}
+
+// ---------------- Recensione post-consegna (Touch&Go Broadcasting) ----------------
+// La recensione è sempre privata: nessuna pubblicazione automatica da
+// nessuna parte, solo lo staff (dal CRM in touchandgo-internal) decide se
+// e quando pubblicarla sui canali social di Touch&Go — vedi MANUALE.md.
+
+const REVIEW_TEXT_MAX_LENGTH = 600;
+
+// Trova un acquisto per id tra quelli già noti al dispositivo (in corso o
+// nello storico) o, se raggiunto da un link/QR di recensione da un altro
+// dispositivo (vedi captureReviewFromUrl()), tra quello recuperato dal
+// server con ensureReviewItem(). Stesso pattern di lookup già usato in
+// PackageCheckScreen().
+function findPurchaseById(id) {
+  return (
+    state.pendingItems.find((it) => it.id === id) ||
+    state.purchaseHistory.find((it) => it.id === id) ||
+    (state.reviewItem && state.reviewItem.id === id ? state.reviewItem : null) ||
+    null
+  );
+}
+
+// Tracciamento locale, solo lato client, di quali acquisti hanno già una
+// recensione inviata da questo dispositivo — evita di ripresentare
+// l'invito/il form dopo l'invio. Deliberatamente NON scritto sul record
+// dell'acquisto in "purchases" (nessuna modifica alla struttura di quello
+// store): la recensione vive per intero nel proprio store "reviews".
+function loadReviewedIds() {
+  try {
+    const raw = localStorage.getItem("tg_reviewed_ids");
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+function markReviewed(purchaseId) {
+  try {
+    const ids = loadReviewedIds();
+    if (!ids.includes(purchaseId)) {
+      ids.push(purchaseId);
+      localStorage.setItem("tg_reviewed_ids", JSON.stringify(ids));
+    }
+  } catch (e) {}
+}
+function isReviewed(purchaseId) {
+  return loadReviewedIds().includes(purchaseId);
+}
+
+// Acquisti "ritirato" con consegna già confermata (deliveryConfirmedAt,
+// sincronizzato dal server) ma non ancora recensiti su QUESTO dispositivo
+// (tg_reviewed_ids è solo locale) — capita non solo se il turista è
+// tornato indietro da ReviewScreen senza inviare (confirmDelivery() lo
+// porta lì automaticamente, ma non lo obbliga), ma anche cambiando
+// dispositivo: la conferma di consegna arriva sincronizzata, la recensione
+// già fatta no. Ordinati per data così il più vecchio (quello "dimenticato"
+// da più tempo) è il primo a comparire nell'invito qui sotto.
+function pendingReviewItems() {
+  return state.purchaseHistory
+    .filter((it) => it.status === "ritirato" && it.deliveryConfirmedAt && !isReviewed(it.id))
+    .sort((a, b) => new Date(a.deliveryConfirmedAt) - new Date(b.deliveryConfirmedAt));
+}
+
+// Invito proattivo in HomeScreen — oggi l'unico modo per scoprire che c'è
+// una recensione in sospeso è aprire "I tuoi acquisti" e trovare la riga
+// giusta. Stesso principio non invasivo di PendingSyncBanner: un solo tap
+// porta direttamente a ReviewScreen per l'acquisto più vecchio in sospeso,
+// senza passare dallo storico.
+function ReviewInviteBanner() {
+  const items = pendingReviewItems();
+  if (!items.length) return null;
+  const item = items[0];
+  const banner = el("div", "review-invite-banner");
+  banner.innerHTML = `
+    <div class="review-invite-icon">⭐</div>
+    <div class="review-invite-body">
+      <div class="review-invite-title">Com'è andata con "${escapeHtml(item.objectName)}"?</div>
+      <div class="review-invite-sub">${
+        items.length > 1
+          ? `Lascia una recensione — ne hai ${items.length} in sospeso`
+          : "Lascia una recensione, bastano 30 secondi"
+      }</div>
+    </div>
+    <div class="review-invite-arrow">→</div>`;
+  banner.addEventListener("click", () => {
+    state.reviewingPurchaseId = item.id;
+    state.reviewReturnTo = "home";
+    state.reviewDraftRating = 0;
+    state.reviewDraftText = "";
+    state.reviewJustSubmitted = false;
+    state.reviewSubmitError = null;
+    state.screen = "review";
+    render();
+  });
+  return banner;
+}
+
+// Un link di recensione (?review=<purchaseId>, vedi captureReviewFromUrl())
+// può essere aperto su un dispositivo diverso da quello che ha registrato
+// l'acquisto — in quel caso l'oggetto non è in state.pendingItems/
+// purchaseHistory locali. Lo recupera dal server riusando l'azione
+// "get-purchases" di sync.js (già pensata per prendere acquisti noti per
+// id, mai l'intero elenco) invece di introdurre un nuovo endpoint.
+async function ensureReviewItem() {
+  const id = state.reviewingPurchaseId;
+  if (!id || findPurchaseById(id) || state.reviewItemFetchAttempted) return;
+  state.reviewItemFetchAttempted = true;
+  try {
+    const res = await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get-purchases", ids: [id] }),
+    });
+    const data = await res.json();
+    if (data && Array.isArray(data.items) && data.items[0]) {
+      state.reviewItem = data.items[0];
+      render();
+    }
+  } catch (e) {}
+}
+
+async function submitReview(item) {
+  const rating = state.reviewDraftRating;
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5 || state.reviewSubmitting) return;
+  state.reviewSubmitting = true;
+  state.reviewSubmitError = null;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/save-review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        purchaseId: item.id,
+        shipmentGroupCode: item.shipmentGroupCode || null,
+        partnerCode: item.partnerCode || null,
+        rating,
+        text: (state.reviewDraftText || "").trim(),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Invio non riuscito, riprova.");
+    }
+    markReviewed(item.id);
+    state.reviewJustSubmitted = true;
+    state.reviewDraftRating = 0;
+    state.reviewDraftText = "";
+  } catch (e) {
+    state.reviewSubmitError = e.message || "Invio non riuscito, riprova.";
+  } finally {
+    state.reviewSubmitting = false;
+    render();
+  }
+}
+
+// Link/QR di condivisione per completare la recensione più tardi o da un
+// altro dispositivo — stesso pattern di PartnerQRSection() (parametro in
+// query catturato all'avvio, vedi captureReviewFromUrl()) e stesso
+// generatore qrCodeUrl() già usato per il QR di deposito/negozio.
+async function shareReviewLink(url) {
+  const text = "Lascia la tua recensione della tua esperienza con Touch&Go:";
+  try {
+    if (navigator.share) {
+      await navigator.share({ text, title: "Recensione Touch&Go", url });
+      return;
+    }
+  } catch (e) {
+    // utente ha annullato o condivisione non riuscita — fallback su clipboard
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    alert("Link copiato — incollalo dove preferisci.");
+  } catch (e) {
+    alert("Copia manualmente questo link: " + url);
+  }
+}
+
+// Etichetta mostrata sotto le stelle mentre si sceglie il voto (Problema
+// 2b) — aiuta a capire cosa si sta selezionando invece di lasciare solo il
+// numero di stelle a parlare da sé.
+const REVIEW_RATING_LABELS = { 1: "Pessimo", 2: "Così così", 3: "Buono", 4: "Ottimo!", 5: "Eccellente!" };
+
+function ReviewScreen() {
+  const wrap = el("div", "section review-screen");
+  // Il testo cambia in base a come si è arrivati qui (dallo storico, come
+  // sempre, oppure — vedi ReviewInviteBanner in HomeScreen — direttamente
+  // dalla home): "Torna allo storico" sarebbe fuorviante nel secondo caso.
+  const back = el("div", "back", state.reviewReturnTo === "home" ? "← Torna alla home" : "← Torna allo storico");
+  back.addEventListener("click", () => {
+    state.screen = state.reviewReturnTo || "history";
+    render();
+  });
+  wrap.appendChild(back);
+  wrap.appendChild(el("div", "step-lbl", "Com'è andata con Touch&Go?"));
+
+  const purchaseId = state.reviewingPurchaseId;
+  const item = findPurchaseById(purchaseId);
+
+  if (!item) {
+    wrap.appendChild(el("div", "identify-intro", "Stiamo recuperando il tuo acquisto…"));
+    ensureReviewItem();
+    return wrap;
+  }
+
+  wrap.appendChild(
+    el(
+      "div",
+      "review-privacy-note",
+      "La tua recensione resta privata: la vede solo il nostro staff, che decide se e quando pubblicarla sui canali social di Touch&Go."
+    )
+  );
+
+  const alreadyDone = isReviewed(purchaseId) || state.reviewJustSubmitted;
+
+  if (alreadyDone) {
+    wrap.appendChild(el("div", "review-thanks", "✓ Grazie, la tua recensione è stata inviata."));
+  } else {
+    const currentRating = state.reviewDraftRating || 0;
+    const starsRow = el("div", "review-stars");
+    for (let i = 1; i <= 5; i++) {
+      const star = el("button", "review-star" + (i <= currentRating ? " active" : ""), i <= currentRating ? "★" : "☆");
+      star.type = "button";
+      star.setAttribute("aria-label", `${i} stelle`);
+      star.addEventListener("click", () => {
+        state.reviewDraftRating = i;
+        render();
+      });
+      starsRow.appendChild(star);
+    }
+    wrap.appendChild(starsRow);
+    wrap.appendChild(el("div", "review-rating-label", currentRating ? REVIEW_RATING_LABELS[currentRating] : ""));
+
+    const textarea = el("textarea", "review-textarea");
+    textarea.placeholder = "Raccontaci com'è andata (facoltativo)";
+    textarea.maxLength = REVIEW_TEXT_MAX_LENGTH;
+    textarea.value = state.reviewDraftText || "";
+    wrap.appendChild(textarea);
+    addVoiceButton(textarea);
+    // Aggiornato leggendo/scrivendo direttamente il nodo, non con un
+    // render() completo ad ogni tasto premuto — altrimenti la textarea
+    // verrebbe ricreata da zero (app.innerHTML = "" in render()) e perderebbe
+    // focus/posizione del cursore mentre si scrive.
+    const charCount = el("div", "review-char-count", `${(state.reviewDraftText || "").length}/${REVIEW_TEXT_MAX_LENGTH}`);
+    textarea.addEventListener("input", (e) => {
+      state.reviewDraftText = e.target.value;
+      charCount.textContent = `${e.target.value.length}/${REVIEW_TEXT_MAX_LENGTH}`;
+    });
+    wrap.appendChild(charCount);
+
+    if (state.reviewSubmitError) {
+      wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.reviewSubmitError)}`));
+    }
+
+    const submitBtn = el(
+      "button",
+      "btn-primary review-submit-btn",
+      state.reviewSubmitting ? "Invio in corso…" : "Invia recensione"
+    );
+    submitBtn.disabled = !currentRating || state.reviewSubmitting;
+    submitBtn.addEventListener("click", () => submitReview(item));
+    const submitWrap = el("div", "review-submit-wrap");
+    submitWrap.appendChild(submitBtn);
+    // Il solo grigiore del bottone disabilitato è facile da non notare —
+    // un testo esplicito toglie ogni dubbio sul perché "non succede nulla".
+    if (!currentRating && !state.reviewSubmitting) {
+      submitWrap.appendChild(el("div", "review-submit-hint", "Scegli un voto qui sopra per continuare"));
+    }
+    wrap.appendChild(submitWrap);
+  }
+
+  const reviewUrl = `${window.location.origin}/?review=${encodeURIComponent(purchaseId)}`;
+  const qrUrl = qrCodeUrl(encodeURIComponent(reviewUrl), 220);
+  wrap.appendChild(el("div", "review-share-note", "Preferisci farlo più tardi o da un altro dispositivo? Scansiona o condividi questo QR/link."));
+  const qrCard = el("div", "qr-card");
+  qrCard.innerHTML = `
+    <img src="${qrUrl}" alt="QR per la recensione" class="qr-img" />
+    <div class="qr-note">Riporta a questa stessa schermata di recensione</div>`;
+  wrap.appendChild(qrCard);
+  const shareBtn = el("button", "btn-secondary", "📤 Condividi il link della recensione");
+  shareBtn.addEventListener("click", () => shareReviewLink(reviewUrl));
+  wrap.appendChild(shareBtn);
+
+  return wrap;
+}
+
 function pickupPointUpdateBanner(item) {
   if (!item.pickupPointChanged) return null;
   const banner = el("div", "pickup-update-banner");
-  banner.innerHTML = `📍 Punto di ritiro aggiornato: ${item.pickupPoint}<div class="pickup-update-note">Tocca per confermare di aver visto l'aggiornamento</div>`;
+  banner.innerHTML = `📍 Punto di ritiro aggiornato: ${escapeHtml(item.pickupPoint)}<div class="pickup-update-note">Tocca per confermare di aver visto l'aggiornamento</div>`;
   banner.addEventListener("click", (e) => {
     e.stopPropagation();
     markPickupPointSeen(item);
@@ -2858,7 +3554,7 @@ function renderPackageCheckResult(check) {
   box.innerHTML = `
     <div class="pack-check-title">${check.oversized ? t("pkgcheck_oversized") : t("pkgcheck_ok")}</div>
     <div class="pack-check-dims">${t("pkgcheck_detected_dims", { dims: formatDims(check.length_cm, check.width_cm, check.height_cm) })}</div>
-    <div class="pack-check-note">${check.note || ""}</div>`;
+    <div class="pack-check-note">${escapeHtml(check.note || "")}</div>`;
   return box;
 }
 
@@ -2921,7 +3617,7 @@ function QueuedScreen() {
   const wrap = el("div", "section booked-screen");
   wrap.appendChild(AssistantAvatar("queued"));
   const qrData = encodeURIComponent(`TouchAndGo|${item.id}|negozio:${item.pickupPoint}|dest:${item.addressLabel}`);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&color=15-15-15&bgcolor=250-248-244&data=${qrData}`;
+  const qrUrl = qrCodeUrl(qrData, 220);
   const intro = el("div");
   intro.innerHTML = `
     <div class="booked-icon">🕓</div>
@@ -2993,12 +3689,12 @@ function DocumentsScreen() {
   const waybill = el("div", "doc-card");
   waybill.innerHTML = `
     <div class="doc-row"><span>${t("docs_row_reference")}</span><b>${item.id}</b></div>
-    <div class="doc-row"><span>${t("docs_row_sender")}</span><b>${item.touristName || "—"}</b></div>
-    <div class="doc-row"><span>${t("docs_row_pickup")}</span><b>${item.pickupPoint}</b></div>
-    <div class="doc-row"><span>${t("docs_row_recipient")}</span><b>${item.touristName || "—"}</b></div>
-    <div class="doc-row"><span>${t("docs_row_delivery_address")}</span><b>${item.addressLabel}</b></div>
-    <div class="doc-row"><span>${t("docs_row_content")}</span><b>${item.objectName}</b></div>
-    <div class="doc-row"><span>${t("result_lbl_hs_code")}</span><b>${item.hsCode}</b></div>
+    <div class="doc-row"><span>${t("docs_row_sender")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
+    <div class="doc-row"><span>${t("docs_row_pickup")}</span><b>${escapeHtml(item.pickupPoint)}</b></div>
+    <div class="doc-row"><span>${t("docs_row_recipient")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
+    <div class="doc-row"><span>${t("docs_row_delivery_address")}</span><b>${escapeHtml(item.addressLabel)}</b></div>
+    <div class="doc-row"><span>${t("docs_row_content")}</span><b>${escapeHtml(item.objectName)}</b></div>
+    <div class="doc-row"><span>${t("result_lbl_hs_code")}</span><b>${escapeHtml(item.hsCode)}</b></div>
     <div class="doc-row"><span>${t("docs_row_weight")}</span><b>${item.weightKg} kg</b></div>
     <div class="doc-row"><span>${t("docs_row_pkg_dims")}</span><b>${item.packageDims ? formatDims(item.packageDims.l, item.packageDims.w, item.packageDims.h) : "—"}</b></div>
     <div class="doc-row"><span>${t("docs_row_issue_date")}</span><b>${dateStr}</b></div>`;
@@ -3009,8 +3705,8 @@ function DocumentsScreen() {
   invoice.innerHTML = `
     <div class="doc-row"><span>${t("docs_row_invoice_number")}</span><b>PF-${item.id}</b></div>
     <div class="doc-row"><span>${t("docs_row_seller")}</span><b>${t("docs_seller_value")}</b></div>
-    <div class="doc-row"><span>${t("docs_row_buyer")}</span><b>${item.touristName || "—"}</b></div>
-    <div class="doc-row"><span>${t("docs_row_goods_desc")}</span><b>${item.objectName}</b></div>
+    <div class="doc-row"><span>${t("docs_row_buyer")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
+    <div class="doc-row"><span>${t("docs_row_goods_desc")}</span><b>${escapeHtml(item.objectName)}</b></div>
     <div class="doc-row"><span>${t("docs_row_declared_value")}</span><b>€${(item.itemValue || 0).toFixed(2)}</b></div>
     <div class="doc-row"><span>${t("docs_row_vat_exempt")}</span><b>Art. 8 DPR 633/72</b></div>
     <div class="doc-row"><span>${t("docs_row_shipping_cost")}</span><b>€${item.price}</b></div>`;
@@ -3018,7 +3714,7 @@ function DocumentsScreen() {
 
   const sigBlock = el("div", "sig-block");
   if (item.hasSignedInvoice) {
-    sigBlock.innerHTML = `<div class="tg-lbl">${t("docs_signature_lbl")}</div><div class="identify-intro">${t("docs_signature_yes", { name: item.touristName || t("docs_signature_fallback_name") })}</div>`;
+    sigBlock.innerHTML = `<div class="tg-lbl">${t("docs_signature_lbl")}</div><div class="identify-intro">${t("docs_signature_yes", { name: escapeHtml(item.touristName || t("docs_signature_fallback_name")) })}</div>`;
   } else {
     sigBlock.innerHTML = `<div class="tg-lbl">${t("docs_signature_lbl")}</div><div class="identify-intro">${t("docs_signature_no")}</div>`;
   }
@@ -3048,16 +3744,16 @@ function ConcludeScreen() {
     el(
       "div",
       "identify-intro",
-      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, invii un unico ordine di ritiro consolidato per ciascuna destinazione."
+      "Questi sono gli acquisti raccolti nei negozi durante il soggiorno. Confermando, paghi ora il totale finale — ricalcolato sul gruppo consolidato, non la somma delle stime viste durante lo shopping — e invii un unico ordine di ritiro per ciascuna destinazione."
     )
   );
 
   const list = el("div", "queue-list");
   state.pendingItems.forEach((it) => {
     const row = el("div", "queue-item clickable");
-    row.innerHTML = `<div class="queue-item-name">${it.objectName}</div>
-      <div class="queue-item-meta">Negozio: ${it.pickupPoint} · HS ${it.hsCode}</div>
-      <div class="queue-item-meta">→ ${it.addressLabel} · €${it.price}</div>`;
+    row.innerHTML = `<div class="queue-item-name">${escapeHtml(it.objectName)}</div>
+      <div class="queue-item-meta">Negozio: ${escapeHtml(it.pickupPoint)} · HS ${escapeHtml(it.hsCode)}</div>
+      <div class="queue-item-meta">→ ${escapeHtml(it.addressLabel)} · stima €${it.price}</div>`;
     row.addEventListener("click", () => {
       state.viewingItemId = it.id;
       state.viewItemReturnTo = "conclude";
@@ -3077,11 +3773,23 @@ function ConcludeScreen() {
   });
   wrap.appendChild(list);
 
-  const totalsByDest = {};
+  // Calcolo finale del prezzo: per ogni destinazione (stessa addressLabel),
+  // consolidatedGroupPrice() ricalcola il gruppo da zero sul peso/volume
+  // combinato con una sola fee di servizio — vedi il commento su quella
+  // funzione e MANUALE.md, sezione "Prezzo consolidato per gruppo di
+  // spedizione". Questo, non la somma di it.price (le stime individuali
+  // mostrate durante lo shopping), è il prezzo che conta davvero.
+  const itemsByDest = {};
   state.pendingItems.forEach((it) => {
-    totalsByDest[it.addressLabel] = (totalsByDest[it.addressLabel] || 0) + it.price;
+    (itemsByDest[it.addressLabel] = itemsByDest[it.addressLabel] || []).push(it);
   });
-  const groups = Object.keys(totalsByDest).length;
+  const groupPricing = {};
+  Object.entries(itemsByDest).forEach(([dest, items]) => {
+    groupPricing[dest] = consolidatedGroupPrice(items);
+  });
+  const groups = Object.keys(itemsByDest).length;
+  const grandTotal = Math.round(Object.values(groupPricing).reduce((s, g) => s + g.total, 0) * 100) / 100;
+
   const summary = el(
     "div",
     "info-line",
@@ -3089,19 +3797,70 @@ function ConcludeScreen() {
   );
   wrap.appendChild(summary);
 
-  const confirmBtn = el("button", "btn-primary", "Conferma e invia ordine di ritiro consolidato →");
+  const paymentSummary = el("div", "price-card");
+  paymentSummary.innerHTML = `
+    <div class="tg-lbl" style="margin-bottom:10px">Totale da confermare e pagare ora</div>
+    ${Object.entries(groupPricing)
+      .map(
+        ([dest, g]) =>
+          `<div class="info-row"><span>${escapeHtml(dest)} (${g.weightKg} kg fatturabili)</span><b>€${g.total.toFixed(2)}</b></div>`
+      )
+      .join("")}
+    <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
+  wrap.appendChild(paymentSummary);
+
+  // ============================================================
+  // QUI è il punto di integrazione per un pagamento reale futuro
+  // (Stripe o altro PSP) — vedi MANUALE.md, sezione "Punto di
+  // integrazione pagamento futuro".
+  //
+  // Oggi il pagamento è solo simulato (il setTimeout qui sotto conferma
+  // sempre, incondizionatamente), ma questo è già, a livello concettuale,
+  // l'istante in cui il turista conferma E PAGA il totale finale mostrato
+  // sopra (singolo o consolidato a seconda di quanti oggetti sono nel
+  // gruppo, calcolato da consolidatedGroupPrice()) — non solo "notifica un
+  // ritiro". Nessun punto del flusso PRIMA di questo (ResultScreen incluso)
+  // deve mai comunicare un addebito: quello è sempre e solo una stima.
+  //
+  // Quando arriverà un pagamento reale, la chiamata al provider va
+  // agganciata ESATTAMENTE qui, prima del blocco che marca gli oggetti come
+  // "ritirato" e li sincronizza col CRM più sotto — non dopo: un pagamento
+  // vero può fallire (carta rifiutata, timeout), e in quel caso gli oggetti
+  // non andrebbero comunque marcati come ritirati né il gruppo salvato.
+  // ============================================================
+  const confirmBtn = el(
+    "button",
+    "btn-primary",
+    `Conferma e paga €${grandTotal.toFixed(2)} — ordine di ritiro consolidato →`
+  );
   confirmBtn.addEventListener("click", () => {
     confirmBtn.disabled = true;
-    confirmBtn.textContent = "Invio ordine…";
+    confirmBtn.textContent = "Confermo e pago…";
     setTimeout(() => {
-      state.shippedGroups = Object.entries(totalsByDest).map(([dest, total]) => ({
-        dest,
-        total: total.toFixed(2),
-        code: generateBookingCode(),
-        count: state.pendingItems.filter((it) => it.addressLabel === dest).length,
-      }));
+      state.shippedGroups = Object.entries(itemsByDest).map(([dest, items]) => {
+        const pricing = groupPricing[dest];
+        const code = generateBookingCode();
+        const group = {
+          code,
+          dest,
+          destinationCountry: pricing.destinationCountry,
+          itemIds: items.map((it) => it.id),
+          itemCount: items.length,
+          weightKg: pricing.weightKg,
+          shipping: pricing.shipping,
+          fee: pricing.fee,
+          total: pricing.total,
+          eta: pricing.eta,
+          touristEmail: state.touristEmail,
+          createdAt: new Date().toISOString(),
+        };
+        saveShipmentGroupToCRM(group);
+        return { dest, total: pricing.total.toFixed(2), code, count: items.length };
+      });
       state.pendingItems.forEach((it) => {
+        const group = state.shippedGroups.find((g) => g.dest === it.addressLabel);
         it.status = "ritirato";
+        it.shipmentGroupCode = group ? group.code : null;
         syncPurchaseToCRM(it);
       });
       state.pendingItems = [];
@@ -3119,7 +3878,7 @@ function ConcludeScreen() {
 function ShippedScreen() {
   const wrap = el("div", "section booked-screen");
   wrap.appendChild(el("div", "booked-icon", "✓"));
-  wrap.appendChild(el("div", "booked-title", "Ordine di ritiro inviato"));
+  wrap.appendChild(el("div", "booked-title", "Ordine confermato e pagato"));
   wrap.appendChild(
     el(
       "div",
@@ -3127,14 +3886,20 @@ function ShippedScreen() {
       `Il corriere passerà a ritirare tutti gli oggetti lasciati nei negozi entro le prossime 24 ore, consolidati in ${state.shippedGroups.length} spedizion${state.shippedGroups.length === 1 ? "e" : "i"}.`
     )
   );
+  const paidTotal = (state.shippedGroups || []).reduce((s, g) => s + parseFloat(g.total), 0);
   (state.shippedGroups || []).forEach((g) => {
     const card = el("div", "qr-card");
     card.innerHTML = `<div class="qr-code">${g.code}</div>
-      <div class="qr-note">${g.count} oggett${g.count === 1 ? "o" : "i"} → ${g.dest}</div>
+      <div class="qr-note">${g.count} oggett${g.count === 1 ? "o" : "i"} → ${escapeHtml(g.dest)}</div>
       <div class="qr-note">Totale €${g.total}</div>`;
     wrap.appendChild(card);
   });
-  wrap.appendChild(el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere."));
+  wrap.appendChild(
+    el("div", "booked-text", `Pagamento di €${paidTotal.toFixed(2)} registrato (simulato in questo prototipo).`)
+  );
+  wrap.appendChild(
+    el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere né a un istituto di pagamento.")
+  );
   const backBtn = el("button", "btn-primary", "Torna alla home");
   backBtn.addEventListener("click", () => {
     state.screen = "home";
@@ -3148,25 +3913,53 @@ function ShippedScreen() {
 // voce invece di scrivere (turisti di fretta o con difficoltà con la
 // tastiera). Usa la Web Speech API nativa del browser (su Chrome/Chromium
 // la trascrizione passa comunque dai server di Google, non è on-device —
-// serve quindi connessione dati attiva). Se il browser non la supporta,
-// non aggiunge nulla: il campo resta scrivibile normalmente, senza errori.
+// serve quindi connessione dati attiva).
+//
+// Bug investigato (segnalato come "il microfono non funziona"): fino a
+// questa versione, se il browser non esponeva SpeechRecognition/
+// webkitSpeechRecognition la funzione usciva subito senza aggiungere
+// nulla — il controllo spariva senza alcuna spiegazione, indistinguibile
+// da un campo che non ha mai avuto dettatura vocale. Verificato con test
+// reali (Playwright + Chromium, vedi commit): (a) su un browser che ESPONE
+// l'API, il pulsante appare correttamente, è cliccabile, non è coperto né
+// tagliato da nessun elemento — anche dentro AssistantChatModal, che è
+// stata verificata esplicitamente perché sospettata di avere un problema
+// suo; (b) il flusso di permesso/errore (recognition "error" con
+// not-allowed/no-speech) funziona davvero e mostra il toast corretto —
+// provato scatenando per davvero un rifiuto di permesso reale. Non è
+// quindi un bug di layout/gestione errori specifico della modale.
+// La causa reale è la (a) del sospetto originale, confermata anche solo
+// leggendo il codice (nessun test necessario: il "return" immediato è
+// deterministico) — su un browser che non espone affatto l'API (Firefox
+// desktop/Android, che non la implementa per scelta di privacy; Safari ha
+// un supporto storicamente incompleto/dipendente dalla versione) il
+// controllo non compariva mai, ovunque nell'app: non solo nella chat
+// assistente, ma anche nei campi nome/indirizzo — semplicemente lì viene
+// notato meno perché scrivere a mano è l'alternativa ovvia e già in vista.
+//
+// Fix: il pulsante compare SEMPRE, anche quando l'API non è disponibile —
+// in versione visivamente attenuata, non clickable per avviare un
+// riconoscimento (non esiste nulla da avviare), ma il tap mostra comunque
+// una spiegazione breve tramite lo stesso toast già usato per gli altri
+// errori, invece di far sparire il controllo senza dire nulla.
+//
 // onResult(transcript), opzionale, viene chiamato dopo che il testo
 // dettato è già stato scritto nel campo — usato dal chat dell'assistente
 // per inviare subito il messaggio dopo la dettatura.
 function addVoiceButton(input, onResult) {
   if (!input) return;
-  if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) return;
   const parent = input.parentElement;
   if (!parent) return;
+  const supported = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
 
   const wrap = el("div", "voice-field-wrap" + (input.classList.contains("addr-cap") ? " voice-cap" : ""));
   parent.insertBefore(wrap, input);
   wrap.appendChild(input);
 
-  const btn = el("button", "voice-btn", "🎤");
+  const btn = el("button", "voice-btn" + (supported ? "" : " voice-btn-unsupported"), "🎤");
   btn.type = "button";
-  btn.title = "Detta a voce";
-  btn.setAttribute("aria-label", "Detta a voce");
+  btn.title = supported ? "Detta a voce" : "Dettatura vocale non disponibile su questo browser";
+  btn.setAttribute("aria-label", supported ? "Detta a voce" : "Dettatura vocale non disponibile su questo browser");
   wrap.appendChild(btn);
 
   const toast = el("div", "voice-toast");
@@ -3181,6 +3974,11 @@ function addVoiceButton(input, onResult) {
       toast.hidden = true;
     }, 4000);
   };
+
+  if (!supported) {
+    btn.addEventListener("click", () => showToast("🎤 Dettatura vocale non disponibile su questo browser — puoi comunque scrivere qui a mano."));
+    return;
+  }
 
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognizing = false;
@@ -3431,12 +4229,12 @@ function DestinationField() {
   const label = state.destinationFromProfile ? t("dest_field_from_profile") : t("dest_field_selected");
   const current = getSelectedAddress();
   wrap.innerHTML = `<div class="dest-lbl">${label}</div>
-    <div class="addr-summary">${current ? `<b>${current.label || t("dest_default_label")}</b> · ${formatAddress(current)}` : t("dest_no_address")}</div>`;
+    <div class="addr-summary">${current ? `<b>${escapeHtml(current.label || t("dest_default_label"))}</b> · ${escapeHtml(formatAddress(current))}` : t("dest_no_address")}</div>`;
 
   const list = el("div", "addr-list");
   state.addresses.forEach((a) => {
     const row = el("div", "addr-option" + (a.id === state.selectedAddressId ? " selected" : ""));
-    row.innerHTML = `<span>${a.label || t("dest_default_label")} — ${formatAddress(a)}</span>`;
+    row.innerHTML = `<span>${escapeHtml(a.label || t("dest_default_label"))} — ${escapeHtml(formatAddress(a))}</span>`;
     row.addEventListener("click", () => {
       state.selectedAddressId = a.id;
       state.destinationFromProfile = false;
@@ -3504,7 +4302,7 @@ function ChooseAddressScreen() {
 
   wrap.appendChild(el("div", "step-lbl", "A quale indirizzo destiniamo questo acquisto?"));
   wrap.appendChild(
-    el("div", "identify-intro", `${localizeObjectName(state.result)} — scegli l'indirizzo per questa spedizione.`)
+    el("div", "identify-intro", `${escapeHtml(localizeObjectName(state.result))} — scegli l'indirizzo per questa spedizione.`)
   );
 
   if (state.addresses.length === 0) {
@@ -3519,7 +4317,7 @@ function ChooseAddressScreen() {
     const list = el("div", "addr-list");
     state.addresses.forEach((a) => {
       const row = el("div", "addr-option" + (a.id === state.selectedAddressId ? " selected" : ""));
-      row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
+      row.innerHTML = `<span>${escapeHtml(a.label || "Indirizzo")} — ${escapeHtml(formatAddress(a))}</span>`;
       row.addEventListener("click", () => {
         state.selectedAddressId = a.id;
         state.destinationFromProfile = false;
@@ -3540,7 +4338,7 @@ function ChooseAddressScreen() {
 
   wrap.appendChild(el("div", "tg-lbl", "Punto di ritiro per questo acquisto"));
   const pickupField = el("div", "dest-field");
-  pickupField.innerHTML = `<div class="dest-lbl">Se diverso dal punto vendita rilevato</div><input class="dest-input" id="item-pickup-input" value="${state.pickupPoint}" />`;
+  pickupField.innerHTML = `<div class="dest-lbl">Se diverso dal punto vendita rilevato</div><input class="dest-input" id="item-pickup-input" value="${escapeHtml(state.pickupPoint)}" />`;
   wrap.appendChild(pickupField);
   wrap.appendChild(
     el("div", "home-foot", "Utile se chi imballa/consegna l'oggetto non è lo stesso negozio dove hai fatto l'acquisto.")
@@ -3578,6 +4376,8 @@ function ChooseAddressScreen() {
         id: generateBookingCode(),
         objectName: localizeObjectName(state.result),
         hsCode: (state.result && state.result.hs_code) || "—",
+        category: (state.result && state.result.category) || null,
+        material: (state.result && state.result.material) || null,
         weightKg: state.result ? state.result.weight_kg : 1,
         dims: state.result
           ? { length_cm: state.result.length_cm, width_cm: state.result.width_cm, height_cm: state.result.height_cm }
@@ -3635,12 +4435,12 @@ function EditItemAddressScreen() {
   }
 
   wrap.appendChild(el("div", "step-lbl", "Cambia destinazione"));
-  wrap.appendChild(el("div", "identify-intro", `${item.objectName} — attualmente verso: ${item.addressLabel}`));
+  wrap.appendChild(el("div", "identify-intro", `${escapeHtml(item.objectName)} — attualmente verso: ${escapeHtml(item.addressLabel)}`));
 
   const list = el("div", "addr-list");
   state.addresses.forEach((a) => {
     const row = el("div", "addr-option" + (a.id === item.addressId ? " selected" : ""));
-    row.innerHTML = `<span>${a.label || "Indirizzo"} — ${formatAddress(a)}</span>`;
+    row.innerHTML = `<span>${escapeHtml(a.label || "Indirizzo")} — ${escapeHtml(formatAddress(a))}</span>`;
     row.addEventListener("click", () => {
       item.addressId = a.id;
       item.addressLabel = `${a.label || "Indirizzo"} — ${formatAddress(a)}`;
@@ -3715,7 +4515,7 @@ function ViewItemPhotoScreen() {
     img.src = item.photo;
     wrap.appendChild(img);
   } else if (item.textDescription) {
-    wrap.appendChild(el("div", "pending-desc", `"${item.textDescription}"`));
+    wrap.appendChild(el("div", "pending-desc", `"${escapeHtml(item.textDescription)}"`));
     wrap.appendChild(el("div", "identify-intro", "Questo acquisto è stato descritto a testo, senza foto."));
   } else {
     wrap.appendChild(el("div", "identify-intro", "Nessuna foto disponibile per questo acquisto."));
@@ -3723,10 +4523,10 @@ function ViewItemPhotoScreen() {
 
   const info = el("div", "info-card");
   info.innerHTML = `
-    <div class="info-row"><span>Oggetto</span><b>${item.objectName}</b></div>
-    <div class="info-row"><span>Codice HS</span><b>${item.hsCode}</b></div>
-    <div class="info-row"><span>Ritiro</span><b>${item.pickupPoint}</b></div>
-    <div class="info-row"><span>Destinazione</span><b>${item.addressLabel}</b></div>`;
+    <div class="info-row"><span>Oggetto</span><b>${escapeHtml(item.objectName)}</b></div>
+    <div class="info-row"><span>Codice HS</span><b>${escapeHtml(item.hsCode)}</b></div>
+    <div class="info-row"><span>Ritiro</span><b>${escapeHtml(item.pickupPoint)}</b></div>
+    <div class="info-row"><span>Destinazione</span><b>${escapeHtml(item.addressLabel)}</b></div>`;
   wrap.appendChild(info);
 
   return wrap;
@@ -3777,7 +4577,7 @@ function DashboardScreen() {
         if (banner) list.appendChild(banner);
         const row = el("div", "history-item");
         row.innerHTML = `
-          <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
+          <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
           <div class="history-meta">Valore oggetto: €${(it.itemValue || 0).toFixed(2)} · Servizio Touch&amp;Go: €${it.price}</div>`;
         list.appendChild(row);
       });
@@ -3869,7 +4669,7 @@ function BiometricLockScreen() {
   wrap.innerHTML = `
     <div class="biometric-icon">🔒</div>
     <div class="step-lbl" style="justify-content:center;text-align:center">Sblocca Touch&amp;Go</div>
-    <div class="identify-intro" style="text-align:center">Ciao ${state.touristName || ""} — verifica la tua identità per continuare.</div>`;
+    <div class="identify-intro" style="text-align:center">Ciao ${escapeHtml(state.touristName || "")} — verifica la tua identità per continuare.</div>`;
   const unlockBtn = el("button", "btn-primary", "🔓 Sblocca con Face ID / Touch ID / impronta");
   const errBox = el("div", "alert hidden");
   unlockBtn.addEventListener("click", async () => {
@@ -3986,10 +4786,10 @@ function PurchaseHistoryList(items, emptyText, editable) {
       const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
       const sourceLbl = it.pickupSource === "gps" ? "GPS" : it.pickupSource === "ip" ? "rete" : "manuale";
       row.innerHTML = `
-        <div class="history-top"><span class="history-name">${it.objectName}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
-        <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${it.pickupPoint}</b> · HS ${it.hsCode}</div>
-        <div class="history-meta">→ ${it.addressLabel} · €${it.price}</div>
-        <div class="history-meta">${it.touristName ? it.touristName + " · " : ""}${dateStr}</div>`;
+        <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
+        <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${escapeHtml(it.pickupPoint)}</b> · HS ${escapeHtml(it.hsCode)}</div>
+        <div class="history-meta">→ ${escapeHtml(it.addressLabel)} · €${it.price}</div>
+        <div class="history-meta">${it.touristName ? escapeHtml(it.touristName) + " · " : ""}${dateStr}</div>`;
       if (editable) {
         row.classList.add("clickable");
         row.addEventListener("click", () => {
@@ -4032,6 +4832,23 @@ function PurchaseHistoryList(items, emptyText, editable) {
         });
         row.appendChild(pickupBtn);
       }
+      if (editable && it.status === "ritirato" && !it.deliveryConfirmedAt) {
+        const confirmBox = el("div", "delivery-confirm-box");
+        confirmBox.appendChild(el("div", "delivery-confirm-question", "Hai ricevuto il tuo pacco?"));
+        const confirmBtn = el("button", "btn-primary delivery-confirm-btn", "Sì, l'ho ricevuto");
+        confirmBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          confirmDelivery(it);
+        });
+        confirmBox.appendChild(confirmBtn);
+        row.appendChild(confirmBox);
+      } else if (editable && it.status === "ritirato" && it.deliveryConfirmedAt) {
+        const confirmedDt = new Date(it.deliveryConfirmedAt);
+        const confirmedStr = isNaN(confirmedDt)
+          ? ""
+          : confirmedDt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+        row.appendChild(el("div", "delivery-confirmed-note", `✓ Consegna confermata${confirmedStr ? " il " + confirmedStr : ""}`));
+      }
       wrap.appendChild(row);
     });
   return wrap;
@@ -4047,6 +4864,8 @@ function HistoryScreen() {
   });
   wrap.appendChild(back);
   wrap.appendChild(el("div", "step-lbl", "I tuoi acquisti"));
+  const syncBanner = PendingSyncBanner();
+  if (syncBanner) wrap.appendChild(syncBanner);
   wrap.appendChild(PurchaseHistoryList(state.purchaseHistory, "Non hai ancora registrato nessun acquisto.", true));
   return wrap;
 }
@@ -4142,33 +4961,61 @@ let viewfinderStream = null;
 // rumore filtrato, apertura+chiusura otturatore) invece di un file audio
 // esterno: nessun asset da scaricare, nessuna questione di licenza,
 // funziona anche offline nella PWA.
+//
+// TOU-20 (audio completamente assente su dispositivo reale, confermato da
+// Giuseppe): la funzione creava un nuovo AudioContext ad ogni scatto senza
+// mai controllarne lo stato. Su Safari/Chrome mobile un AudioContext può
+// nascere "suspended" anche se costruito dentro un gesto utente reale (il
+// tap sul pulsante di scatto) — senza un resume() esplicito, i nodi
+// programmati non producono alcun suono e non sollevano alcun errore:
+// esattamente il sintomo riportato ("nessun suono, neanche l'ombra",
+// nessun errore in console). Fix: un solo AudioContext condiviso e
+// riusato (creato al primo scatto, quindi già dentro un gesto utente), con
+// resume() esplicito prima di programmare i suoni ogni volta che risulta
+// "suspended". Il .catch(e=>{}) che inghiottiva ogni errore in silenzio è
+// stato sostituito con un console.warn, per non ripetere lo stesso
+// problema di diagnosticabilità già risolto per il fallback fotocamera.
+let sharedAudioCtx = null;
+function getSharedAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+  return sharedAudioCtx;
+}
+function scheduleShutterNoise(ctx) {
+  const now = ctx.currentTime;
+  [
+    { delay: 0, freq: 1800, gain: 0.5 },
+    { delay: 0.07, freq: 2800, gain: 0.35 },
+  ].forEach(({ delay, freq, gain }) => {
+    const bufferSize = Math.floor(ctx.sampleRate * 0.02);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = freq;
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = gain;
+    noise.connect(filter).connect(gainNode).connect(ctx.destination);
+    noise.start(now + delay);
+    noise.stop(now + delay + 0.02);
+  });
+}
 function playShutterSound() {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime;
-    [
-      { delay: 0, freq: 1800, gain: 0.5 },
-      { delay: 0.07, freq: 2800, gain: 0.35 },
-    ].forEach(({ delay, freq, gain }) => {
-      const bufferSize = Math.floor(ctx.sampleRate * 0.02);
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = "highpass";
-      filter.frequency.value = freq;
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = gain;
-      noise.connect(filter).connect(gainNode).connect(ctx.destination);
-      noise.start(now + delay);
-      noise.stop(now + delay + 0.02);
-    });
-    setTimeout(() => ctx.close(), 300);
-  } catch (e) {}
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume().then(() => scheduleShutterNoise(ctx)).catch((e) => console.warn("Audio scatto: resume() dell'AudioContext fallito", e));
+    } else {
+      scheduleShutterNoise(ctx);
+    }
+  } catch (e) {
+    console.warn("Audio scatto non riprodotto", e);
+  }
 }
 
 function closeViewfinder(overlay) {
@@ -4308,6 +5155,26 @@ function capturePartnerCode() {
 
 capturePartnerCode();
 
+// Percorso "Hai già un account partner? Accedi" dal sito marketing
+// (dist/site/index.html, sezione #partner): apre l'app con ?mode=partner
+// invece di limitarsi allo scroll sulla sezione di registrazione nuovo
+// partner. Stesso principio di capturePartnerCode()/capturePromoCode()
+// sopra/sotto — un parametro in query letto una volta all'avvio. Non
+// tocca in nessun modo la logica di login (PartnerLoginAndHistory, sotto)
+// o l'autenticazione via partner-stats.js: imposta solo la modalità con
+// cui l'app parte, così chi arriva da quel link trova già in vista il
+// login del componente esistente, senza duplicare nessuna UI sul sito.
+function captureModeFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "partner") {
+      state.mode = "partner";
+    }
+  } catch (e) {}
+}
+
+captureModeFromUrl();
+
 // Codice invito per l'offerta "prima spedizione a prezzo breakeven".
 // A differenza del codice partner, non viene mai mostrato di default:
 // compare solo se arriva da un link diretto (?invito=CODICE) o se il
@@ -4364,6 +5231,47 @@ capturePromoCode();
 if (state.promoCode) checkPromoCode(state.promoCode);
 loadHistory();
 
+// Recensione raggiunta da un link/QR condiviso (?review=<purchaseId>) —
+// stesso pattern di capturePartnerCode()/captureModeFromUrl()/
+// capturePromoCode() sopra: un parametro letto una volta all'avvio. Va
+// dopo loadHistory() così findPurchaseById() può già trovare l'acquisto
+// tra quelli noti a questo dispositivo, prima di ricorrere a
+// ensureReviewItem() (fetch dal server) per il caso "altro dispositivo".
+function captureReviewFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("review");
+    if (fromUrl) {
+      state.reviewingPurchaseId = fromUrl.trim();
+      state.reviewReturnTo = "home";
+      state.screen = "review";
+    }
+  } catch (e) {}
+}
+
+captureReviewFromUrl();
+if (state.reviewingPurchaseId) ensureReviewItem();
+
+// Spazio ospite (continuità operativa, vedi MANUALE.md): GUEST_MODE è una
+// variabile d'ambiente Netlify letta solo dalle Netlify Functions — questo
+// file statico servito da dist/ non ha modo di leggerla direttamente
+// (nessun build step in questo repository che possa iniettarla). Un
+// endpoint minimo e non sensibile (guest-status.js) la espone come
+// booleano; se la chiamata fallisce (offline, funzione irraggiungibile)
+// il banner resta semplicemente nascosto — mai un falso positivo che
+// mostri "spazio ospite" su un deploy che non lo è davvero.
+async function checkGuestMode() {
+  try {
+    const res = await fetch("/.netlify/functions/guest-status");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.guestMode) {
+      state.guestMode = true;
+      render();
+    }
+  } catch (e) {}
+}
+
 // Un punto di ritiro scelto a mano in una sessione precedente ha priorità
 // sulla rilevazione automatica GPS/rete al prossimo avvio — altrimenti
 // loadLocation() lo sovrascriverebbe sempre, impedendo di continuare ad
@@ -4382,15 +5290,26 @@ render();
 if (!manualPickupAtStartup) loadLocation();
 syncPurchaseUpdatesFromCRM();
 discoverPurchasesByEmail();
+checkGuestMode();
+processPendingSyncQueue();
 
 window.addEventListener("online", () => {
   state.isOffline = false;
   render();
+  processPendingSyncQueue();
 });
 window.addEventListener("offline", () => {
   state.isOffline = true;
   render();
 });
+// Rete "connessa" non significa "il precedente tentativo andrà a buon
+// fine adesso" (un blip può risolversi senza mai attraversare gli eventi
+// online/offline, es. un singolo errore 5xx transitorio) — un controllo
+// periodico leggero mentre l'app resta aperta intercetta questi casi
+// senza bisogno di un riavvio. processPendingSyncQueue() esce subito se
+// la coda è vuota o offline, quindi il costo quando non c'è nulla in
+// sospeso è trascurabile.
+setInterval(processPendingSyncQueue, 3 * 60 * 1000);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
