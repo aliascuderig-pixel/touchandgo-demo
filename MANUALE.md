@@ -606,3 +606,79 @@ Nessun valore reale di queste variabili è mai scritto in questo file o nel codi
 **Cosa NON cambia rispetto a prima**: il principio originale del file (router come parte più semplice e affidabile del sistema) resta il criterio guida anche con questa aggiunta — da qui il vincolo esplicito, verificato con test automatici (vedi sotto), che qualunque guasto imprevisto nel nuovo meccanismo risolva sempre verso `main`, mai verso `guest`.
 
 **Test automatici**: `router/netlify/functions/__tests__/go.test.js` e `.../reset.test.js` (più `netlify/functions/__tests__/health.test.js` per l'endpoint sul sito principale) — stessa tecnica di `save-purchase.commission.test.js` (store Blobs finto in memoria, nessuna rete/credenziale reale), eseguibili con `npm test` dalla radice del repository. Coprono: sito sano (resta su `main`, nessun failover scritto), `health.js` che fallisce (passa a `guest` e registra il failover), un secondo giro dopo il blocco (resta su `guest` senza richiamare `health.js`), entro la finestra di debounce (stesso comportamento sul lato `main`), il reset manuale (torna a controllare davvero alla richiesta successiva), e lo store del router irraggiungibile in lettura o in scrittura (fallback sempre a `main`).
+
+## Controllo giornaliero automatico (system health check)
+
+**Perché esiste**: con quattro "dispositivi" ormai in produzione (sito principale, spazio ospite, router di continuità, CRM interno in `touchandgo-internal`), un problema in uno di loro può passare inosservato finché non lo nota un turista o Giuseppe per caso. Questa funzione li controlla tutti **una volta al giorno, da sola**, e lascia un report leggibile dal CRM — senza mai consumare credito AI reale né toccare stato reale del sistema (nessun failover innescato, nessun acquisto/recensione finti).
+
+### Sintassi usata per lo scheduling (verificata, non a memoria)
+
+Netlify supporta le Scheduled Functions tramite il wrapper `schedule()` del pacchetto `@netlify/functions` (aggiunto come nuova dipendenza in `package.json`, prima non presente in questo repository):
+
+```js
+const { schedule } = require("@netlify/functions");
+exports.handler = schedule("0 6 * * *", async () => { /* ... */ });
+```
+
+Verificata leggendo il codice/README pubblicati sul registro npm della versione corrente (`@netlify/functions@6.0.0`, 2026) — non tramite ricordo: l'espressione cron è letta **staticamente in fase di build** da Netlify per registrare il trigger; a runtime `schedule(cron, handler)` in questa versione restituisce semplicemente `handler` invariato. Nessuna modifica a `netlify.toml` è necessaria. Conseguenza pratica utile per i test: **chiamare l'URL della function anche manualmente** (curl, o direttamente in locale) esegue davvero l'handler e ne restituisce il risultato reale — non serve aspettare le 06:00 per verificarne il comportamento.
+
+**Frequenza**: una volta al giorno, alle 06:00 UTC (`"0 6 * * *"`).
+
+### Il problema della password del CRM (Visitor Access)
+
+Il sito `touchandgo-internal` (dominio `cute-moxie-cd1e4b.netlify.app`) è protetto da una password **a livello di dominio** (Netlify Visitor Access), non solo dalla password applicativa del kit riservato — quindi anche solo raggiungere una sua Netlify Function da un controllo automatico senza browser richiede di superare quella protezione. Non essendoci accesso al pannello Netlify da qui, non è stato possibile verificare direttamente quale modalità di Visitor Access sia configurata sul dominio. Se è impostata come autenticazione HTTP Basic reale (il caso più comune per questo tipo di protezione), è superabile senza browser con un semplice header `Authorization: Basic base64(utente:password)` — per questo il controllo CRM legge due nuove variabili d'ambiente, **`CRM_VISITOR_USER`** e **`CRM_VISITOR_PASSWORD`** (impostate solo se e quando Giuseppe le configura su Netlify, sul sito principale — mai un valore reale scritto qui): se assenti, la richiesta parte comunque senza autenticazione e, se il sito è davvero protetto, il controllo la segnala esplicitamente come `crm_visitor_auth_non_configurata` — mai un falso "ok".
+
+La sonda vera e propria verso `crm.js`, una volta superata la Visitor Access, è a **costo zero**: una `POST` con un'`action` sconosciuta, che `crm.js` rifiuta subito con `400 "Unknown action"` prima di qualunque lettura/scrittura Blobs — lo stesso identico percorso che l'app pubblica userebbe per errore, nessuna azione reale.
+
+### Cosa controlla, ogni giorno (`netlify/functions/daily-healthcheck.js`)
+
+| Dispositivo | Come |
+|---|---|
+| Sito principale | `GET .netlify/functions/health` (esistente, invariato) |
+| Spazio ospite | `GET .netlify/functions/health` sullo stesso deploy con `GUEST_MODE=true` — nessun nuovo endpoint necessario: `health.js` è lo stesso file, già presente su entrambi i deploy |
+| Router di continuità | `GET .netlify/functions/status` — **nuovo** endpoint di sola lettura (vedi sotto), mai `go.js`: non deve mai poter innescare un failover reale |
+| CRM interno | `POST .netlify/functions/crm` con `action` sconosciuta (vedi sopra) |
+
+Ogni controllo ha un timeout di 4 secondi (stesso pattern `AbortController` di `health.js`/`go.js`) e **non lancia mai eccezioni**: qualunque esito diventa `{ status: "ok" | "problem", responseTimeMs, error? }`. I quattro controlli girano in parallelo e **ciascuno è indipendente**: se uno fallisce, gli altri tre vengono comunque completati e il report viene comunque salvato per intero (parziale sul dispositivo in errore, non abortito al primo problema) — verificato con test automatici che simulano sia il caso "tutto ok" sia il caso "un dispositivo irraggiungibile" (vedi sotto).
+
+**`router/netlify/functions/status.js`** (nuovo): a differenza di `go.js`, chiama **solo** `readState()` (la stessa funzione pura già usata da `go.js` per decidere il redirect) — mai `checkMainHealth()` né `writeState()`. Restituisce lo stato persistito più il target calcolato (`redirectsTo`), così il controllo giornaliero può verificare che il router "risponda e reindirizzi correttamente" senza il minimo rischio di alterare il debounce o innescare un failover, qualunque sia la frequenza con cui viene interrogato.
+
+### Il report: dove finisce, quanto resta
+
+Un nuovo store Netlify Blobs condiviso, **`system-reports`**, stesse credenziali di produzione già usate per gli altri store condivisi (`purchases`, ecc. — `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN`). Una chiave per giorno (`"YYYY-MM-DD"`, UTC), così un'esecuzione non sovrascrive mai lo storico dei giorni precedenti — solo un eventuale secondo giro nello stesso giorno (es. durante un test manuale) aggiorna quella stessa chiave, comportamento voluto.
+
+Forma di ogni record:
+
+```json
+{
+  "date": "2026-09-01",
+  "checkedAt": "2026-09-01T06:00:00.000Z",
+  "overallStatus": "ok",
+  "devices": {
+    "main":   { "status": "ok", "responseTimeMs": 123 },
+    "guest":  { "status": "ok", "responseTimeMs": 140 },
+    "router": { "status": "ok", "responseTimeMs": 88 },
+    "crm":    { "status": "problem", "responseTimeMs": 210, "error": "crm_visitor_auth_non_configurata" }
+  }
+}
+```
+
+**Storico e pulizia**: dopo ogni scrittura, la function elenca tutte le chiavi dello store (sono già `"YYYY-MM-DD"`, quindi l'ordine alfabetico coincide con quello cronologico) e cancella tutte tranne le **30 più recenti**. Netlify Blobs non ha una scadenza nativa per singola chiave, quindi la pulizia è fatta così, sempre dalla stessa function che scrive: nessun meccanismo separato da tenere sincronizzato, e non può "dimenticarsene" perché gira ad ogni esecuzione. 30 giorni bastano per uno storico mensile utile nel CRM senza far crescere lo store indefinitamente; un errore nella pulizia è comunque best-effort e non fa mai fallire il salvataggio del report del giorno, già avvenuto prima.
+
+**Spazio ospite**: la funzione si ferma subito (`isGuestMode()`) se eseguita sul deploy ospite — è lo **stesso repository**, quindi anche quel deploy avrebbe altrimenti un proprio scheduler che esegue la stessa function ogni giorno, producendo report duplicati e un secondo, inutile, tentativo di autenticazione verso il CRM. Il controllo di sistema è responsabilità del solo deploy di produzione.
+
+**Visualizzazione**: una nuova scheda nel CRM (`touchandgo-internal`, repository separato) legge questo stesso store con le stesse credenziali condivise — vedi il `MANUALE.md` di quel repository per i dettagli.
+
+### Vincoli rispettati (verificati con test automatici)
+
+- **Mai credito AI reale consumato**: nessuna vera classificazione — `health.js` verifica solo che la chiave Anthropic sia valida (endpoint Models, zero generazione), la sonda CRM è un'azione rifiutata a costo zero prima di qualunque I/O.
+- **Mai stato reale modificato**: `status.js` del router è puramente in lettura; nessun acquisto/recensione fittizio viene mai creato.
+- **Mai un abort al primo errore**: un dispositivo irraggiungibile non impedisce di controllare gli altri né di salvare comunque il report (parziale).
+
+**Test automatici**: `netlify/functions/__tests__/daily-healthcheck.test.js` (caso tutto ok, caso router irraggiungibile con report parziale salvato comunque, CRM senza credenziali Visitor Access configurate, spazio ospite che si ferma subito, pulizia storico oltre 30 giorni) e `router/netlify/functions/__tests__/status.test.js` (nessuno stato ancora scritto, failover già attivo, override `ACTIVE_TARGET`, store irraggiungibile) — stessa tecnica delle altre suite (store Blobs finto in memoria, fetch finto, nessuna rete/credenziale reale), eseguibili con `npm test` dalla radice del repository. Grazie al comportamento di `schedule()` spiegato sopra, questi stessi test invocano l'handler reale, non un doppio finto.
+
+**Variabili d'ambiente nuove, solo sul sito principale** (mai un valore reale scritto in questo file):
+
+| Variabile | A cosa serve |
+|---|---|
+| `CRM_VISITOR_USER` / `CRM_VISITOR_PASSWORD` | Credenziali HTTP Basic per superare la Visitor Access del dominio CRM, se configurata così. Se assenti, il controllo CRM lo segnala esplicitamente invece di dare un falso "ok". |
