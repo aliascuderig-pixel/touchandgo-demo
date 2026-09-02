@@ -139,29 +139,33 @@ exports.handler = async (event) => {
         return { statusCode: 403, body: JSON.stringify({ error: BLOCKED_MESSAGE }) };
       }
 
-      // Blocco automatico: un cliente che non ha mai avuto un acquisto
-      // "abbonato" e tenta un secondo acquisto non-abbonato viene bloccato
-      // per tutte le richieste future (il controllo sopra lo intercetterà
-      // dal tentativo successivo in poi).
+      // Segnalazione (non più blocco automatico — verificato dal vivo il
+      // 1° settembre 2026: bloccava permanentemente anche clienti con due
+      // acquisti del tutto legittimi). Un cliente che ha già almeno un
+      // acquisto registrato e non è mai stato abbonato, se effettua un
+      // acquisto aggiuntivo non-abbonato, NON viene più bloccato — procede
+      // come un acquisto qualunque. Viene solo flaggato sul record stesso
+      // (flaggedReason/flaggedAt), per revisione manuale dello staff dal
+      // CRM — mai una scrittura automatica in blocklist: quello store resta
+      // riservato al solo blocco manuale ("Blocca cliente" dal CRM).
       const { blobs } = await purchases.list();
       const priorItems = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
       // Esclude il record dell'item stesso: un acquisto già salvato che
       // viene semplicemente ri-sincronizzato (es. cambio status "in
       // sospeso" -> "in confezionamento" -> "ritiro richiesto" ->
-      // "ritirato") non è un "secondo acquisto" e non deve auto-bloccare
-      // il cliente al primo acquisto legittimo.
+      // "ritirato") non è un "secondo acquisto" e non deve flaggare il
+      // primo acquisto legittimo del cliente.
       const emailItems = priorItems.filter((it) => normalizeEmail(it.touristEmail) === email && it.id !== item.id);
 
+      // Ricalcolato ad ogni salvataggio (non letto/preservato dal record
+      // precedente né dal payload in arrivo, che non lo contiene mai): resta
+      // sempre coerente con lo stato reale degli acquisti del cliente in
+      // questo istante, senza bisogno di logica di merge aggiuntiva.
       if (emailItems.length > 0 && item.pricingTier !== "abbonato") {
         const everSubscribed = emailItems.some((it) => it.pricingTier === "abbonato");
         if (!everSubscribed) {
-          await blocklist.setJSON(email, {
-            email,
-            reason: "Automatico: secondo acquisto senza abbonamento",
-            auto: true,
-            blockedAt: new Date().toISOString(),
-          });
-          return { statusCode: 403, body: JSON.stringify({ error: BLOCKED_MESSAGE }) };
+          item.flaggedReason = "Secondo acquisto senza abbonamento";
+          item.flaggedAt = new Date().toISOString();
         }
       }
     }
