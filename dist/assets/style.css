@@ -585,6 +585,13 @@ button{font-family:inherit;cursor:pointer}
 .promo-invalid{font-size:10.5px;color:var(--danger);text-align:center;margin-top:6px}
 .promo-active-note{font-size:11px;color:var(--gold-deep);background:var(--warn-bg);border:1px solid var(--gold-soft);padding:9px 12px;text-align:center;margin-top:16px;font-weight:600}
 
+/* Copia/Condividi per il codice sconto generato dal partner — stessa
+   forma del bottone #ps-copy-code sul sito, colori app. */
+.discount-code-actions{display:flex;gap:8px;justify-content:center;margin-top:8px}
+.discount-copy-btn,.discount-share-btn{background:transparent;border:1px solid var(--gold-deep);color:var(--gold-deep);font-family:var(--body);font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:7px 14px;cursor:pointer;border-radius:2px;white-space:nowrap}
+.discount-copy-btn:hover,.discount-share-btn:hover{background:var(--gold-deep);color:#fff}
+.discount-copy-btn.copied{background:var(--good);border-color:var(--good);color:#fff}
+
 /* ---------- Info section ---------- */
 .info-section{border-top:1px solid var(--line);margin-top:6px}
 .info-card{background:var(--surface);border:1px solid var(--line);padding:14px 16px;margin-bottom:18px}

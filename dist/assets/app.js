@@ -438,6 +438,14 @@ const I18N = {
     partner_discount_error_default: "Codice non valido o già utilizzato.",
     partner_discount_error_connection: "Errore di connessione. Riprova.",
 
+    // ---- Codice sconto generato dal partner (PartnerLoginAndHistory) — copia/condividi ----
+    partner_discount_gen_copy_btn: "Copia",
+    partner_discount_gen_copied: "Copiato ✓",
+    partner_discount_gen_select_copy: "Selezionalo e copia",
+    partner_discount_gen_share_btn: "Condividi",
+    partner_discount_gen_share_title: "Codice sconto Touch&Go",
+    partner_discount_gen_share_text: "Ecco il tuo codice sconto Touch&Go: {code} — vale il 10% sulla fee di servizio, valido una sola volta.",
+
     // ---- PackageCheckScreen ----
     back_generic: "← Torna indietro",
     item_not_found: "Acquisto non trovato.",
@@ -672,6 +680,14 @@ const I18N = {
     result_partner_discount_applied: "✓ Partner discount code {code} applied — -€{amount} off the service fee",
     partner_discount_error_default: "Invalid or already used code.",
     partner_discount_error_connection: "Connection error. Please try again.",
+
+    // ---- Partner-generated discount code (PartnerLoginAndHistory) — copy/share ----
+    partner_discount_gen_copy_btn: "Copy",
+    partner_discount_gen_copied: "Copied ✓",
+    partner_discount_gen_select_copy: "Select and copy",
+    partner_discount_gen_share_btn: "Share",
+    partner_discount_gen_share_title: "Touch&Go discount code",
+    partner_discount_gen_share_text: "Here's your Touch&Go discount code: {code} — 10% off the service fee, valid once.",
 
     // ---- PackageCheckScreen ----
     back_generic: "← Go back",
@@ -1216,6 +1232,93 @@ async function sendAssistantChatMessage() {
   render();
 }
 
+// Bottoni "Copia"/"Condividi" per il codice sconto appena generato dal
+// partner (PartnerLoginAndHistory) — stesso identico meccanismo già usato
+// per il codice partner sul sito (dist/site/index.html, #ps-copy-code):
+// Clipboard API, poi fallback a document.execCommand("copy") su una
+// textarea temporanea, poi fallback finale a selezione manuale del testo.
+// Manipola il DOM direttamente fuori dal ciclo state/render(), come gli
+// altri toast effimeri dell'app (voice-toast, camera-fallback-toast) — un
+// render() nel frattempo (improbabile in questa finestra di 2s, ma non
+// impossibile) resetterebbe il bottone, esattamente come per quei toast.
+function buildDiscountCodeActions(code, noteEl) {
+  const row = el("div", "discount-code-actions");
+
+  const copyBtn = el("button", "discount-copy-btn", t("partner_discount_gen_copy_btn"));
+  copyBtn.type = "button";
+  let copyResetTimer = null;
+  copyBtn.addEventListener("click", async () => {
+    let copied = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(code);
+        copied = true;
+      } catch (err) {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      try {
+        const tmp = document.createElement("textarea");
+        tmp.value = code;
+        tmp.style.position = "fixed";
+        tmp.style.opacity = "0";
+        document.body.appendChild(tmp);
+        tmp.focus();
+        tmp.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(tmp);
+      } catch (err) {
+        copied = false;
+      }
+    }
+
+    clearTimeout(copyResetTimer);
+    if (copied) {
+      copyBtn.textContent = t("partner_discount_gen_copied");
+      copyBtn.classList.add("copied");
+    } else {
+      // Non è riuscito nemmeno il fallback via execCommand: seleziona
+      // almeno visivamente il testo del codice, così il partner può
+      // copiarlo da tastiera (Ctrl/Cmd+C) invece di doverlo ricopiare a
+      // mano — stesso identico fallback finale del sito.
+      const range = document.createRange();
+      range.selectNodeContents(noteEl);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      copyBtn.textContent = t("partner_discount_gen_select_copy");
+    }
+    copyResetTimer = setTimeout(() => {
+      copyBtn.textContent = t("partner_discount_gen_copy_btn");
+      copyBtn.classList.remove("copied");
+    }, 2000);
+  });
+  row.appendChild(copyBtn);
+
+  // "Fallback silenzioso": se il browser non supporta la Web Share API
+  // (stesso pattern già usato in shareQR() per il QR di deposito), il
+  // bottone "Condividi" non viene nemmeno mostrato — resta solo "Copia".
+  if (navigator.share) {
+    const shareBtn = el("button", "discount-share-btn", t("partner_discount_gen_share_btn"));
+    shareBtn.type = "button";
+    shareBtn.addEventListener("click", async () => {
+      try {
+        await navigator.share({
+          title: t("partner_discount_gen_share_title"),
+          text: t("partner_discount_gen_share_text", { code }),
+        });
+      } catch (err) {
+        // Utente ha annullato o condivisione non riuscita — nessun
+        // fallback rumoroso: il bottone "Copia" resta comunque disponibile.
+      }
+    });
+    row.appendChild(shareBtn);
+  }
+
+  return row;
+}
+
 function PartnerScreen() {
   const wrap = el("div", "section");
 
@@ -1619,13 +1722,20 @@ function PartnerCreditSection(stats) {
   wrap.appendChild(genBtn);
 
   if (state.partnerGeneratedDiscountCode) {
-    wrap.appendChild(
-      el(
-        "div",
-        "promo-active-note",
-        `✓ Codice sconto generato: ${escapeHtml(state.partnerGeneratedDiscountCode)} — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
-      )
+    // escapeHtml() sul codice mantenuto (PR #28, fix XSS) anche col nuovo
+    // wrapper <b class="discount-code-value"> introdotto qui per i bottoni
+    // Copia/Condividi sotto — il wrapper cambia solo la struttura del DOM,
+    // non deve mai riaprire la porta a HTML non escapato nel contenuto.
+    const discountNote = el(
+      "div",
+      "promo-active-note",
+      `✓ Codice sconto generato: <b class="discount-code-value">${escapeHtml(state.partnerGeneratedDiscountCode)}</b> — comunicalo al cliente, vale il 10% sulla fee di servizio, una sola volta`
     );
+    wrap.appendChild(discountNote);
+    // Passa solo l'elemento col codice (non l'intera frase) al fallback di
+    // selezione manuale — stessa precisione del sito, che seleziona solo
+    // #ps-result-code.
+    wrap.appendChild(buildDiscountCodeActions(state.partnerGeneratedDiscountCode, discountNote.querySelector(".discount-code-value")));
   }
   if (state.partnerDiscountGenerateError) {
     wrap.appendChild(el("div", "alert", `⚠️ ${state.partnerDiscountGenerateError}`));
