@@ -95,10 +95,24 @@ const BLOCKED_MESSAGE = "Non è possibile completare la richiesta. Contatta l'as
 // Rifiuta record palesemente inventati prima che finiscano nelle statistiche
 // del CRM: id presente, prezzo e peso in un range plausibile, tier di
 // prezzo tra i tre effettivamente usati dall'app.
+//
+// Limite prezzo: 5000 (non più 500) — bug reale trovato dal vivo il 3
+// settembre 2026 (vedi MANUALE.md, "Limite di prezzo per acquisto"): 500
+// era troppo basso perché "price" include anche il costo di spedizione
+// oltre alla fee di servizio, e per un oggetto pesante o una destinazione
+// lontana lo supera facilmente in modo del tutto legittimo (caso reale:
+// sedia a dondolo, 15kg, verso il Giappone, €1078,50 — rifiutata). A
+// differenza di un errore transitorio, questo rifiuto è permanente: la
+// coda di ritentativo lato client (vedi "Coda di ritentativo per la
+// sincronizzazione col CRM") continua a riprovare per sempre senza mai
+// riuscire, perché il motivo del rifiuto non cambia da solo. Nuovo limite
+// allineato a quello già usato per il totale del gruppo consolidato in
+// save-shipment-group.js (group.total > 5000) — un singolo acquisto non
+// dovrebbe mai poter superare quello che il gruppo consentirebbe.
 function isValidPurchase(item) {
   if (!item || typeof item !== "object") return false;
   if (typeof item.id !== "string" || !item.id.trim()) return false;
-  if (typeof item.price !== "number" || !isFinite(item.price) || item.price < 0 || item.price > 500) return false;
+  if (typeof item.price !== "number" || !isFinite(item.price) || item.price < 0 || item.price > 5000) return false;
   const weight = typeof item.weightKg === "number" ? item.weightKg : item.weight_kg;
   if (typeof weight !== "number" || !isFinite(weight) || weight <= 0 || weight >= 50) return false;
   if (!VALID_PRICING_TIERS.includes(item.pricingTier)) return false;
