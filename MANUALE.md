@@ -692,3 +692,44 @@ Forma di ogni record:
 | Variabile | A cosa serve |
 |---|---|
 | `CRM_VISITOR_USER` / `CRM_VISITOR_PASSWORD` | Credenziali HTTP Basic per superare la Visitor Access del dominio CRM, se configurata così. Se assenti, il controllo CRM lo segnala esplicitamente invece di dare un falso "ok". |
+
+## Test end-to-end settimanale (spazio ospite)
+
+**Perché esiste, e perché è diverso dal controllo giornaliero sopra**: `daily-healthcheck.js` verifica solo "il sito risponde?" — a costo zero, ogni giorno. Un controllo così superficiale non avrebbe mai potuto trovare il bug reale scoperto il 3 settembre 2026 durante una lunga sessione di test manuale dal vivo (limite di prezzo troppo basso in `isValidPurchase()`, corretto in PR #31): serviva un vero acquisto simulato, con classificazione AI reale, per farlo emergere. `netlify/functions/weekly-e2e-test.js` rifà esattamente quel percorso, in automatico, **una volta a settimana**.
+
+### Frequenza: settimanale, non giornaliera — e perché
+
+`classify.js` fa una vera chiamata (a pagamento) all'API Anthropic — a differenza di `health.js`, che verifica solo che la chiave sia valida senza generare nulla. Questo test ne fa **due per esecuzione** (due oggetti distinti, per poter consolidare un gruppo). Il costo reale, per quanto piccolo, va comunque contenuto: da qui la cadenza settimanale invece che giornaliera.
+
+**Sintassi cron**: `"0 7 * * 1"` — lunedì alle 07:00 UTC (un'ora dopo il controllo giornaliero delle 06:00, per non sovrapporsi). Stesso meccanismo già verificato per `daily-healthcheck.js` (wrapper `schedule()` di `@netlify/functions`, cron letto staticamente in fase di build, nessuna sintassi nuova da verificare): un'espressione cron a 5 campi standard, qui con il quinto campo (giorno della settimana) `1` = lunedì.
+
+### Perché gira SOLO sullo spazio ospite
+
+Un vero acquisto simulato scrive dati reali (due acquisti, un gruppo di spedizione) — farlo su produzione sporcherebbe le statistiche reali del CRM viste da Giuseppe/staff. Lo spazio ospite (`touchandgo-guest.netlify.app`) esiste apposta come ambiente isolato (vedi "Spazio ospite (continuità operativa)" sopra): stesso codice, store Blobs completamente separati (suffisso `-guest`).
+
+**Garanzie di sicurezza, verificate con test automatici**:
+- **Un solo punto della funzione può costruire un URL di chiamata**: `guestUrl(path)`, che antepone sempre e solo `GUEST_BASE_URL` (`https://touchandgo-guest.netlify.app/`) — nessun'altra stringa di URL compare altrove nel file per una `fetch()` reale. `KNOWN_PRODUCTION_URL` esiste unicamente come sentinella per l'autoverifica sotto, mai passata a `fetch()`.
+- **Autoverifica esplicita** (`assertTargetIsGuestOrThrow()`), richiamata sia in testa alla funzione sia dentro `guestUrl()` ad ogni singola chiamata (difesa in profondità): se `GUEST_BASE_URL` non risultasse più contenere `touchandgo-guest.netlify.app`, o coincidesse col dominio di produzione noto, la funzione si ferma con un errore chiaro **prima** di qualunque chiamata di rete — mai un tentativo silenzioso verso il sito vero, nemmeno in caso di bug futuro nel file stesso.
+- **Skip se eseguita dal deploy ospite** (`isGuestMode()`, stessa guardia di `daily-healthcheck.js`): questa function esiste nello stesso repository deployato anche come sito ospite — se eseguita da lì produrrebbe un secondo giro di classificazioni reali (costo raddoppiato) e un report duplicato. Responsabilità del solo deploy di produzione, che verifica lo spazio ospite dall'esterno.
+- **URL effettivamente chiamati da questa funzione** (elenco esplicito, tutti sotto `GUEST_BASE_URL`):
+  1. `.netlify/functions/classify` (× 2 — una per oggetto)
+  2. `.netlify/functions/save-purchase` (× 2)
+  3. `.netlify/functions/save-shipment-group` (× 1)
+- **Verifica di lettura** (passo 5): non una `fetch`, una lettura diretta dagli store Blobs `purchases-guest`/`shipment-groups-guest` (stesse credenziali condivise `NETLIFY_BLOBS_SITE_ID`/`TOKEN` di produzione — l'unica differenza tra i dati di produzione e quelli ospite è il nome dello store, mai le credenziali). Suffisso `-guest` **incondizionato** (non tramite `guestScopedStoreName()`, che dipenderebbe da `GUEST_MODE` di questa esecuzione — sempre `false` qui): stesso principio di `guestSuffixedStoreName()` già usato in `touchandgo-internal` per la riconciliazione, usato qui **solo in lettura**, mai per scrivere.
+
+### Cosa fa, nell'ordine (`netlify/functions/weekly-e2e-test.js`)
+
+1. **Classifica due oggetti di test** (`classify.js`, testo non foto — stesso prompt/schema esatti di `classifyText()` in `app.js`): descrizioni fisse e riconoscibili ("Test automatico settimanale — oggetto artigianale in legno..." / "...sciarpa di seta dipinta a mano...", entrambe con la nota "non cancellare manualmente se visto nel CRM ospite").
+2. **Salva i due acquisti** (`save-purchase.js`) con `status: "in sospeso"` (non si simula un ritiro reale), `pricingTier: "pieno"`, email `weekly-e2e-test@touchandgo-internal-test.it`, destinazione **Unione Europea** (Francia/Germania — deliberatamente diversa dal Giappone già usato nei test manuali del 3 settembre, per non confondere i dati).
+3. **Calcola il prezzo consolidato del gruppo** e lo salva (`save-shipment-group.js`). `consolidatedGroupPrice()` (in `dist/assets/app.js`) è client-side puro — nessun modulo server-side la espone — quindi le formule (`SHIPPING_RATES`, `SHIPPING_MARGIN`, `FULL_FEE`, peso volumetrico, fasce tariffarie) sono **replicate** in questo file (`computeIndividualPrice`/`computeConsolidatedPrice`), non richiamate direttamente. Se le formule in `app.js` cambiano, questa replica va aggiornata a mano — nessun modo automatico di tenerle sincronizzate finché restano in due posti.
+4. **Verifica di lettura** — non solo "la richiesta è tornata 200": legge indietro entrambi gli acquisti da `purchases-guest` e il gruppo da `shipment-groups-guest`, e segnala esplicitamente `"problem"` se un salvataggio confermato con 200 non risultasse poi davvero recuperabile.
+5. **Controllo di business**: il prezzo consolidato del gruppo deve essere **minore o uguale** alla somma dei due prezzi individuali stimati (il consolidamento risparmia una fee di servizio, non ne aggiunge mai) — se risultasse maggiore, è un bug reale in `consolidatedGroupPrice()`/nella sua replica qui, segnalato nel report (`priceSanityCheck`), mai silenziato. Piccola tolleranza (1 centesimo) solo per arrotondamenti in virgola mobile.
+6. **Tempo totale**: l'intera pipeline dovrebbe completarsi entro 30 secondi (`TOTAL_BUDGET_MS`) — se supera questa soglia, il report lo segnala (`withinTimeBudget: false`), senza per questo invalidare gli altri controlli già completati.
+
+### Il report
+
+Nuovo store Blobs condiviso, **`weekly-e2e-reports`** (stesse credenziali di produzione degli altri store condivisi), una chiave per esecuzione (`"YYYY-MM-DD"`, la data della corsa). Storico delle ultime 12 esecuzioni (~3 mesi a cadenza settimanale) mantenuto con la stessa tecnica di pulizia di `system-reports` (elenca le chiavi, cancella le più vecchie oltre la soglia, ad ogni scrittura). Contiene: data/ora, esito di ciascun passo (`ok`/`problem`/`skipped`, con dettaglio e tempo di risposta), gli id generati (`generatedIds` — utile per pulizia manuale futura se necessario), tempo totale ed esito del controllo tempo.
+
+Un fallimento in un passo iniziale (es. una classificazione fallita) interrompe i passi successivi che ne dipendono — segnati esplicitamente `"skipped"`, non semplicemente omessi — ma il report viene **comunque sempre salvato** con lo stato parziale raccolto fino a quel momento, mai un'eccezione non gestita che ne faccia sparire ogni traccia.
+
+**Test automatici**: `netlify/functions/__tests__/weekly-e2e-test.test.js` — caso tutto ok (pipeline completa, con verifica esplicita che ogni singolo URL chiamato punti a `GUEST_BASE_URL`), spazio ospite che si ferma subito (zero chiamate), un fallimento nella prima classificazione che interrompe i passi dipendenti ma salva comunque un report parziale, una verifica di lettura che rileva un salvataggio confermato (200) ma in realtà non recuperabile dallo store, il controllo di business `checkConsolidatedNotGreaterThanSum` testato direttamente sia nel caso normale sia nel caso "prezzo consolidato maggiore della somma" (dimostrato che viene rilevato e segnalato, non ignorato — incluso il limite esatto della tolleranza di arrotondamento), e la proprietà "un gruppo di un solo oggetto produce lo stesso prezzo del calcolo individuale" (stessa garanzia già richiesta a `consolidatedGroupPrice()` in `app.js`). Store Blobs finto in memoria, fetch finto, nessuna rete/credenziale/chiamata AI reale — eseguibili con `npm test` dalla radice del repository.
