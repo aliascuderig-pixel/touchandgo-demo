@@ -40,9 +40,13 @@ async function checkRateLimit(key) {
 
 // Rifiuta record palesemente inventati prima che finiscano nel CRM: codice
 // prenotazione presente, almeno un oggetto nel gruppo, prezzo/peso in un
-// range plausibile (stesso ordine di grandezza dei limiti già usati in
-// save-purchase.js per il singolo oggetto, qui semplicemente più ampi
-// perché il gruppo può contenere più oggetti).
+// range plausibile. Limite prezzo (5000) allineato deliberatamente a
+// quello del singolo oggetto in save-purchase.js (vedi commento lì, e
+// MANUALE.md "Limite di prezzo per acquisto"): un singolo acquisto non
+// dovrebbe mai poter superare quello che il gruppo consentirebbe, quindi
+// i due limiti sono lo stesso numero, non uno "più ampio" dell'altro.
+// Il limite di peso resta invece più ampio (500kg contro 50kg del singolo
+// oggetto) perché il gruppo può contenere più oggetti.
 function isValidShipmentGroup(group) {
   if (!group || typeof group !== "object") return false;
   if (typeof group.code !== "string" || !group.code.trim()) return false;
