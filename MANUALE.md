@@ -225,6 +225,21 @@ in sospeso → in confezionamento → ritiro richiesto → ritirato
 
 Se lo staff cambia il punto di ritiro mentre l'acquisto è "in confezionamento" (perché il confezionamento avviene altrove), il turista vede un banner ben visibile nel proprio storico ("📍 Punto di ritiro aggiornato: ...") finché non lo conferma con un tap — a quel punto sparisce (flag `pickupPointChanged` azzerato lato server tramite l'azione `ack-pickup-point`).
 
+### Documento e firma obbligatori per richiedere il ritiro
+
+Documento di riconoscimento e firma rilevata dall'AI restano **opzionali durante la registrazione** (`IdentifyScreen`, vedi punto 6 del flusso sopra) — un turista può salvare il proprio profilo senza mai caricare nulla. Prima di questa modifica, però, questo permetteva anche di **richiedere il ritiro** senza mai aver fornito né documento né firma (lettera di vettura generata con "Nessuna firma rilevata" e "Nessun documento di riconoscimento associato").
+
+- **`hasValidIdentity()`** (`dist/assets/app.js`, vicino a `getSelectedAddress()`) — unica fonte di verità per il controllo: `true` solo se **sia** `state.idDocument` è presente **sia** `state.signatureDetected === true`. Non tocca in alcun modo il rilevamento firma stesso (`detectSignature()`, l'AI che analizza il documento in `IdentifyScreen`) — solo il controllo a valle sul risultato già salvato in `state`.
+- **Due punti di applicazione**, entrambi con lo stesso controllo prima di qualunque mutazione di stato:
+  - **`PurchaseHistoryList()`** — il bottone "📦 Richiedi ritiro" (visibile quando `it.status === "in confezionamento"`, vedi "Stati di un acquisto" sopra): se `hasValidIdentity()` è `false`, il tap non cambia più lo stato dell'acquisto — reindirizza invece a `IdentifyScreen` con `state.identifyReturnTo = "history"`.
+  - **`ConcludeScreen()`** — il bottone di conferma/pagamento (simulato) che consolida tutti gli acquisti "in sospeso": stesso controllo, `state.identifyReturnTo = "conclude"`.
+- **Stesso pattern già esistente altrove** (`state.identifyPrompt`/`state.identifyReturnTo`, usato ad es. in `ChooseAddressScreen` quando manca la registrazione): `IdentifyScreen()` mostra `state.identifyPrompt` come testo introduttivo al posto del messaggio generico di benvenuto, e al salvataggio (`goBtn`) riporta il turista esattamente a `state.identifyReturnTo` invece che alla Home.
+- **Messaggio specifico secondo il caso**, per non confondere chi in buona fede ha già provato a caricare un documento:
+  - nessun documento caricato → *"Prima di richiedere il ritiro, carica un documento di riconoscimento con firma visibile."* (variante equivalente per Concludi: *"Prima di confermare il ritiro, ..."*);
+  - documento presente ma l'AI non vi ha rilevato una firma (`state.idDocument` valorizzato, `state.signatureDetected` `false`) → *"Il documento caricato non mostra una firma visibile: ricaricane uno che la includa prima di richiedere/confermare il ritiro."*, non il messaggio generico.
+- **Nessun'altra logica toccata**: prezzo, classificazione, sincronizzazione col CRM e consolidamento del gruppo di spedizione restano invariati — il controllo interviene solo come gate prima della mutazione di stato già esistente in ciascuno dei due punti.
+- **Test**: `dist/assets/__tests__/identity-verification-pickup.test.js` — carica l'app intera in jsdom e guida veri click DOM. Copre: blocco e reindirizzamento (messaggio generico) senza documento né firma, sia da Storico che da Concludi; blocco con messaggio specifico quando c'è un documento ma nessuna firma rilevata, in entrambi i punti; azione che procede normalmente con documento e firma presenti, in entrambi i punti; un round-trip completo (reindirizzamento → caricamento documento simulato → firma rilevata via una `classify()` mockata → salvataggio → ritorno esatto al punto di partenza, Storico o Concludi → azione completata con successo).
+
 ### Conferma di consegna del turista (`deliveryConfirmedAt`)
 
 "ritirato" indica solo che il corriere ha ritirato l'oggetto dal negozio — non che sia mai arrivato davvero a casa del turista. Non esisteva nessuna conferma successiva a quel punto.
