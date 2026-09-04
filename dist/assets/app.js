@@ -3834,6 +3834,15 @@ function ConcludeScreen() {
     `Conferma e paga €${grandTotal.toFixed(2)} — ordine di ritiro consolidato →`
   );
   confirmBtn.addEventListener("click", () => {
+    if (!hasValidIdentity()) {
+      state.identifyPrompt = state.idDocument
+        ? "Il documento caricato non mostra una firma visibile: ricaricane uno che la includa prima di confermare il ritiro."
+        : "Prima di confermare il ritiro, carica un documento di riconoscimento con firma visibile.";
+      state.identifyReturnTo = "conclude";
+      state.screen = "identify";
+      render();
+      return;
+    }
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Confermo e pago…";
     setTimeout(() => {
@@ -4192,6 +4201,15 @@ function formatAddress(a) {
 
 function getSelectedAddress() {
   return state.addresses.find((a) => a.id === state.selectedAddressId) || state.addresses[0] || null;
+}
+
+// Un ritiro può essere richiesto solo se il turista ha sia caricato un
+// documento di riconoscimento SIA ottenuto una firma effettivamente
+// rilevata su quel documento (state.signatureDetected, impostato da
+// detectSignature() in IdentifyScreen) — vedi MANUALE.md, sezione
+// "Documento e firma obbligatori per richiedere il ritiro".
+function hasValidIdentity() {
+  return !!state.idDocument && state.signatureDetected === true;
 }
 
 // Destinazione da usare per il calcolo prezzo: l'indirizzo salvato se il
@@ -4823,6 +4841,15 @@ function PurchaseHistoryList(items, emptyText, editable) {
         const pickupBtn = el("button", "queue-item-change", "📦 Richiedi ritiro");
         pickupBtn.addEventListener("click", (e) => {
           e.stopPropagation();
+          if (!hasValidIdentity()) {
+            state.identifyPrompt = state.idDocument
+              ? "Il documento caricato non mostra una firma visibile: ricaricane uno che la includa prima di richiedere il ritiro."
+              : "Prima di richiedere il ritiro, carica un documento di riconoscimento con firma visibile.";
+            state.identifyReturnTo = "history";
+            state.screen = "identify";
+            render();
+            return;
+          }
           it.status = "ritiro richiesto";
           it.pickupRequestedAt = new Date().toISOString();
           savePending();
