@@ -267,6 +267,27 @@ button{font-family:inherit;cursor:pointer}
   padding:12px 14px;font-size:12px;color:var(--warn);line-height:1.6;display:flex;gap:8px;
 }
 
+/* ---------- Stima dazi doganali (estimate-duty.js) ----------
+   Deliberatamente NON in stile .hs-block (sfondo scuro, oro, il
+   trattamento riservato ai dati doganali "ufficiali" sopra in questa
+   stessa schermata) — bordo tratteggiato, palette neutra/muted e un
+   badge "non ufficiale" sempre visibile: deve leggersi a colpo d'occhio
+   come un dato di affidabilità diversa, mai confuso con HS code/peso. */
+.duty-estimate-card{
+  margin:14px 20px 0;background:var(--paper);border:1px dashed var(--line);border-radius:var(--radius-sm);
+  padding:12px 14px;
+}
+.duty-estimate-heading{
+  display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;
+}
+.duty-estimate-badge{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);background:var(--line);padding:2px 7px;border-radius:999px;font-weight:700;
+}
+.duty-estimate-text{color:var(--text);font-size:12px;line-height:1.6;white-space:pre-wrap}
+.duty-estimate-skeleton{color:var(--muted);font-size:12px;font-style:italic}
+
 .result-actions{padding:20px}
 
 /* ---------- Motion ---------- */

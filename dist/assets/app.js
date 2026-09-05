@@ -406,6 +406,9 @@ const I18N = {
     result_lbl_hs_code: "Codice doganale HS",
     result_obj_fallback: "Oggetto",
     result_secure_note: "🛡️ Valore dichiarato elevato: copertura assicurativa estesa consigliata — richiedibile senza costi aggiuntivi prima del ritiro.",
+    duty_estimate_heading: "Stima dazi doganali",
+    duty_estimate_badge: "Non ufficiale",
+    duty_estimate_loading: "Calcolo stima in corso…",
     result_promo_badge_breakeven: "Una tantum · invito {code}",
     result_promo_headline_breakeven: "La tua prima spedizione,<br><em>al prezzo che costa a noi.</em>",
     result_fee_service: "Fee di servizio Touch&amp;Go",
@@ -649,6 +652,9 @@ const I18N = {
     result_lbl_hs_code: "HS customs code",
     result_obj_fallback: "Item",
     result_secure_note: "🛡️ High declared value: extended insurance coverage is recommended — you can request it at no extra cost before pickup.",
+    duty_estimate_heading: "Customs duty estimate",
+    duty_estimate_badge: "Unofficial",
+    duty_estimate_loading: "Estimating…",
     result_promo_badge_breakeven: "One-time · invite {code}",
     result_promo_headline_breakeven: "Your first shipment,<br><em>at the price it costs us.</em>",
     result_fee_service: "Touch&amp;Go service fee",
@@ -882,6 +888,14 @@ const state = {
   error: null,
   result: null,
   price: null,
+  // Stima dazi doganali (netlify/functions/estimate-duty.js) — SOLO
+  // informativa, mai parte del prezzo Touch&Go (vedi priceFor()/
+  // priceQuotes(), mai letta lì). Popolata in modo asincrono e non
+  // bloccante da refreshDutyEstimate() dopo che il risultato della
+  // classificazione è già mostrato — vedi MANUALE.md.
+  dutyEstimate: null,
+  dutyEstimateLoading: false,
+  dutyEstimateRequestId: 0,
   addresses: [],
   selectedAddressId: null,
   destinationFromProfile: true,
@@ -2667,6 +2681,30 @@ function AnalyzingScreen() {
   return wrap;
 }
 
+// Sezione "Stima dazi doganali" in ResultScreen — SOLO informativa,
+// popolata da refreshDutyEstimate() (vedi runClassification()). Sempre
+// visivamente SEPARATA e SECONDARIA rispetto ai dati doganali
+// "ufficiali" (HS code/peso, .hs-block sopra nella stessa schermata,
+// stile scuro/oro): badge "Non ufficiale" sempre presente, stile a parte
+// (.duty-estimate-card, bordo tratteggiato/palette neutra) — mai un dato
+// mostrato come se avesse lo stesso livello di affidabilità.
+//
+// Tre stati, nessuno bloccante: non ancora richiesta/paese sconosciuto
+// (return null, nessuna sezione), in caricamento (skeleton breve),
+// arrivata (testo dell'AI — che include già il proprio disclaimer per
+// costruzione del prompt lato server, vedi estimate-duty.js). Un
+// fallimento silenzioso ricade nel primo caso: nessun messaggio d'errore
+// che sembri parte del percorso principale.
+function DutyEstimateSection() {
+  if (!state.dutyEstimateLoading && !state.dutyEstimate) return null;
+  const box = el("div", "duty-estimate-card");
+  const heading = `<div class="duty-estimate-heading">${escapeHtml(t("duty_estimate_heading"))}<span class="duty-estimate-badge">${escapeHtml(t("duty_estimate_badge"))}</span></div>`;
+  box.innerHTML = state.dutyEstimateLoading
+    ? `${heading}<div class="duty-estimate-skeleton">${escapeHtml(t("duty_estimate_loading"))}</div>`
+    : `${heading}<div class="duty-estimate-text">${escapeHtml(state.dutyEstimate)}</div>`;
+  return box;
+}
+
 function ResultScreen() {
   const r = state.result;
   const p = state.price;
@@ -2714,6 +2752,9 @@ function ResultScreen() {
     <div class="hs-desc" id="res-desc"></div>`;
   card.appendChild(hs);
   wrap.appendChild(card);
+
+  const dutyEstimateSection = DutyEstimateSection();
+  if (dutyEstimateSection) wrap.appendChild(dutyEstimateSection);
 
   const shippingNote = localizeShippingNote(r);
   if (shippingNote) {
@@ -5074,11 +5115,75 @@ async function runClassification(promise) {
     state.partnerDiscountAmount = 0;
     state.partnerDiscountError = null;
     state.screen = "result";
+    // Stima dazi doganali — vedi refreshDutyEstimate(): DELIBERATAMENTE
+    // non awaited. Il flusso critico (classificazione, prezzo, QR) deve
+    // arrivare alla schermata Result esattamente come sopra, a
+    // prescindere da quanto impieghi o se fallisca questa chiamata in
+    // più. render() qui sotto mostra già Result; refreshDutyEstimate()
+    // farà il proprio render() incrementale quando (e se) arriva.
+    refreshDutyEstimate(result, currentDestinationName());
   } catch (err) {
     state.error = /401/.test(err.message) ? t("dest_error_api_key") : t("dest_error_ai_generic");
     state.screen = "destination";
   }
   render();
+}
+
+// Stima dazi doganali (netlify/functions/estimate-duty.js) — SOLO
+// informativa, MAI parte del prezzo Touch&Go (priceFor()/priceQuotes()
+// non la leggono in nessun punto). Chiamata da runClassification() senza
+// mai essere attesa (await) da lì — vedi commento lì: un fallimento o un
+// tempo di risposta lungo qui non deve mai bloccare o ritardare il resto
+// del percorso d'acquisto, già arrivato alla schermata Result quando
+// questa funzione parte.
+//
+// dutyEstimateRequestId protegge dal caso limite in cui una seconda
+// classificazione partisse prima che questa chiamata sia tornata (es.
+// tap veloce su "← Home" e poi un nuovo oggetto): una risposta ormai
+// superata non deve sovrascrivere lo stato con la stima sbagliata
+// object/paese.
+async function refreshDutyEstimate(result, country) {
+  state.dutyEstimate = null;
+  if (!country) {
+    // Vincolo 5: paese di destinazione non ancora noto -> nessun
+    // tentativo, la sezione resta semplicemente assente (vedi
+    // DutyEstimateSection() in ResultScreen). Non dovrebbe succedere in
+    // pratica (DestinationScreen fissa sempre un paese prima di poter
+    // classificare, vedi DestinationField()/GuestDestinationField()),
+    // ma non ci si fida ciecamente di quell'invariante da qui.
+    state.dutyEstimateLoading = false;
+    return;
+  }
+  const requestId = ++state.dutyEstimateRequestId;
+  state.dutyEstimateLoading = true;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/estimate-duty", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hs_code: result.hs_code,
+        category: result.category,
+        weight_kg: result.weight_kg,
+        value_eur: result.value_eur,
+        country,
+        lang: state.lang,
+      }),
+    });
+    const data = await res.json();
+    if (requestId !== state.dutyEstimateRequestId) return; // superata da una classificazione più recente
+    if (res.ok && data.estimate) {
+      state.dutyEstimate = data.estimate;
+    }
+  } catch (e) {
+    // Silenzioso per design (vincolo 1): è un arricchimento facoltativo,
+    // mai un errore da mostrare al turista come se fosse un problema del
+    // percorso principale — la sezione resta semplicemente assente.
+  }
+  if (requestId === state.dutyEstimateRequestId) {
+    state.dutyEstimateLoading = false;
+    render();
+  }
 }
 
 function handleFile(file) {
