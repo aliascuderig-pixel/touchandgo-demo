@@ -722,9 +722,13 @@ button{font-family:inherit;cursor:pointer}
 .promo-card-inline .btn-primary{background:var(--gold-soft);color:var(--ink)}
 
 /* Mirino fotocamera custom (TOU-20) — vedi openCameraViewfinder() in app.js.
-   Colori lasciati letterali (non tokenizzati): l'overlay della fotocamera
-   resta identico in tutti i temi, non segue la palette lime/corallo. */
-.viewfinder-overlay{position:fixed;inset:0;background:#000;z-index:300;display:flex;align-items:center;justify-content:center;overflow:hidden}
+   Sfondo/scrim/pillole lasciati letterali (#000, rgba(0,0,0,x)): restano
+   identici in tutti i temi, l'overlay non deve "sparire" contro un fondo
+   scuro diverso. La cornice dorata e la chrome del mirino immersivo (sotto)
+   usano invece i token già invertiti per tema (--gold-hot/--ivory/
+   --muted-on-ink/--ink) — l'accento SEGUE la palette lime/corallo, solo lo
+   sfondo/gli scrim restano fissi. */
+.viewfinder-overlay{position:fixed;inset:0;background:#000;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;overflow:hidden}
 .viewfinder-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .viewfinder-frame{position:relative;width:82vw;max-width:420px;aspect-ratio:3/4;pointer-events:none}
 .vf-corner{position:absolute;width:34px;height:34px;border-color:var(--gold-hot);border-style:solid;opacity:.95}
@@ -736,3 +740,31 @@ button{font-family:inherit;cursor:pointer}
 .vf-shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);z-index:2;width:70px;height:70px;border-radius:50%;background:transparent;border:3px solid #fff;cursor:pointer;padding:0}
 .vf-shutter::after{content:"";display:block;width:56px;height:56px;margin:4px auto;border-radius:50%;background:#fff}
 .vf-shutter:active::after{background:var(--gold-hot)}
+
+/* ---------- TOU-21 Opzione B "Mirino immersivo" (chrome ricca, solo Home) ----------
+   Stesso linguaggio visivo già stabilito per la chrome traslucida
+   dell'onboarding (.ob-lang-group/.ob-skip-btn/.ob-wordmark): pillole
+   semi-trasparenti/blur sopra il feed camera live, non una barra opaca
+   piena. Tutto position:absolute rispetto a .viewfinder-overlay, stesso
+   approccio di .vf-close/.vf-shutter sopra — niente flex per i controlli,
+   per non entrare in conflitto col centraggio di .vf-guide/.viewfinder-frame. */
+.vf-scrim{position:absolute;left:0;right:0;pointer-events:none;z-index:1}
+.vf-scrim-top{top:0;height:150px;background:linear-gradient(180deg,rgba(0,0,0,.6),transparent)}
+.vf-scrim-bottom{bottom:0;height:220px;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent)}
+
+.vf-topbar{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 16px 0}
+.vf-back{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:17px;line-height:1;cursor:pointer;flex-shrink:0}
+.vf-wordmark{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.03em;color:var(--ivory);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vf-wordmark b{color:var(--gold-hot);font-weight:600}
+.vf-lang-group{display:flex;gap:4px;background:rgba(0,0,0,.45);border-radius:20px;padding:3px;flex-shrink:0}
+.vf-lang-btn{background:transparent;border:none;color:var(--muted-on-ink);font-family:var(--body);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:16px;cursor:pointer}
+.vf-lang-btn.on{background:var(--gold-hot);color:var(--ink)}
+
+.vf-guide{position:relative;z-index:2;text-align:center;font-family:var(--body);font-size:12.5px;font-weight:600;color:var(--ivory);text-shadow:0 1px 4px rgba(0,0,0,.6);padding:0 24px}
+
+.vf-badge{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);z-index:3;max-width:88%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.18);color:var(--ivory);font-family:var(--body);font-size:10.5px;font-weight:600;padding:7px 14px;border-radius:20px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vf-gallery,.vf-secondary{position:absolute;bottom:54px;z-index:3;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.vf-gallery{left:28px}
+.vf-secondary{right:28px}
+.vf-secondary.on{background:var(--gold-hot);border-color:var(--gold-hot);color:var(--ink)}
+.vf-describe-link{position:absolute;left:0;right:0;bottom:12px;z-index:3;text-align:center;font-family:var(--body);font-size:11.5px;font-weight:600;color:var(--muted-on-ink);text-decoration:underline;cursor:pointer;text-shadow:0 1px 4px rgba(0,0,0,.6)}
