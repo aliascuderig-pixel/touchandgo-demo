@@ -192,3 +192,126 @@ test("mode sconosciuto o assente ricade su question_mode anche attraverso l'hand
   await mod.handler(makeEvent({ message: "Ciao", mode: "qualcosa-di-inventato" }, "4.4.4.4"));
   assert.equal(getLastCall().body.system, mod.QUESTION_MODE_FACTS);
 });
+
+// ---------------------------------------------------------------------
+// CORS (Access-Control-Allow-Origin) — questa function deve poter essere
+// chiamata da un'origine diversa (widget di chat nella guida di
+// presentazione, non sullo stesso dominio dell'app).
+// ---------------------------------------------------------------------
+
+function makeOptionsEvent(ip) {
+  return { httpMethod: "OPTIONS", headers: { "x-nf-client-connection-ip": ip || "127.0.0.1" } };
+}
+
+test('(1) OPTIONS: risponde 204 con gli header CORS corretti, senza eseguire la logica principale', async () => {
+  const mod = freshModule();
+  let fetchCalled = false;
+  global.fetch = () => { fetchCalled = true; return Promise.reject(new Error("non deve mai essere chiamato da una OPTIONS")); };
+
+  const res = await mod.handler(makeOptionsEvent("10.10.10.10"));
+
+  assert.equal(res.statusCode, 204);
+  assert.equal(res.headers["Access-Control-Allow-Origin"], "*");
+  assert.equal(res.headers["Access-Control-Allow-Methods"], "POST, OPTIONS");
+  assert.equal(res.headers["Access-Control-Allow-Headers"], "Content-Type");
+  assert.equal(fetchCalled, false, "una OPTIONS non deve mai arrivare a chiamare Anthropic");
+});
+
+test("(1) OPTIONS: non consuma il rate limit — 25 OPTIONS di fila non riducono il budget di una POST reale dallo stesso IP", async () => {
+  const mod = freshModule();
+  const ip = "11.11.11.11";
+
+  // Più del limite di 20/ora, apposta: se una OPTIONS consumasse anche
+  // solo un punto di budget, questo da solo basterebbe a far scattare il
+  // 429 sulla richiesta successiva.
+  for (let i = 0; i < 25; i++) {
+    await mod.handler(makeOptionsEvent(ip));
+  }
+
+  const getLastCall = mockAnthropicFetch();
+  const res = await mod.handler(makeEvent({ message: "Ciao", mode: "domanda" }, ip));
+  assert.equal(res.statusCode, 200, "la prima vera richiesta POST dallo stesso IP deve ancora passare, il budget deve essere intatto");
+  assert.ok(getLastCall(), "la POST deve essere arrivata fino alla chiamata Anthropic (mai bloccata da un budget eroso dalle OPTIONS)");
+});
+
+test("(2) ogni tipo di risposta esistente include Access-Control-Allow-Origin: *", async () => {
+  const mod = freshModule();
+
+  // 405 — metodo non consentito.
+  const res405 = await mod.handler({ httpMethod: "GET", headers: {} });
+  assert.equal(res405.statusCode, 405);
+  assert.equal(res405.headers["Access-Control-Allow-Origin"], "*");
+
+  // 400 — messaggio mancante.
+  const res400 = await mod.handler(makeEvent({ message: "   " }, "20.0.0.1"));
+  assert.equal(res400.statusCode, 400);
+  assert.equal(res400.headers["Access-Control-Allow-Origin"], "*");
+
+  // 429 — rate limit superato (21 richieste dallo stesso IP).
+  let res429;
+  for (let i = 0; i < 21; i++) {
+    res429 = await mod.handler(makeEvent({ message: `tentativo ${i}` }, "20.0.0.2"));
+  }
+  assert.equal(res429.statusCode, 429);
+  assert.equal(res429.headers["Access-Control-Allow-Origin"], "*");
+
+  // 500 — ANTHROPIC_API_KEY assente.
+  delete process.env.ANTHROPIC_API_KEY;
+  const res500 = await mod.handler(makeEvent({ message: "Ciao" }, "20.0.0.3"));
+  assert.equal(res500.statusCode, 500);
+  assert.equal(res500.headers["Access-Control-Allow-Origin"], "*");
+  process.env.ANTHROPIC_API_KEY = "test-key";
+
+  // 200 — richiesta riuscita.
+  mockAnthropicFetch();
+  const res200 = await mod.handler(makeEvent({ message: "Ciao" }, "20.0.0.4"));
+  assert.equal(res200.statusCode, 200);
+  assert.equal(res200.headers["Access-Control-Allow-Origin"], "*");
+  assert.equal(res200.headers["Content-Type"], "application/json", "l'header Content-Type preesistente sulla 200 non deve sparire");
+
+  // 502 — risposta AI vuota.
+  global.fetch = () => Promise.resolve({ ok: true, status: 200, json: async () => ({ content: [] }) });
+  const res502 = await mod.handler(makeEvent({ message: "Ciao" }, "20.0.0.5"));
+  assert.equal(res502.statusCode, 502);
+  assert.equal(res502.headers["Access-Control-Allow-Origin"], "*");
+
+  // Errore Anthropic propagato (es. 401) — status inoltrato, header CORS comunque presenti.
+  global.fetch = () => Promise.resolve({ ok: false, status: 401, json: async () => ({ error: { message: "invalid api key" } }) });
+  const resAnthropicErr = await mod.handler(makeEvent({ message: "Ciao" }, "20.0.0.6"));
+  assert.equal(resAnthropicErr.statusCode, 401);
+  assert.equal(resAnthropicErr.headers["Access-Control-Allow-Origin"], "*");
+
+  // 500 — eccezione generica (fetch che lancia).
+  global.fetch = () => { throw new Error("boom"); };
+  const resThrow = await mod.handler(makeEvent({ message: "Ciao" }, "20.0.0.7"));
+  assert.equal(resThrow.statusCode, 500);
+  assert.equal(resThrow.headers["Access-Control-Allow-Origin"], "*");
+});
+
+test("CORS_HEADERS esportato corrisponde esattamente a quanto usato dall'handler", () => {
+  const { CORS_HEADERS } = freshModule();
+  assert.deepEqual(CORS_HEADERS, {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  });
+});
+
+test("(3) nessuna regressione: le tre modalità restano funzionanti end-to-end dopo l'aggiunta del CORS", async () => {
+  const mod = freshModule();
+
+  const getCall1 = mockAnthropicFetch("risposta domanda");
+  const res1 = await mod.handler(makeEvent({ message: "Quanto costa?", mode: "domanda" }, "30.0.0.1"));
+  assert.equal(res1.statusCode, 200);
+  assert.equal(getCall1().body.system, mod.QUESTION_MODE_FACTS);
+
+  const getCall2 = mockAnthropicFetch("risposta traduzione");
+  const res2 = await mod.handler(makeEvent({ message: "Quanto costa?", mode: "traduci_per_negoziante", lang: "en" }, "30.0.0.2"));
+  assert.equal(res2.statusCode, 200);
+  assert.match(getCall2().body.system, /traduttore/);
+
+  const getCall3 = mockAnthropicFetch("risposta suite");
+  const res3 = await mod.handler(makeEvent({ message: "Come funziona?", mode: "spiega_la_suite" }, "30.0.0.3"));
+  assert.equal(res3.statusCode, 200);
+  assert.equal(getCall3().body.system, mod.SUITE_MODE_FACTS);
+});

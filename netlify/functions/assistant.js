@@ -20,6 +20,30 @@ const { guestScopedStoreName } = require("../lib/guest-mode");
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
 
+// CORS — questa function è pensata per essere chiamata da chiunque, senza
+// autenticazione (stesso principio già vero prima di questa modifica: solo
+// il rate limit per IP la protegge dall'abuso, nessuna password). Finora
+// non serviva perché ogni chiamata arrivava dalla stessa app/dominio; ora
+// deve poter essere richiamata anche da un'origine diversa (un widget di
+// chat dentro la guida di presentazione del prodotto, non ospitata sullo
+// stesso dominio). "*" è quindi una scelta deliberata, non una svista —
+// coerente con l'endpoint già pubblico che è.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+// Unico punto che aggiunge gli header CORS a una risposta — ogni return
+// esistente dell'handler passa da qui, cosí nessuno può restare escluso
+// per una dimenticanza futura (invece di ripetere lo stesso oggetto
+// header in ogni singolo return). Non cambia mai status code o body,
+// solo unisce gli header CORS a quelli eventualmente già presenti
+// (es. "Content-Type" sulla risposta 200).
+function withCors(response) {
+  return { ...response, headers: { ...CORS_HEADERS, ...(response.headers || {}) } };
+}
+
 function getClientIp(event) {
   return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
 }
@@ -120,14 +144,22 @@ function buildSystemPrompt(mode, lang) {
 }
 
 exports.handler = async (event) => {
+  // Preflight CORS: il browser la manda da sola prima di una POST
+  // cross-origin con Content-Type: application/json — va rispettata
+  // SUBITO, prima di qualunque altra cosa (nessun parsing del body, nessun
+  // rate limit consumato, nessuna chiamata ad Anthropic). Verificato con
+  // un test dedicato che il rate limit non viene toccato da una OPTIONS.
+  if (event.httpMethod === "OPTIONS") {
+    return withCors({ statusCode: 204, body: "" });
+  }
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: { message: "Method not allowed" } }) };
+    return withCors({ statusCode: 405, body: JSON.stringify({ error: { message: "Method not allowed" } }) });
   }
   try {
     const { message, mode, lang } = JSON.parse(event.body || "{}");
     const trimmed = (message || "").trim();
     if (!trimmed) {
-      return { statusCode: 400, body: JSON.stringify({ error: { message: "Messaggio mancante." } }) };
+      return withCors({ statusCode: 400, body: JSON.stringify({ error: { message: "Messaggio mancante." } }) });
     }
     // ATTENZIONE: senza includere esplicitamente "spiega_la_suite" qui,
     // questa normalizzazione la avrebbe silenziosamente fatta collassare
@@ -139,15 +171,15 @@ exports.handler = async (event) => {
 
     const withinLimit = await checkRateLimit(`assistant:${getClientIp(event)}`);
     if (!withinLimit) {
-      return { statusCode: 429, body: JSON.stringify({ error: { message: "Troppe richieste, riprova tra qualche minuto." } }) };
+      return withCors({ statusCode: 429, body: JSON.stringify({ error: { message: "Troppe richieste, riprova tra qualche minuto." } }) });
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return {
+      return withCors({
         statusCode: 500,
         body: JSON.stringify({ error: { message: "Chiave API non configurata sul server (variabile ANTHROPIC_API_KEY mancante)." } }),
-      };
+      });
     }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -166,19 +198,19 @@ exports.handler = async (event) => {
     });
     const data = await res.json();
     if (!res.ok) {
-      return { statusCode: res.status, body: JSON.stringify({ error: data.error || { message: "Errore AI" } }) };
+      return withCors({ statusCode: res.status, body: JSON.stringify({ error: data.error || { message: "Errore AI" } }) });
     }
     const reply = data.content && data.content[0] && data.content[0].text;
     if (!reply) {
-      return { statusCode: 502, body: JSON.stringify({ error: { message: "Risposta vuota dall'AI." } }) };
+      return withCors({ statusCode: 502, body: JSON.stringify({ error: { message: "Risposta vuota dall'AI." } }) });
     }
-    return {
+    return withCors({
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reply: reply.trim() }),
-    };
+    });
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: { message: err.message } }) };
+    return withCors({ statusCode: 500, body: JSON.stringify({ error: { message: err.message } }) });
   }
 };
 
@@ -190,3 +222,4 @@ exports.buildSystemPrompt = buildSystemPrompt;
 exports.QUESTION_MODE_FACTS = QUESTION_MODE_FACTS;
 exports.TRANSLATE_MODE_PROMPT = TRANSLATE_MODE_PROMPT;
 exports.SUITE_MODE_FACTS = SUITE_MODE_FACTS;
+exports.CORS_HEADERS = CORS_HEADERS;
