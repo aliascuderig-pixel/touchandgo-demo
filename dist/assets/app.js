@@ -908,6 +908,14 @@ const state = {
   partnerLoginLoading: false,
   partnerLoginError: null,
   partnerStats: null,
+  // Comunicati dallo staff verso i partner (creati/gestiti solo dal CRM
+  // interno, touchandgo-internal) — vedi PartnerComunicatiSection() e
+  // refreshPartnerComunicati() più sotto. Solo lettura + segna-come-letto
+  // da questo lato.
+  partnerComunicati: [],
+  partnerComunicatiLoading: false,
+  partnerComunicatiError: null,
+  partnerComunicatiOpenId: null,
   partnerUpgradePlan: null,
   partnerUpgradeLoading: false,
   partnerUpgradeError: null,
@@ -1394,6 +1402,7 @@ function PartnerLoginAndHistory() {
             monthlyBreakdown: data.monthlyBreakdown || [],
             recentOrders: data.recentOrders || [],
           };
+          refreshPartnerComunicati();
         } else {
           state.partnerLoginError = "Codice partner non riconosciuto.";
         }
@@ -1433,6 +1442,14 @@ function PartnerLoginAndHistory() {
     state.partnerUpgradePlan = null;
     state.partnerUpgradeLoading = false;
     state.partnerUpgradeError = null;
+    // Mai lasciare i comunicati dell'ultimo partner loggato in memoria: se
+    // un altro partner accedesse subito dopo sullo stesso dispositivo
+    // (prima che refreshPartnerComunicati() del nuovo login sostituisca i
+    // dati), vedrebbe per un istante comunicati non suoi.
+    state.partnerComunicati = [];
+    state.partnerComunicatiLoading = false;
+    state.partnerComunicatiError = null;
+    state.partnerComunicatiOpenId = null;
     render();
   });
 
@@ -1466,6 +1483,8 @@ function PartnerLoginAndHistory() {
     <div class="info-row"><span>Commissioni maturate (10%)</span><b>€${stats.totalCommission.toFixed(2)}</b></div>
     <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
+
+  wrap.appendChild(PartnerComunicatiSection());
 
   // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a
   // pagamento — quanto avrebbe già generato di commissione se fosse stato
@@ -1590,6 +1609,116 @@ async function refreshPartnerStats() {
     // Aggiornamento saldo non riuscito — resta il valore già mostrato,
     // il riscatto stesso ha comunque avuto successo lato server.
   }
+}
+
+// Comunicati dallo staff Touch&Go verso i partner — creati/gestiti SOLO
+// dal CRM interno (touchandgo-internal, store Blobs condiviso
+// "partner-comunicati"). Da questo lato: sola lettura filtrata per
+// partner + segna-come-letto, azioni "list-comunicati"/
+// "mark-comunicato-letto" in sync.js. Il filtro "solo i miei" (broadcast +
+// quelli indirizzati al mio codice, mai quelli di un altro partner)
+// avviene interamente lato server — questa funzione si limita a mostrare
+// quello che il server ha già deciso essere rilevante per questo partner.
+async function refreshPartnerComunicati() {
+  if (!state.partnerLoggedCode) return;
+  state.partnerComunicatiLoading = true;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list-comunicati", code: state.partnerLoggedCode }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      state.partnerComunicati = data.comunicati || [];
+      state.partnerComunicatiError = null;
+    } else {
+      state.partnerComunicatiError = data.error || "Errore nel caricamento delle comunicazioni.";
+    }
+  } catch (e) {
+    state.partnerComunicatiError = "Errore di connessione. Riprova.";
+  }
+  state.partnerComunicatiLoading = false;
+  render();
+}
+
+// Segna un comunicato come letto — aggiornamento ottimistico locale
+// (badge "Nuovo" sparisce subito) più la chiamata reale al server, che è
+// l'unica a decidere se la lettura viene davvero registrata (dedup contro
+// letture ripetute vive lì, vedi sync.js). Un fallimento di rete qui non
+// fa rollback: nel peggiore dei casi il badge resta "letto" solo
+// localmente finché non arriva un refresh successivo — non è un dato
+// critico come un credito, a differenza di redeem-credit-for-invoice.
+async function markComunicatoRead(id) {
+  const item = (state.partnerComunicati || []).find((c) => c.id === id);
+  if (!item || item.readByMe || !state.partnerLoggedCode) return;
+  item.readByMe = true;
+  render();
+  try {
+    await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark-comunicato-letto", code: state.partnerLoggedCode, id }),
+    });
+  } catch (e) {
+    // Vedi commento sopra: nessun rollback necessario.
+  }
+}
+
+function PartnerComunicatiSection() {
+  const wrap = el("div");
+  wrap.appendChild(el("div", "tg-lbl", "Comunicazioni Touch&Go"));
+
+  if (state.partnerComunicatiError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerComunicatiError)}`));
+  }
+
+  const list = state.partnerComunicati || [];
+  if (!list.length) {
+    wrap.appendChild(
+      el(
+        "div",
+        "info-card",
+        `<div class="info-row"><span>${state.partnerComunicatiLoading ? "Caricamento…" : "Nessuna comunicazione al momento."}</span></div>`
+      )
+    );
+    return wrap;
+  }
+
+  const card = el("div", "info-card");
+  card.innerHTML = list
+    .map((c) => {
+      const isOpen = state.partnerComunicatiOpenId === c.id;
+      const d = new Date(c.createdAt);
+      const dateStr = isNaN(d) ? "—" : d.toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
+      const unread = !c.readByMe;
+      // categoria/testo arrivano dal CRM interno (staff autenticato, non
+      // un form pubblico) ma passano comunque SEMPRE da escapeHtml() prima
+      // di finire in innerHTML — stessa disciplina applicata ovunque in
+      // questo file a ogni campo testo libero, senza eccezioni basate su
+      // "chi ha scritto il dato".
+      return `<div class="comunicato-row${unread ? " comunicato-unread" : ""}" data-comunicato-id="${escapeHtml(c.id)}">
+        <div class="info-row">
+          <span>${escapeHtml(dateStr)} · ${escapeHtml(c.categoria)}${unread ? ' <span class="pill comunicato-badge">Nuovo</span>' : ""}</span>
+        </div>
+        ${isOpen ? `<div class="comunicato-body">${escapeHtml(c.testo)}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+  wrap.appendChild(card);
+
+  card.querySelectorAll("[data-comunicato-id]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const id = row.dataset.comunicatoId;
+      const wasOpen = state.partnerComunicatiOpenId === id;
+      state.partnerComunicatiOpenId = wasOpen ? null : id;
+      if (!wasOpen) markComunicatoRead(id);
+      render();
+    });
+  });
+
+  return wrap;
 }
 
 // Andamento nel tempo (TOU-17) — a differenza dei totali cumulativi sopra
