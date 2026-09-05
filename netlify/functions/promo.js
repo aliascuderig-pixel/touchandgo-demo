@@ -15,6 +15,55 @@
 const { getStore } = require("@netlify/blobs");
 const { guestScopedStoreName } = require("../lib/guest-mode");
 
+// Rate limiting — mancava fino a questa revisione di sicurezza, a
+// differenza di quasi ogni altra function pubblica di questo repository
+// (classify.js, save-purchase.js, save-review.js, save-shipment-group.js,
+// sync.js, partner-discount.js, partner-stats.js, assistant.js). Il
+// codice invito è generato dall'admin con un formato di ~17 milioni di
+// combinazioni possibili (3 lettere + 3 cifre) — senza un limite di
+// velocità, "check" da solo (che non consuma il codice) permetterebbe di
+// enumerarle in sequenza senza mai lasciare traccia di un uso fallito,
+// fino a trovarne uno valido e consumarlo prima del destinatario
+// previsto.
+//
+// Stesso identico pattern (store Blobs "rate-limits", finestra scorrevole
+// per IP) già usato in ogni altra function elencata sopra. STESSO limite
+// (20 richieste/60 minuti) già scelto per save-review.js/classify.js/
+// partner-stats.js/partner-discount.js: abbastanza permissivo per un
+// turista reale che prova il proprio codice una o due volte anche con un
+// typo (ben sotto 20 chiamate), ma abbastanza stretto da rendere un
+// attacco automatizzato impraticabile — 20/ora per IP significa al
+// massimo 480 tentativi/giorno, che su ~17 milioni di combinazioni
+// richiederebbe secoli per esaurire lo spazio, altrettanto impraticabile
+// quanto indovinare una password. Budget CONDIVISO tra "check" e "redeem"
+// (stessa chiave `promo:IP` per entrambe le azioni, non una chiave
+// separata per ciascuna): altrimenti alternare le due azioni
+// raddoppierebbe il budget effettivo di un attaccante rispetto a quanto
+// concesso a un IP onesto.
+const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
+
+function getClientIp(event) {
+  return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
+}
+
+async function checkRateLimit(key) {
+  const store = getStore({
+    name: guestScopedStoreName("rate-limits"),
+    siteID: process.env.NETLIFY_BLOBS_SITE_ID,
+    token: process.env.NETLIFY_BLOBS_TOKEN,
+  });
+  const now = Date.now();
+  const record = (await store.get(key, { type: "json" })) || { count: 0, windowStart: now };
+  if (now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
+    record.count = 0;
+    record.windowStart = now;
+  }
+  record.count += 1;
+  await store.setJSON(key, record);
+  return record.count <= RATE_LIMIT_MAX;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito" }) };
@@ -27,6 +76,15 @@ exports.handler = async (event) => {
 
     if (!normalized) {
       return { statusCode: 400, body: JSON.stringify({ valid: false, error: "Codice mancante" }) };
+    }
+
+    // Applicato PRIMA di toccare lo store "promo" e per ENTRAMBE le
+    // azioni (vedi commento sopra) — "check" da solo, senza mai chiamare
+    // "redeem", è già sufficiente per enumerare i codici se non fosse
+    // limitato allo stesso modo.
+    const withinLimit = await checkRateLimit(`promo:${getClientIp(event)}`);
+    if (!withinLimit) {
+      return { statusCode: 429, body: JSON.stringify({ valid: false, error: "Troppe richieste, riprova tra qualche minuto." }) };
     }
 
     const promos = getStore({
