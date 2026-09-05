@@ -109,6 +109,12 @@ exports.handler = async (event) => {
     const purchases = getStore({ name: guestScopedStoreName("purchases"), ...blobsAuth });
     const partners = getStore({ name: guestScopedStoreName("partners"), ...blobsAuth });
     const discountCodes = getStore({ name: guestScopedStoreName("partner-discount-codes"), ...blobsAuth });
+    // Comunicati dallo staff verso i partner — store creato/gestito dal CRM
+    // interno (touchandgo-internal, repository privato, azioni
+    // save-comunicato/list-comunicati/delete-comunicato in crm.js). Da
+    // questo lato, SOLO lettura filtrata per partner + segna-come-letto:
+    // la creazione/gestione resta esclusiva del CRM, non toccata qui.
+    const comunicati = getStore({ name: guestScopedStoreName("partner-comunicati"), ...blobsAuth });
 
     // Usata dall'app turista per allineare localmente lo stato degli
     // acquisti già noti (status, pickupPoint, ecc.) con quanto aggiornato
@@ -261,6 +267,78 @@ exports.handler = async (event) => {
       await partners.setJSON(code, partner);
       const invoice = await issuePartnerInvoice(partners, code, partner);
       return ok({ code, planLabel: planInfo.label, partner, invoice });
+    }
+
+    // ------------------------------------------------------------------
+    // Comunicati dallo staff verso i partner (assistenza, cambi tariffari,
+    // regole doganali, ecc.), creati dal CRM interno. Un comunicato è
+    // "rilevante" per un partner se è un broadcast (destinatario null) o è
+    // indirizzato esattamente al suo codice — FILTRATO QUI, lato server:
+    // il client non riceve mai un comunicato indirizzato a un partner
+    // diverso. Il codice funge da credenziale, stesso principio di
+    // partner-stats.js/redeem-credit-for-invoice — verificato contro lo
+    // store "partners" prima di restituire qualunque dato.
+    //
+    // readBy (chi ha letto cosa, e quando) non viene mai esposto al
+    // client così com'è: rivelerebbe codici partner e orari di lettura di
+    // ALTRI partner, un'informazione che questo endpoint non deve
+    // trapelare. Solo un booleano derivato, "readByMe", riferito
+    // esclusivamente al partner che sta chiedendo.
+    //
+    // Scansiona l'intero store "partner-comunicati" per applicare il
+    // filtro (stesso motivo/stesso schema di "get-purchases-by-email"
+    // sopra, che scansiona l'intero store "purchases") — protetta dallo
+    // stesso rate limit per non permettere scansioni ripetute illimitate.
+    if (action === "list-comunicati") {
+      const withinLimit = await checkRateLimit(`list-comunicati:${getClientIp(event)}`);
+      if (!withinLimit) return bad("Troppe richieste, riprova tra qualche minuto.", 429);
+      const normalized = (body.code || "").trim().toUpperCase();
+      if (!normalized) return bad("Missing partner code");
+      const partner = await partners.get(normalized, { type: "json" });
+      if (!partner) return bad("Partner non trovato", 404);
+
+      const { blobs } = await comunicati.list();
+      const all = (await Promise.all(blobs.map((b) => comunicati.get(b.key, { type: "json" })))).filter(Boolean);
+      const relevant = all
+        .filter((c) => c.destinatario === null || c.destinatario === normalized)
+        .map((c) => ({
+          id: c.id,
+          categoria: c.categoria,
+          testo: c.testo,
+          destinatario: c.destinatario,
+          createdAt: c.createdAt,
+          readByMe: Array.isArray(c.readBy) && c.readBy.some((r) => r.partnerCode === normalized),
+        }));
+      relevant.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      return ok({ comunicati: relevant });
+    }
+
+    // Segna un comunicato come letto da QUESTO partner — aggiunge
+    // { partnerCode, readAt } a readBy solo se non è già presente (mai un
+    // duplicato su letture ripetute dello stesso comunicato). Rifiuta con
+    // lo STESSO messaggio/codice di un id inesistente ("Comunicato non
+    // trovato", 404) se il comunicato esiste ma è indirizzato a un altro
+    // partner — mai rivelare che un comunicato altrui esiste provando a
+    // indovinarne l'id.
+    if (action === "mark-comunicato-letto") {
+      const normalized = (body.code || "").trim().toUpperCase();
+      if (!normalized) return bad("Missing partner code");
+      const { id } = body;
+      if (!id) return bad("Missing id");
+      const partner = await partners.get(normalized, { type: "json" });
+      if (!partner) return bad("Partner non trovato", 404);
+
+      const record = await comunicati.get(id, { type: "json" });
+      if (!record || (record.destinatario !== null && record.destinatario !== normalized)) {
+        return bad("Comunicato non trovato", 404);
+      }
+      record.readBy = Array.isArray(record.readBy) ? record.readBy : [];
+      const alreadyRead = record.readBy.some((r) => r.partnerCode === normalized);
+      if (!alreadyRead) {
+        record.readBy.push({ partnerCode: normalized, readAt: new Date().toISOString() });
+        await comunicati.setJSON(id, record);
+      }
+      return ok({ id, readByMe: true });
     }
 
     return bad("Unknown action");

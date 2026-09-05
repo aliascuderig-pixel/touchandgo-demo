@@ -63,7 +63,7 @@ function bootApp(t, seedLocalStorage) {
   const context = dom.getInternalVMContext();
   vm.runInContext(APP_JS_SOURCE, context, { filename: "app.js" });
 
-  return { window, document: window.document };
+  return { window, document: window.document, context };
 }
 
 function clickByText(document, selector, text) {
@@ -220,4 +220,53 @@ test("ViewItemPhotoScreen: descrizione libera (textDescription, campo 'Descrivil
   document.querySelector(".history-item").click();
   const result = inspect(window, document, ".pending-desc", marker);
   assertEscaped("ViewItemPhotoScreen", result, marker);
+});
+
+test("Area partner — Comunicati: categoria e testo (creati dal CRM interno) sono escapati", async (t) => {
+  // Il comunicato è scritto dallo staff nel CRM interno, non da un form
+  // pubblico — ma la stessa disciplina di escaping si applica comunque,
+  // senza eccezioni basate su "chi ha scritto il dato" (vedi commento in
+  // PartnerComunicatiSection()). Login e lista comunicati arrivano via
+  // fetch (non localStorage, a differenza degli altri test in questo
+  // file): manipoliamo `state` direttamente nello stesso contesto vm
+  // (stessa tecnica di setGlobal in admin-xss.test.js, touchandgo-internal)
+  // invece di guidare l'intero login via click, per tenere il test
+  // mirato solo all'escaping.
+  const categoriaMarker = "xss-comunicato-categoria";
+  const testoMarker = "xss-comunicato-testo";
+  const { window, document, context } = bootApp(t, (ls) => {
+    ls.setItem("tg_onboarded", "1");
+  });
+  window.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      comunicati: [
+        {
+          id: "c-1",
+          categoria: payloadFor(categoriaMarker),
+          testo: payloadFor(testoMarker),
+          destinatario: null,
+          createdAt: new Date().toISOString(),
+          readByMe: false,
+        },
+      ],
+      readByMe: true, // forma minima valida anche per l'eventuale risposta di mark-comunicato-letto scatenata dal click sotto
+    }),
+  });
+
+  document.querySelector(".cover-screen").click();
+  document.querySelector('[data-mode="partner"]').click();
+  vm.runInContext('state.partnerLoggedCode = "NEGOZIO123";', context);
+  await vm.runInContext("refreshPartnerComunicati()", context);
+
+  // Chiuso: solo la categoria è visibile (il testo compare solo aperto).
+  const closedResult = inspect(window, document, ".comunicato-row", categoriaMarker);
+  assertEscaped("Comunicati - categoria", closedResult, categoriaMarker);
+
+  // Un tap apre la riga (render sincrono dentro il click handler, prima
+  // ancora che la chiamata mark-comunicato-letto scatenata dallo stesso
+  // tap si risolva) — a quel punto anche il testo è nel DOM.
+  document.querySelector(".comunicato-row").click();
+  const openResult = inspect(window, document, ".comunicato-row", testoMarker);
+  assertEscaped("Comunicati - testo", openResult, testoMarker);
 });

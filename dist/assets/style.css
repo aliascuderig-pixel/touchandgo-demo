@@ -602,6 +602,13 @@ button{font-family:inherit;cursor:pointer}
 .info-row.total b{font-size:17px}
 .info-line{font-size:11.5px;color:var(--text-secondary);line-height:1.6;padding:6px 0}
 
+/* ---------- Comunicati (area partner) ---------- */
+.comunicato-row{cursor:pointer;padding:2px 0}
+.comunicato-row .info-row{cursor:pointer}
+.comunicato-unread .info-row span{font-weight:600;color:var(--text)}
+.comunicato-badge{margin-left:6px}
+.comunicato-body{font-size:11.5px;color:var(--text-secondary);line-height:1.6;padding:0 0 10px;white-space:pre-wrap}
+
 /* ---------- Result (v2) ---------- */
 .result-card{border-radius:0;box-shadow:none}
 .hs-block{border-radius:0}

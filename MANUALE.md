@@ -447,6 +447,20 @@ Oltre alla commissione (un numero puramente informativo), ogni partner ha un **s
 
 Nel CRM, la tab Partner & Commissioni mostra credito disponibile e conteggio codici sconto generati/usati per ogni partner.
 
+### Comunicati dallo staff (`PartnerComunicatiSection`)
+
+Il CRM interno (`touchandgo-internal`, tab "Comunicati" — vedi il `MANUALE.md` di quel repository) permette allo staff di inviare comunicazioni ai partner: assistenza, cambi tariffari, regole doganali, o altro, a tutti insieme (broadcast) o a un codice partner specifico. Questa sezione dell'area partner (subito sotto il riepilogo vendite/credito, prima dell'andamento mensile) ne mostra al partner loggato SOLO quelli rilevanti per lui — **mai** quelli indirizzati a un partner diverso.
+
+- **Store condiviso `partner-comunicati`**: creato e gestito **esclusivamente** dal CRM interno (`crm.js`, azioni `save-comunicato`/`list-comunicati`/`delete-comunicato`) — questo repository non crea, modifica o cancella mai un comunicato. Ogni record: `id`, `categoria` (whitelist fissa lato CRM), `testo`, `destinatario` (`null` = tutti, oppure un codice partner specifico), `createdAt`, `readBy` (array di `{ partnerCode, readAt }`).
+- **Filtro "solo i miei", sempre lato server**: due nuove azioni in `sync.js`.
+  - `list-comunicati` (`{ code }`): verifica che il codice corrisponda a un partner reale (stesso principio di `partner-stats.js`), poi restituisce solo i comunicati con `destinatario === null` o `destinatario === code` — un comunicato indirizzato a un altro partner non viene **mai** incluso nella risposta, verificato con un test dedicato che usa due partner distinti nello stesso store (non solo un caso singolo). Il campo `readBy` grezzo non raggiunge mai il client (rivelerebbe codici partner e orari di lettura di **altri** partner): al suo posto, solo un booleano `readByMe`, calcolato lato server per il partner che sta chiedendo.
+  - `mark-comunicato-letto` (`{ code, id }`): aggiunge `{ partnerCode, readAt }` a `readBy` solo se quel partner non lo ha già letto (nessun duplicato su letture ripetute — verificato chiamandola due volte di fila). Se il comunicato esiste ma è indirizzato a un altro partner, risponde con lo **stesso** errore 404 "Comunicato non trovato" usato per un id inesistente — mai un segnale che riveli che il comunicato esiste ma "non è per te".
+  - Entrambe richiedono un codice partner realmente registrato (`partners.get(code)`), stesso principio di `redeem-credit-for-invoice`/`generate-partner-discount-code`. `list-comunicati` è inoltre protetta dallo stesso rate limit (20 richieste/60 minuti per IP) di `get-purchases-by-email`, perché entrambe scansionano l'intero store per applicare un filtro lato server.
+- **UI**: elenco con data, categoria, e un badge **"Nuovo"** (pillola `.pill`) sui comunicati non ancora letti da questo partner. Un tap apre/chiude il testo e, alla prima apertura, chiama `mark-comunicato-letto` — aggiornamento del badge ottimistico e immediato lato client, la vera fonte di verità resta comunque il server (un fallimento di rete qui non blocca né corrompe nulla, a differenza del credito: nel peggiore dei casi il badge sparirebbe solo localmente finché un refresh successivo non lo confermasse).
+- **Sicurezza**: `categoria`/`testo` arrivano dallo staff autenticato nel CRM, non da un form pubblico — ma passano comunque **sempre** da `escapeHtml()` prima di finire in `innerHTML`, stessa disciplina applicata a ogni campo testo libero di questo file, senza eccezioni basate su "chi ha scritto il dato". Verificato con un test dedicato (payload `<img src=x onerror=...>` sia in categoria sia in testo, mostrato come testo letterale, mai eseguito).
+- **Ricaricato** subito dopo il login (`refreshPartnerComunicati()`, chiamata da `PartnerLoginAndHistory`) e **azzerato al logout** — senza questo azzeramento, un secondo partner che accedesse sullo stesso dispositivo subito dopo vedrebbe per un istante i comunicati del partner precedente.
+- **Non copre ancora**: nessuna notifica push/email quando arriva un nuovo comunicato — il partner lo vede solo aprendo l'app e la propria area. Fuori scope di questo giro.
+
 ---
 
 ## Sicurezza e backend
@@ -476,7 +490,7 @@ Solo le function di questo repository — quelle del CRM/kit riservato/area inve
 | `promo.js` | Valida e consuma i codici invito per l'offerta breakeven. |
 | `save-purchase.js` | Salva/aggiorna un acquisto nello store centrale `purchases`; applica il blocco automatico anti-abuso; accredita il partner quando lo stato diventa "ritirato" tramite questo percorso (conferma del turista); registra l'archivio di riferimento doganale (vedi sotto). |
 | `save-shipment-group.js` | Salva nello store `shipment-groups` un record per ogni gruppo di spedizione consolidato confermato in `ConcludeScreen` (destinazione, oggetti inclusi, peso/volume combinato, prezzo finale) — vedi "Persistenza del gruppo di spedizione" in "App turista". |
-| `sync.js` | Le azioni sui dati condivisi che l'app/sito pubblico usano senza passare dal CRM interno: `get-purchases`, `get-purchases-by-email`, `ack-pickup-point`, `redeem-credit-for-invoice`, `generate-partner-discount-code`, `register-partner` — stessa identica logica che vivrebbe in `crm.js`, estratta qui perché questo repository non ha accesso a quello privato. Vedi "CRM interno, area investitori e kit riservato" in Panoramica. |
+| `sync.js` | Le azioni sui dati condivisi che l'app/sito pubblico usano senza passare dal CRM interno: `get-purchases`, `get-purchases-by-email`, `ack-pickup-point`, `redeem-credit-for-invoice`, `generate-partner-discount-code`, `register-partner`, `list-comunicati`/`mark-comunicato-letto` (Comunicati lato partner, vedi "Area partner" sotto) — stessa identica logica che vivrebbe in `crm.js`, estratta qui perché questo repository non ha accesso a quello privato. Vedi "CRM interno, area investitori e kit riservato" in Panoramica. |
 
 ### Archivio di riferimento doganale (store Blobs `customs-reference`)
 
@@ -538,7 +552,7 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
   - `guestScopedStoreName(baseName)` — restituisce `baseName` invariato in produzione, `${baseName}-guest` nello spazio ospite.
 - **Ogni `getStore({ name: ..., ...blobsAuth })`** in questo repository passa il nome attraverso `guestScopedStoreName()` invece di scrivere la stringa a mano — un solo punto che decide la separazione, quindi un solo punto da aggiornare se la convenzione cambiasse in futuro. Così i dati generati nello spazio ospite finiscono in store Blobs **completamente separati**, non si mescolano mai con quelli di produzione — nemmeno per errore, anche se i due siti finissero per condividere per sbaglio le stesse credenziali `NETLIFY_BLOBS_SITE_ID`/`NETLIFY_BLOBS_TOKEN`.
 
-**Store "gemellati" (produzione + ospite)** — ognuno di questi 8 store esiste oggi in due copie indipendenti, `nome` e `nome-guest`:
+**Store "gemellati" (produzione + ospite)** — ognuno di questi 9 store esiste oggi in due copie indipendenti, `nome` e `nome-guest`:
 
 | Store | Scritto/letto da |
 |---|---|
@@ -547,6 +561,7 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
 | `blocklist` | `save-purchase.js` |
 | `promo` | `promo.js` |
 | `partner-discount-codes` | `partner-discount.js`, `sync.js` |
+| `partner-comunicati` | `sync.js` (legge filtrato per partner, aggiorna `readBy`) — creato/gestito da `crm.js` nel repository privato, vedi "Comunicati dallo staff" in "Area partner" |
 | `customs-reference` | `save-purchase.js` (scrive), `classify.js` (legge) |
 | `shipment-groups` | `save-shipment-group.js` |
 | `rate-limits` | tutte le function pubbliche (`assistant.js`, `classify.js`, `partner-discount.js`, `partner-stats.js`, `save-purchase.js`, `save-shipment-group.js`, `sync.js`) — isolato anch'esso: il conteggio anti-abuso dello spazio ospite non condivide mai la finestra con quello di produzione |
@@ -565,7 +580,7 @@ Una sola variabile d'ambiente Netlify, **`GUEST_MODE`**, impostata a `"true"` **
 
 - **Il failover verso lo spazio ospite è ora automatico** (vedi "Router di continuità" più sotto) quando la classificazione del sito principale smette di funzionare — ma il **ripristino resta sempre e solo manuale**: il router non torna da solo su produzione nemmeno se il sito principale si rimette a funzionare da solo nel frattempo. Resta comunque disponibile anche il passaggio manuale diretto (`ACTIVE_TARGET`), che vince sempre su tutto il resto.
 - **Lo spazio ospite parte vuoto**: nessun acquisto, partner, codice promo/sconto o voce dell'archivio doganale di produzione è visibile lì, per design — è la conseguenza diretta dell'isolamento completo, non un bug. Un partner registrato o un codice invito creato su produzione non esistono nello store `-guest` corrispondente finché non verrà costruito un meccanismo di sincronizzazione (fuori scope qui).
-- **5 dei 7 store gemellati sono scritti/letti anche da `touchandgo-internal`** (repository privato del CRM, `crm.js`): `purchases`, `partners`, `blocklist`, `promo`, `partner-discount-codes` (verificato leggendo `crm.js`). Quel codice non conosce `GUEST_MODE` e usa sempre i nomi store "di base" (senza suffisso) — un'azione fatta dallo staff nel CRM (registrare un partner, sbloccare un cliente, creare un codice invito, cambiare lo stato di un acquisto) raggiunge solo la copia di produzione, mai quella `-guest`. Solo `customs-reference` e `rate-limits` sono esclusivi di questo repository. Coerente con l'isolamento di questa fase, ma da tenere presente quando si progetterà la sincronizzazione — un'eventuale azione CRM sullo spazio ospite richiederebbe di portare la stessa consapevolezza di `GUEST_MODE` anche in `touchandgo-internal`.
+- **6 dei 9 store gemellati sono scritti/letti anche da `touchandgo-internal`** (repository privato del CRM, `crm.js`): `purchases`, `partners`, `blocklist`, `promo`, `partner-discount-codes`, `partner-comunicati` (verificato leggendo `crm.js`). Quel codice non conosce `GUEST_MODE` e usa sempre i nomi store "di base" (senza suffisso) — un'azione fatta dallo staff nel CRM (registrare un partner, sbloccare un cliente, creare un codice invito, cambiare lo stato di un acquisto, inviare un comunicato) raggiunge solo la copia di produzione, mai quella `-guest`. Solo `customs-reference`, `shipment-groups` e `rate-limits` sono esclusivi di questo repository. Coerente con l'isolamento di questa fase, ma da tenere presente quando si progetterà la sincronizzazione — un'eventuale azione CRM sullo spazio ospite richiederebbe di portare la stessa consapevolezza di `GUEST_MODE` anche in `touchandgo-internal`.
 
 ### Router di continuità (`/router`)
 
