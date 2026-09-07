@@ -5,19 +5,16 @@
 // report viene comunque salvato per intero — nessun abort al primo
 // errore). Fetch e store Netlify Blobs finti, nessuna rete reale.
 //
-// Sezione CRM (login Visitor Access): copre il flusso reale a due passi
-// (login con password -> cookie di sessione -> richiesta autenticata),
-// introdotto al posto del precedente (sbagliato) tentativo di Basic Auth.
-// IMPORTANTE — questi test provano che la LOGICA di parsing/gestione degli
-// errori è corretta contro un insieme di risposte HTTP plausibili (con e
-// senza campi nascosti nel form, con e senza più header Set-Cookie, con
-// cookie assente per simulare una password sbagliata, ecc.) — NON possono
-// provare che il formato assunto (URL della pagina di login, nome del
-// campo "password", POST sulla stessa pagina) corrisponda esattamente al
-// comportamento reale di Netlify per questo sito: quell'ambiente non è
-// raggiungibile da questa sandbox (vedi commento in cima a checkCrm() nel
-// file sorgente) e va verificato manualmente prima di fidarsene in
-// produzione.
+// Sezione CRM (Netlify Management API): due tentativi precedenti provavano
+// ad autenticarsi come un browser contro la Visitor Access del sito
+// (Basic Auth, poi un login simulato con cookie) — scartati perché
+// dipendevano da un meccanismo non documentato/non pubblico di Netlify.
+// L'approccio attuale interroga la Management API ufficiale
+// (https://docs.netlify.com/api/get-started/) per leggere lo stato
+// dell'ultimo deploy del progetto — endpoint stabile e documentato, quindi
+// questi test (fetch finto, nessuna rete reale) provano davvero il
+// comportamento contro il contratto reale dell'API, non solo contro
+// un'assunzione sul formato di un login mai osservato.
 
 const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -73,7 +70,7 @@ beforeEach(() => {
   process.env.NETLIFY_BLOBS_SITE_ID = "test-site";
   process.env.NETLIFY_BLOBS_TOKEN = "test-token";
   delete process.env.GUEST_MODE;
-  delete process.env.CRM_VISITOR_PASSWORD;
+  delete process.env.NETLIFY_HEALTHCHECK_TOKEN;
 });
 
 afterEach(() => {
@@ -81,60 +78,26 @@ afterEach(() => {
   process.env = { ...originalEnv };
 });
 
-// Mappa (url, method) -> risposta finta. Ogni entry è [urlSubstring, respond]
-// (qualunque metodo, comportamento di prima) oppure [urlSubstring, method,
-// respond] (solo per quel metodo — necessario per il CRM, dove GET e POST
-// colpiscono la STESSA URL con esiti diversi: la pagina di login vs. l'invio
-// della password).
+// Mappa URL -> risposta finta, usata dai test principali sotto.
 function fetchRouter(responses) {
-  return async (url, options) => {
-    const method = (options && options.method) || "GET";
-    for (const entry of responses) {
-      if (entry.length === 2) {
-        const [match, respond] = entry;
-        if (url.includes(match)) return respond();
-      } else {
-        const [match, forMethod, respond] = entry;
-        if (url.includes(match) && method === forMethod) return respond();
-      }
+  return async (url) => {
+    for (const [match, respond] of responses) {
+      if (url.includes(match)) return respond();
     }
-    throw new Error(`URL/metodo non atteso nel test: ${method} ${url}`);
+    throw new Error(`URL non atteso nel test: ${url}`);
   };
 }
 
-// ---- Helper per simulare Headers con supporto a getSetCookie() (Node 18.14+/20+) ----
-function fakeHeaders(map) {
-  const lower = {};
-  for (const k of Object.keys(map)) lower[k.toLowerCase()] = map[k];
-  return {
-    get(name) {
-      const v = lower[name.toLowerCase()];
-      if (v === undefined) return null;
-      return Array.isArray(v) ? v[0] : v;
-    },
-    getSetCookie() {
-      const v = lower["set-cookie"];
-      if (!v) return [];
-      return Array.isArray(v) ? v : [v];
-    },
-  };
+// Un deploy "ready" dell'ultimo minuto — la risposta di successo tipica di
+// GET /api/v1/sites/{id}/deploys?per_page=1.
+function readyDeploy(overrides) {
+  return [{ state: "ready", created_at: new Date().toISOString(), commit_ref: "abc123", context: "production", ...overrides }];
 }
 
-const FAKE_SESSION_JWT = "eyJFAKE.SESSIONE.DIPROVA";
-const LOGIN_GATE_HTML_NO_HIDDEN = `<html><body><form method="POST"><input type="password" name="password"/><button>Entra</button></form></body></html>`;
-
-// Le tre chiamate del flusso CRM riuscito: GET della pagina (gate di login),
-// POST della password sulla stessa pagina (nessun action esplicito nel
-// form -> stessa URL), POST autenticata alla function reale.
-function crmLoginOkEntries(mod) {
+function crmOkEntry() {
   return [
-    [mod.CRM_LOGIN_URL, "GET", () => ({ status: 200, headers: fakeHeaders({}), text: async () => LOGIN_GATE_HTML_NO_HIDDEN })],
-    [
-      mod.CRM_LOGIN_URL,
-      "POST",
-      () => ({ status: 200, headers: fakeHeaders({ "set-cookie": `${mod.CRM_SITE_ID}=${FAKE_SESSION_JWT}; Path=/; HttpOnly; Secure` }) }),
-    ],
-    [".netlify/functions/crm", "POST", () => ({ status: 400, headers: fakeHeaders({}), json: async () => ({ error: "Unknown action" }) })],
+    "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+    () => ({ status: 200, json: async () => readyDeploy() }),
   ];
 }
 
@@ -150,10 +113,10 @@ const ALL_OK_RESPONSES_BASE = [
   ],
 ];
 
-test("caso tutto ok: quattro dispositivi ok (CRM con login Visitor Access riuscito), overallStatus ok, report salvato", async () => {
-  process.env.CRM_VISITOR_PASSWORD = "password-di-prova";
+test("caso tutto ok: quattro dispositivi ok (CRM con deploy 'ready' via Management API), overallStatus ok, report salvato", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE, crmOkEntry()]);
   const mod = freshModule();
-  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE, ...crmLoginOkEntries(mod)]);
   const report = await mod.runDailyHealthcheck();
 
   assert.equal(report.overallStatus, "ok");
@@ -169,8 +132,7 @@ test("caso tutto ok: quattro dispositivi ok (CRM con login Visitor Access riusci
 });
 
 test("caso router irraggiungibile: report parziale salvato, solo router in problem", async () => {
-  process.env.CRM_VISITOR_PASSWORD = "password-di-prova";
-  const mod = freshModule();
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
   global.fetch = fetchRouter([
     ALL_OK_RESPONSES_BASE[0],
     ALL_OK_RESPONSES_BASE[1],
@@ -180,8 +142,9 @@ test("caso router irraggiungibile: report parziale salvato, solo router in probl
         throw new Error("ECONNREFUSED");
       },
     ],
-    ...crmLoginOkEntries(mod),
+    crmOkEntry(),
   ]);
+  const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
 
   assert.equal(report.overallStatus, "problem");
@@ -199,75 +162,140 @@ test("caso router irraggiungibile: report parziale salvato, solo router in probl
   assert.equal(parsed.devices.main.status, "ok");
 });
 
-test("CRM: CRM_VISITOR_PASSWORD non configurata -> errore esplicito, nessuna chiamata di rete tentata per il CRM", async () => {
-  const mod = freshModule();
+test("CRM: NETLIFY_HEALTHCHECK_TOKEN non configurato -> errore esplicito, nessuna chiamata di rete tentata per il CRM", async () => {
   // Nessuna entry CRM nel router: se checkCrm() tentasse comunque una
   // fetch (bug), il router lancerebbe "URL non atteso" — quell'eccezione
-  // verrebbe intercettata da checkCrm() e trasformata in un errore di
-  // tipo "unreachable", diverso da quello atteso qui sotto, quindi
-  // l'assert fallirebbe comunque se il codice tentasse una chiamata.
+  // verrebbe intercettata da checkCrm() e trasformata in un errore di tipo
+  // "unreachable", diverso da quello atteso qui sotto, quindi l'assert
+  // fallirebbe comunque se il codice tentasse una chiamata.
   global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE]);
+  const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
 
   assert.equal(report.devices.crm.status, "problem");
-  assert.equal(report.devices.crm.error, "crm_visitor_password_non_configurata");
+  assert.equal(report.devices.crm.error, "crm_healthcheck_token_non_configurato");
   assert.equal(report.overallStatus, "problem");
 });
 
-test("CRM: password sbagliata (login non restituisce il cookie di sessione atteso) -> errore esplicito, MAI un falso ok", async () => {
-  process.env.CRM_VISITOR_PASSWORD = "password-sbagliata";
-  const mod = freshModule();
+test("CRM: token non valido/senza permessi (401) -> errore esplicito, distinto da un vero errore di deploy", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-scaduto";
   global.fetch = fetchRouter([
     ...ALL_OK_RESPONSES_BASE,
-    [mod.CRM_LOGIN_URL, "GET", () => ({ status: 200, headers: fakeHeaders({}), text: async () => LOGIN_GATE_HTML_NO_HIDDEN })],
-    // Password sbagliata: Netlify ripresenta il gate (200, HTML), nessun Set-Cookie.
-    [mod.CRM_LOGIN_URL, "POST", () => ({ status: 200, headers: fakeHeaders({}) })],
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 401, json: async () => ({ message: "Invalid token" }) })],
   ]);
+  const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
 
   assert.equal(report.devices.crm.status, "problem");
-  assert.equal(report.devices.crm.error, "crm_visitor_login_fallito");
-  assert.notEqual(report.devices.crm.error, "timeout");
-  assert.notEqual(report.devices.crm.error, "unreachable");
+  assert.equal(report.devices.crm.error, "crm_healthcheck_token_invalido");
 });
 
-test("CRM: errore di rete durante il login (sito irraggiungibile) -> unreachable, MAI 'crm_visitor_login_fallito'", async () => {
-  process.env.CRM_VISITOR_PASSWORD = "password-di-prova";
+test("CRM: 404 (Netlify nasconde i siti a cui il token non ha accesso) -> stesso errore di token invalido", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-senza-permessi";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 404, json: async () => ({ message: "Not found" }) })],
+  ]);
   const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_healthcheck_token_invalido");
+});
+
+test("CRM: ultimo deploy in stato 'error' -> crm_deploy_in_errore, mai un falso ok", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
   global.fetch = fetchRouter([
     ...ALL_OK_RESPONSES_BASE,
     [
-      mod.CRM_LOGIN_URL,
-      "GET",
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => ({ status: 200, json: async () => readyDeploy({ state: "error" }) }),
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_deploy_in_errore");
+});
+
+test("CRM: deploy ancora 'building' ma recente -> ok (non è un falso 'problem' su ogni deploy in corso)", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => ({ status: 200, json: async () => readyDeploy({ state: "building", created_at: new Date(Date.now() - 60 * 1000).toISOString() }) }),
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "ok");
+});
+
+test("CRM: deploy bloccato in 'building' da oltre la soglia -> crm_deploy_non_pronto", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  const mod0 = freshModule();
+  const stuckSince = new Date(Date.now() - (mod0.DEPLOY_STUCK_THRESHOLD_MS + 60 * 1000)).toISOString();
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => ({ status: 200, json: async () => readyDeploy({ state: "building", created_at: stuckSince }) }),
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_deploy_non_pronto");
+});
+
+test("CRM: risposta 200 ma corpo non è un array (contratto API violato) -> errore esplicito, non un crash", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 200, json: async () => ({ unexpected: true }) })],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_api_risposta_inattesa");
+});
+
+test("CRM: risposta 200 ma array vuoto (nessun deploy mai avvenuto) -> errore esplicito", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 200, json: async () => [] })],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_api_risposta_inattesa");
+});
+
+test("CRM: errore di rete verso api.netlify.com -> unreachable, MAI confuso con un errore applicativo", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
       () => {
         throw new Error("ECONNREFUSED");
       },
     ],
   ]);
+  const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
 
   assert.equal(report.devices.crm.status, "problem");
   assert.equal(report.devices.crm.error, "ECONNREFUSED");
-  assert.notEqual(report.devices.crm.error, "crm_visitor_login_fallito", "un vero errore di rete non deve mai essere confuso con un login fallito");
-});
-
-test("CRM: login riuscito ma la risposta autenticata è comunque 401/403 (cookie scaduto/rifiutato) -> errore esplicito", async () => {
-  process.env.CRM_VISITOR_PASSWORD = "password-di-prova";
-  const mod = freshModule();
-  global.fetch = fetchRouter([
-    ...ALL_OK_RESPONSES_BASE,
-    [mod.CRM_LOGIN_URL, "GET", () => ({ status: 200, headers: fakeHeaders({}), text: async () => LOGIN_GATE_HTML_NO_HIDDEN })],
-    [
-      mod.CRM_LOGIN_URL,
-      "POST",
-      () => ({ status: 200, headers: fakeHeaders({ "set-cookie": `${mod.CRM_SITE_ID}=${FAKE_SESSION_JWT}; Path=/` }) }),
-    ],
-    [".netlify/functions/crm", "POST", () => ({ status: 403, headers: fakeHeaders({}) })],
-  ]);
-  const report = await mod.runDailyHealthcheck();
-
-  assert.equal(report.devices.crm.status, "problem");
-  assert.equal(report.devices.crm.error, "crm_visitor_login_fallito");
+  assert.notEqual(report.devices.crm.error, "crm_deploy_in_errore");
+  assert.notEqual(report.devices.crm.error, "crm_healthcheck_token_invalido");
 });
 
 test("spazio ospite (GUEST_MODE=true): la function si ferma subito, nessun controllo eseguito", async () => {
@@ -281,9 +309,9 @@ test("spazio ospite (GUEST_MODE=true): la function si ferma subito, nessun contr
 });
 
 test("pulizia storico: mantiene solo gli ultimi 30 giorni dopo la scrittura", async () => {
-  process.env.CRM_VISITOR_PASSWORD = "password-di-prova";
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE, crmOkEntry()]);
   const mod = freshModule();
-  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE, ...crmLoginOkEntries(mod)]);
 
   // Pre-popola 32 giorni finti più vecchi di oggi.
   const store = stores["system-reports"] || (stores["system-reports"] = new Map());
@@ -297,115 +325,4 @@ test("pulizia storico: mantiene solo gli ultimi 30 giorni dopo la scrittura", as
 
   // 32 vecchi + 1 di oggi = 33, deve restare solo KEEP_DAYS = 30.
   assert.equal(store.size, 30);
-});
-
-// ---------------------------------------------------------------------
-// Unit test sulle singole funzioni di parsing del login — provano che la
-// LOGICA regge un insieme di formati HTML/header plausibili, non che
-// corrispondano esattamente al formato reale di Netlify (mai osservato
-// direttamente, vedi nota in cima al file).
-// ---------------------------------------------------------------------
-
-test("extractHiddenFields: nessun campo nascosto -> array vuoto, nessun errore", () => {
-  const mod = freshModule();
-  assert.deepEqual(mod.extractHiddenFields(LOGIN_GATE_HTML_NO_HIDDEN), []);
-  assert.deepEqual(mod.extractHiddenFields(""), []);
-  assert.deepEqual(mod.extractHiddenFields(undefined), []);
-});
-
-test("extractHiddenFields: individua ogni <input type=hidden>, ignora gli altri input", () => {
-  const mod = freshModule();
-  const html = `<form>
-    <input type="hidden" name="csrf_token" value="abc123">
-    <input type="hidden" name="empty_field" value="">
-    <input type="password" name="password">
-    <input type="hidden" name='single_quoted' value='xyz'>
-  </form>`;
-  const fields = mod.extractHiddenFields(html);
-  assert.deepEqual(fields, [
-    { name: "csrf_token", value: "abc123" },
-    { name: "empty_field", value: "" },
-    { name: "single_quoted", value: "xyz" },
-  ]);
-});
-
-test("extractFormAction: nessun action esplicito -> ricade sulla pagina corrente", () => {
-  const mod = freshModule();
-  const pageUrl = "https://cute-moxie-cd1e4b.netlify.app/site/admin.html";
-  assert.equal(mod.extractFormAction(`<form method="POST"><input name="password"></form>`, pageUrl), pageUrl);
-  assert.equal(mod.extractFormAction("", pageUrl), pageUrl);
-});
-
-test("extractFormAction: action relativo viene risolto rispetto alla pagina", () => {
-  const mod = freshModule();
-  const pageUrl = "https://cute-moxie-cd1e4b.netlify.app/site/admin.html";
-  assert.equal(mod.extractFormAction(`<form action="/.netlify/login" method="POST">`, pageUrl), "https://cute-moxie-cd1e4b.netlify.app/.netlify/login");
-});
-
-test("extractFormAction: action assoluto viene usato così com'è", () => {
-  const mod = freshModule();
-  const pageUrl = "https://cute-moxie-cd1e4b.netlify.app/site/admin.html";
-  assert.equal(mod.extractFormAction(`<form action="https://altro-dominio.example/login">`, pageUrl), "https://altro-dominio.example/login");
-});
-
-test("extractSessionCookie: trova il cookie tra più Set-Cookie (getSetCookie)", () => {
-  const mod = freshModule();
-  const res = {
-    headers: fakeHeaders({
-      "set-cookie": [`altro_cookie=xyz; Path=/`, `${mod.CRM_SITE_ID}=${FAKE_SESSION_JWT}; Path=/; HttpOnly`, `terzo=1`],
-    }),
-  };
-  assert.equal(mod.extractSessionCookie(res), FAKE_SESSION_JWT);
-});
-
-test("extractSessionCookie: nessun Set-Cookie -> null", () => {
-  const mod = freshModule();
-  const res = { headers: fakeHeaders({}) };
-  assert.equal(mod.extractSessionCookie(res), null);
-});
-
-test("extractSessionCookie: Set-Cookie presente ma nome diverso da CRM_SITE_ID -> null (non un falso positivo)", () => {
-  const mod = freshModule();
-  const res = { headers: fakeHeaders({ "set-cookie": "nome_diverso=qualcosa; Path=/" }) };
-  assert.equal(mod.extractSessionCookie(res), null);
-});
-
-test("extractSessionCookie: fallback su un singolo header combinato quando getSetCookie() non è disponibile", () => {
-  const mod = freshModule();
-  const res = {
-    headers: {
-      get(name) {
-        if (name.toLowerCase() === "set-cookie") return `${mod.CRM_SITE_ID}=${FAKE_SESSION_JWT}; Path=/`;
-        return null;
-      },
-      // niente getSetCookie — simula un ambiente fetch più vecchio.
-    },
-  };
-  assert.equal(mod.extractSessionCookie(res), FAKE_SESSION_JWT);
-});
-
-test("loginToVisitorProtectedSite: integrazione dei tre passaggi con un campo CSRF nascosto nel form", async () => {
-  const mod = freshModule();
-  const htmlWithCsrf = `<html><body><form method="POST"><input type="hidden" name="csrf_token" value="tok-123"><input type="password" name="password"></form></body></html>`;
-  let capturedLoginBody = null;
-  global.fetch = fetchRouter([
-    [mod.CRM_LOGIN_URL, "GET", () => ({ status: 200, headers: fakeHeaders({}), text: async () => htmlWithCsrf })],
-    [
-      mod.CRM_LOGIN_URL,
-      "POST",
-      () => ({ status: 200, headers: fakeHeaders({ "set-cookie": `${mod.CRM_SITE_ID}=${FAKE_SESSION_JWT}; Path=/` }) }),
-    ],
-  ]);
-  // Intercetta anche il body inviato, per verificare che il token CSRF
-  // nascosto venga davvero incluso nella POST insieme alla password.
-  const realFetch = global.fetch;
-  global.fetch = async (url, options) => {
-    if (options && options.method === "POST" && url === mod.CRM_LOGIN_URL) capturedLoginBody = options.body;
-    return realFetch(url, options);
-  };
-
-  const cookie = await mod.loginToVisitorProtectedSite("la-password");
-  assert.equal(cookie, FAKE_SESSION_JWT);
-  assert.ok(capturedLoginBody.includes("password=la-password"));
-  assert.ok(capturedLoginBody.includes("csrf_token=tok-123"), "il campo nascosto CSRF deve essere rimandato indietro nella POST di login");
 });

@@ -127,162 +127,85 @@ async function checkRouter() {
 // CRM (repository interno, sito protetto a livello di dominio dalla
 // "Password Protection"/Visitor Access di Netlify — piano a pagamento).
 //
-// *** ATTENZIONE — QUESTA SEZIONE CONTIENE ASSUNZIONI NON VERIFICATE ***
-// Il tentativo precedente usava un header "Authorization: Basic", SBAGLIATO:
-// la Visitor Access di Netlify non è Basic Auth, è un login con password
-// che restituisce un cookie di sessione (da cui l'errore sempre presente
-// "crm_visitor_auth_fallita"). Non è stato possibile, né dall'utente né da
-// qui (questo ambiente ha l'intero dominio netlify.app/netlify.com bloccato
-// dalla policy di rete — verificato esplicitamente su più sottodomini,
-// inclusa la documentazione pubblica di Netlify: nessun modo di ispezionare
-// la richiesta di login reale), catturare la POST di login effettiva.
+// *** Cambio di approccio (settembre 2026) ***
+// Due tentativi precedenti hanno provato a superare la Visitor Access come
+// farebbe un browser: prima con un header "Authorization: Basic" (sbagliato,
+// la Visitor Access non è Basic Auth), poi simulando il login vero e proprio
+// (POST della password -> cookie di sessione). Il secondo approccio era
+// tecnicamente fattibile ma è stato scartato: Netlify non pubblica né
+// documenta un meccanismo ufficiale per automatizzare quel login (a
+// differenza, per dire, dell'header di bypass automazione di Vercel) —
+// simularlo significa dipendere da un'interfaccia interna non pubblica, che
+// può cambiare senza preavviso e rompere di nuovo il controllo in modo
+// silenzioso, lo stesso problema che si vuole risolvere qui.
 //
-// Quello che SAPPIAMO per certo (ispezione browser reale dell'utente, non
-// documentazione generica): il cookie di sessione impostato dopo un login
-// riuscito si chiama esattamente come il site ID del progetto Netlify
-// (CRM_SITE_ID sotto) e il suo valore è un JWT.
-//
-// Quello che ASSUMIAMO, NON verificato, e va confermato manualmente prima
-// di fidarsi ciecamente di questo codice in produzione (vedi MANUALE.md,
-// sezione dedicata, con la checklist esatta da controllare nei DevTools):
-// - Il form di login compare quando si richiede una pagina reale del sito
-//   (qui usiamo CRM_LOGIN_URL = .../site/admin.html, la pagina vera del
-//   CRM) e può contenere campi nascosti (es. token CSRF) oltre al campo
-//   password — extractHiddenFields() li individua ed è un no-op innocuo se
-//   non ce ne sono, quindi il codice non si rompe se questa parte
-//   dell'assunzione è sbagliata (semplicemente non aggiunge nulla).
-// - Il campo del form per la password si chiama "password".
-// - Il form fa POST alla STESSA pagina (o all'action esplicita del form,
-//   se presente e diversa) — extractFormAction() usa l'action se c'è,
-//   altrimenti ricade sulla pagina stessa.
-// - La risposta (200 con contenuto, o un redirect) porta il cookie di
-//   sessione in un header Set-Cookie — per questo la POST di login usa
-//   redirect:"manual": lato server Node/undici questo permette di leggere
-//   Set-Cookie anche se Netlify rispondesse con un redirect 3xx invece che
-//   con contenuto diretto (a differenza del comportamento "opaco" dei
-//   redirect manuali nei browser, qui gli header restano leggibili).
-//
-// Se una di queste assunzioni è sbagliata, il login fallisce in modo
-// ESPLICITO e DISTINGUIBILE da un problema di rete/sito down
-// ("crm_visitor_login_fallito", mai confuso con "timeout"/"unreachable" —
-// vedi timeoutOrUnreachable(), usato solo per veri errori di rete/timeout).
-// Stessa cosa per una password sbagliata: nessun cookie valido nella
-// risposta di login -> stesso errore esplicito, mai un falso "ok".
-const CRM_SITE_ID = "81ef474e-77e4-4852-bfae-0e159f6a2931"; // = nome del cookie di sessione (confermato da ispezione browser reale, non un'assunzione)
-const CRM_LOGIN_URL = TARGETS.crm + "site/admin.html"; // pagina reale del CRM, usata SOLO per il login — vedi ASSUNZIONI sopra
-
-// Estrae { name, value } di ogni <input type="hidden" ...> nell'HTML del
-// gate di login — se il form ne avesse (es. un token CSRF) vanno rimandati
-// indietro nella POST di login insieme alla password. Se non ce ne sono
-// (o se l'HTML non è nel formato atteso), restituisce un array vuoto: la
-// POST di login prosegue comunque con la sola password, non si rompe.
-function extractHiddenFields(html) {
-  const fields = [];
-  const inputRe = /<input\b[^>]*>/gi;
-  let m;
-  while ((m = inputRe.exec(html || "")) !== null) {
-    const tag = m[0];
-    if (!/type\s*=\s*["']hidden["']/i.test(tag)) continue;
-    const nameMatch = tag.match(/name\s*=\s*["']([^"']+)["']/i);
-    const valueMatch = tag.match(/value\s*=\s*["']([^"']*)["']/i);
-    if (nameMatch) fields.push({ name: nameMatch[1], value: valueMatch ? valueMatch[1] : "" });
-  }
-  return fields;
-}
-
-// Estrae l'attributo action del primo <form> nell'HTML, risolto come URL
-// assoluto rispetto a pageUrl. Se il form non ha un action esplicito (o è
-// vuoto, il caso più comune: "posta sulla pagina corrente"), o se non è
-// stato trovato nessun <form>, ricade su pageUrl stesso.
-function extractFormAction(html, pageUrl) {
-  const match = (html || "").match(/<form\b[^>]*\baction\s*=\s*["']([^"']*)["']/i);
-  if (!match || !match[1]) return pageUrl;
-  try {
-    return new URL(match[1], pageUrl).toString();
-  } catch (e) {
-    return pageUrl;
-  }
-}
-
-// Estrae il valore del cookie CRM_SITE_ID da tutti gli header Set-Cookie di
-// una risposta (login riuscito) — usa getSetCookie() se disponibile (Node
-// 18.14+/20+, restituisce ogni Set-Cookie separatamente, corretto quando ce
-// n'è più di uno), altrimenti ricade su un singolo header combinato.
-function extractSessionCookie(res) {
-  const setCookieHeaders = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [res.headers.get("set-cookie")].filter(Boolean);
-  for (const header of setCookieHeaders) {
-    const match = header.match(new RegExp(`^${CRM_SITE_ID}=([^;]+)`));
-    if (match) return match[1];
-  }
-  return null;
-}
-
-// Esegue il login reale contro la Visitor Access di Netlify — vedi il
-// commento sulle ASSUNZIONI sopra checkCrm() per ogni passaggio. Restituisce
-// il valore del cookie di sessione se il login è riuscito, null altrimenti
-// (password sbagliata, o una delle assunzioni sul formato della richiesta
-// non corrisponde a quella reale — nessuna differenza visibile da qui tra
-// i due casi, motivo per cui va verificato manualmente, vedi MANUALE.md).
-async function loginToVisitorProtectedSite(password) {
-  const gate = await fetch(CRM_LOGIN_URL, { redirect: "manual" });
-  const gateHtml = gate.status < 400 ? await gate.text().catch(() => "") : "";
-  const hiddenFields = extractHiddenFields(gateHtml);
-  const loginUrl = extractFormAction(gateHtml, CRM_LOGIN_URL);
-
-  const body = new URLSearchParams();
-  body.set("password", password);
-  for (const field of hiddenFields) body.set(field.name, field.value);
-
-  const res = await fetch(loginUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    redirect: "manual",
-  });
-  return extractSessionCookie(res);
-}
+// Approccio attuale: non ci si autentica più come un browser contro il
+// sito. Si interroga invece la Netlify Management API (ufficiale,
+// documentata, stabile: https://docs.netlify.com/api/get-started/) per
+// leggere lo stato dell'ULTIMO deploy del progetto CRM — un segnale
+// diverso ("il progetto ha un deploy recente e sano?") ma altrettanto
+// valido per uno scopo di monitoraggio, e molto più robusto perché non
+// dipende da nessun dettaglio non documentato di Netlify.
+const CRM_SITE_ID = "81ef474e-77e4-4852-bfae-0e159f6a2931"; // site ID del progetto Netlify del CRM (touchandgo-internal) — non è un segreto
+const NETLIFY_API_BASE = "https://api.netlify.com/api/v1";
+// Una build "in corso" da più di questa soglia senza essere né "ready" né
+// "error" è trattata come un problema (bloccata) — 10 minuti sono ampi per
+// un sito statico come questo (nessuno step di build reale, solo publish).
+const DEPLOY_STUCK_THRESHOLD_MS = 10 * 60 * 1000;
 
 async function checkCrm() {
   const start = Date.now();
-  const password = process.env.CRM_VISITOR_PASSWORD;
-  if (!password) {
-    return { status: "problem", responseTimeMs: Date.now() - start, error: "crm_visitor_password_non_configurata" };
+  const token = process.env.NETLIFY_HEALTHCHECK_TOKEN;
+  if (!token) {
+    return { status: "problem", responseTimeMs: Date.now() - start, error: "crm_healthcheck_token_non_configurato" };
   }
 
-  let sessionCookie;
   try {
-    sessionCookie = await loginToVisitorProtectedSite(password);
-  } catch (err) {
-    return timeoutOrUnreachable(err, start);
-  }
-  if (!sessionCookie) {
-    // Password sbagliata, oppure una delle assunzioni sul formato del
-    // login non corrisponde a quello reale — in entrambi i casi un errore
-    // esplicito e distinto da timeout/unreachable, mai un falso "ok".
-    return { status: "problem", responseTimeMs: Date.now() - start, error: "crm_visitor_login_fallito" };
-  }
-
-  const headers = { "Content-Type": "application/json", Cookie: `${CRM_SITE_ID}=${sessionCookie}` };
-  try {
-    const { res, responseTimeMs } = await timedFetch(TARGETS.crm + ".netlify/functions/crm", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ action: "__daily_healthcheck_probe__" }),
+    const { res, responseTimeMs } = await timedFetch(`${NETLIFY_API_BASE}/sites/${CRM_SITE_ID}/deploys?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.status === 401 || res.status === 403) {
-      return { status: "problem", responseTimeMs, error: "crm_visitor_login_fallito" };
+
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      // Netlify risponde 404 (non 403) anche quando il token non ha i
+      // permessi su questo sito, per non rivelarne l'esistenza a chi non è
+      // autorizzato — comportamento REST standard documentato, non
+      // un'assunzione specifica di questo sito (a differenza del vecchio
+      // tentativo di login). Da qui non possiamo distinguere "sito non
+      // esiste" da "token senza permessi": in entrambi i casi serve
+      // rigenerare/verificare il token, quindi stesso errore.
+      return { status: "problem", responseTimeMs, error: "crm_healthcheck_token_invalido" };
     }
-    if (res.status === 400) {
-      let body = null;
-      try {
-        body = await res.json();
-      } catch (e) {
-        // corpo non-JSON: trattato come risposta inattesa sotto
-      }
-      if (body && body.error === "Unknown action") return { status: "ok", responseTimeMs };
-      return { status: "problem", responseTimeMs, error: "crm_risposta_inattesa" };
+    if (res.status !== 200) {
+      return { status: "problem", responseTimeMs, error: "http_" + res.status };
     }
-    return { status: "problem", responseTimeMs, error: "http_" + res.status };
+
+    let deploys;
+    try {
+      deploys = await res.json();
+    } catch (e) {
+      return { status: "problem", responseTimeMs, error: "crm_api_risposta_inattesa" };
+    }
+    if (!Array.isArray(deploys) || deploys.length === 0) {
+      return { status: "problem", responseTimeMs, error: "crm_api_risposta_inattesa" };
+    }
+
+    const latest = deploys[0];
+    if (latest.state === "ready") {
+      return { status: "ok", responseTimeMs };
+    }
+    if (latest.state === "error") {
+      return { status: "problem", responseTimeMs, error: "crm_deploy_in_errore" };
+    }
+    // Qualunque altro stato (building, enqueued, uploading, processing,
+    // ecc.): un deploy in corso è normale per qualche minuto, un problema
+    // solo se resta bloccato oltre la soglia — altrimenti sarebbe un falso
+    // "problem" ad ogni deploy in corso al momento esatto del controllo.
+    const startedAt = Date.parse(latest.created_at || latest.published_at || "");
+    const stuck = !Number.isNaN(startedAt) && Date.now() - startedAt > DEPLOY_STUCK_THRESHOLD_MS;
+    if (stuck) {
+      return { status: "problem", responseTimeMs, error: "crm_deploy_non_pronto" };
+    }
+    return { status: "ok", responseTimeMs };
   } catch (err) {
     return timeoutOrUnreachable(err, start);
   }
@@ -371,8 +294,5 @@ exports.handler = schedule("0 6 * * *", async () => {
 exports.runDailyHealthcheck = runDailyHealthcheck;
 exports.TARGETS = TARGETS;
 exports.CRM_SITE_ID = CRM_SITE_ID;
-exports.CRM_LOGIN_URL = CRM_LOGIN_URL;
-exports.extractHiddenFields = extractHiddenFields;
-exports.extractFormAction = extractFormAction;
-exports.extractSessionCookie = extractSessionCookie;
-exports.loginToVisitorProtectedSite = loginToVisitorProtectedSite;
+exports.NETLIFY_API_BASE = NETLIFY_API_BASE;
+exports.DEPLOY_STUCK_THRESHOLD_MS = DEPLOY_STUCK_THRESHOLD_MS;
