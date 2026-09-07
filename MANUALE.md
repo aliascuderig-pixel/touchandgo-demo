@@ -697,7 +697,29 @@ Verificata leggendo il codice/README pubblicati sul registro npm della versione 
 
 ### Il problema della password del CRM (Visitor Access)
 
-Il sito `touchandgo-internal` (dominio `cute-moxie-cd1e4b.netlify.app`) è protetto da una password **a livello di dominio** (Netlify Visitor Access), non solo dalla password applicativa del kit riservato — quindi anche solo raggiungere una sua Netlify Function da un controllo automatico senza browser richiede di superare quella protezione. Non essendoci accesso al pannello Netlify da qui, non è stato possibile verificare direttamente quale modalità di Visitor Access sia configurata sul dominio. Se è impostata come autenticazione HTTP Basic reale (il caso più comune per questo tipo di protezione), è superabile senza browser con un semplice header `Authorization: Basic base64(utente:password)` — per questo il controllo CRM legge due nuove variabili d'ambiente, **`CRM_VISITOR_USER`** e **`CRM_VISITOR_PASSWORD`** (impostate solo se e quando Giuseppe le configura su Netlify, sul sito principale — mai un valore reale scritto qui): se assenti, la richiesta parte comunque senza autenticazione e, se il sito è davvero protetto, il controllo la segnala esplicitamente come `crm_visitor_auth_non_configurata` — mai un falso "ok".
+Il sito `touchandgo-internal` (dominio `cute-moxie-cd1e4b.netlify.app`) è protetto da una password **a livello di dominio** (Netlify Visitor Access — "Password Protection" nel piano a pagamento), non solo dalla password applicativa del kit riservato — quindi anche solo raggiungere una sua Netlify Function da un controllo automatico senza browser richiede di superare quella protezione.
+
+**Primo tentativo (superato, sbagliato)**: si era assunto che la Visitor Access fosse autenticazione HTTP Basic reale, superabile con un header `Authorization: Basic base64(utente:password)` (`CRM_VISITOR_USER`/`CRM_VISITOR_PASSWORD`). **Era un'assunzione sbagliata**: il controllo falliva sempre con `crm_visitor_auth_fallita`, in produzione, ogni giorno. La Visitor Access di Netlify su questo sito **non è Basic Auth** — è un login con password che restituisce un cookie di sessione, verificato dall'utente stesso via ispezione diretta del browser (non doveva essere indovinato).
+
+**Fix attuale (6 settembre 2026) — login reale in due passi**: `checkCrm()` fa (1) `GET` della pagina reale del CRM (`CRM_LOGIN_URL`, il gate di login), (2) `POST` della password (`CRM_VISITOR_PASSWORD`, sola — niente più `CRM_VISITOR_USER`) sulla stessa pagina (o sull'`action` esplicito del form, se presente), estraendo dalla risposta il cookie di sessione, e (3) rifà la sonda originale a `crm.js` includendo quel cookie.
+
+**Cosa sappiamo per certo** (ispezione browser reale, non documentazione generica): il nome del cookie di sessione impostato da un login riuscito coincide esattamente con il **site ID** del progetto Netlify (`CRM_SITE_ID = "81ef474e-77e4-4852-bfae-0e159f6a2931"`, hardcoded nel file — non è un segreto, è un identificativo pubblico del progetto), il suo valore è un JWT.
+
+**Cosa invece è un'ASSUNZIONE, non verificata — questo ambiente di sviluppo ha l'intero dominio `netlify.app`/`netlify.com` bloccato dalla policy di rete (verificato esplicitamente: nessun sottodominio del progetto, nemmeno la documentazione pubblica di Netlify, è raggiungibile da qui), quindi non è stato possibile osservare la vera richiesta di login**:
+
+- Il campo del form per la password si chiama `password`.
+- Il form fa `POST` sulla stessa pagina richiesta (o sul suo `action`, se diverso — gestito comunque, vedi `extractFormAction()`).
+- Eventuali campi nascosti nel form (es. un token CSRF) vengono rimandati indietro automaticamente (`extractHiddenFields()`) — ma se il form ne richiedesse uno con un nome/comportamento diverso da un `<input type="hidden">` standard, il codice non lo saprebbe gestire.
+
+**Checklist da verificare manualmente prima di fidarsi ciecamente di questo in produzione** (2 minuti, DevTools del browser su `cute-moxie-cd1e4b.netlify.app/site/admin.html`, tab Network, inserire la password e inviare il form):
+1. L'URL esatto a cui va la richiesta POST del login — coincide con la pagina stessa, o con un endpoint diverso (es. `/.netlify/...`)?
+2. Il nome del campo password nel payload della richiesta — è davvero `password`?
+3. La risposta contiene un header `Set-Cookie` con nome uguale al site ID sopra? Su quale risposta esattamente (200 diretto, o un redirect 302 nel mezzo)?
+4. Ci sono altri campi nel form (nascosti o no) che vengono inviati insieme alla password?
+
+Se anche solo uno di questi punti risultasse diverso da quanto assunto, il login fallirebbe con l'errore esplicito `crm_visitor_login_fallito` (mai un falso "ok", mai confuso con un errore di rete/timeout — vedi sotto) — a quel punto va aggiornato `CRM_LOGIN_URL`/il nome del campo/l'URL della POST in `daily-healthcheck.js` di conseguenza.
+
+**Se `CRM_VISITOR_PASSWORD` non è configurata**, la funzione non tenta nemmeno il login (nessuna richiesta di rete) e segnala esplicitamente `crm_visitor_password_non_configurata` — mai un falso "ok".
 
 La sonda vera e propria verso `crm.js`, una volta superata la Visitor Access, è a **costo zero**: una `POST` con un'`action` sconosciuta, che `crm.js` rifiuta subito con `400 "Unknown action"` prima di qualunque lettura/scrittura Blobs — lo stesso identico percorso che l'app pubblica userebbe per errore, nessuna azione reale.
 
@@ -708,7 +730,7 @@ La sonda vera e propria verso `crm.js`, una volta superata la Visitor Access, è
 | Sito principale | `GET .netlify/functions/health` (esistente, invariato) |
 | Spazio ospite | `GET .netlify/functions/health` sullo stesso deploy con `GUEST_MODE=true` — nessun nuovo endpoint necessario: `health.js` è lo stesso file, già presente su entrambi i deploy |
 | Router di continuità | `GET .netlify/functions/status` — **nuovo** endpoint di sola lettura (vedi sotto), mai `go.js`: non deve mai poter innescare un failover reale |
-| CRM interno | `POST .netlify/functions/crm` con `action` sconosciuta (vedi sopra) |
+| CRM interno | Login Visitor Access (password → cookie di sessione) poi `POST .netlify/functions/crm` con `action` sconosciuta, con quel cookie (vedi sopra) |
 
 Ogni controllo ha un timeout di 4 secondi (stesso pattern `AbortController` di `health.js`/`go.js`) e **non lancia mai eccezioni**: qualunque esito diventa `{ status: "ok" | "problem", responseTimeMs, error? }`. I quattro controlli girano in parallelo e **ciascuno è indipendente**: se uno fallisce, gli altri tre vengono comunque completati e il report viene comunque salvato per intero (parziale sul dispositivo in errore, non abortito al primo problema) — verificato con test automatici che simulano sia il caso "tutto ok" sia il caso "un dispositivo irraggiungibile" (vedi sotto).
 
@@ -729,7 +751,7 @@ Forma di ogni record:
     "main":   { "status": "ok", "responseTimeMs": 123 },
     "guest":  { "status": "ok", "responseTimeMs": 140 },
     "router": { "status": "ok", "responseTimeMs": 88 },
-    "crm":    { "status": "problem", "responseTimeMs": 210, "error": "crm_visitor_auth_non_configurata" }
+    "crm":    { "status": "problem", "responseTimeMs": 210, "error": "crm_visitor_password_non_configurata" }
   }
 }
 ```
@@ -746,13 +768,13 @@ Forma di ogni record:
 - **Mai stato reale modificato**: `status.js` del router è puramente in lettura; nessun acquisto/recensione fittizio viene mai creato.
 - **Mai un abort al primo errore**: un dispositivo irraggiungibile non impedisce di controllare gli altri né di salvare comunque il report (parziale).
 
-**Test automatici**: `netlify/functions/__tests__/daily-healthcheck.test.js` (caso tutto ok, caso router irraggiungibile con report parziale salvato comunque, CRM senza credenziali Visitor Access configurate, spazio ospite che si ferma subito, pulizia storico oltre 30 giorni) e `router/netlify/functions/__tests__/status.test.js` (nessuno stato ancora scritto, failover già attivo, override `ACTIVE_TARGET`, store irraggiungibile) — stessa tecnica delle altre suite (store Blobs finto in memoria, fetch finto, nessuna rete/credenziale reale), eseguibili con `npm test` dalla radice del repository. Grazie al comportamento di `schedule()` spiegato sopra, questi stessi test invocano l'handler reale, non un doppio finto.
+**Test automatici**: `netlify/functions/__tests__/daily-healthcheck.test.js` — caso tutto ok (incluso login CRM riuscito), caso router irraggiungibile con report parziale salvato comunque, `CRM_VISITOR_PASSWORD` non configurata (nessuna richiesta di rete tentata), password sbagliata (nessun cookie nella risposta di login — errore esplicito, mai confuso con un errore di rete), errore di rete durante il login (esplicitamente distinto dall'errore precedente), cookie accettato al login ma rifiutato dalla sonda vera (401/403 sulla richiesta autenticata), spazio ospite che si ferma subito, pulizia storico oltre 30 giorni — più test unitari dedicati sulle singole funzioni di parsing del login (`extractHiddenFields`, `extractFormAction`, `extractSessionCookie`) contro più formati HTML/header plausibili. **Importante**: questi test provano che la *logica* di parsing e la distinzione tra tipi di errore sono corrette contro un insieme di risposte simulate — non possono provare che il formato assunto del login (vedi checklist sopra) corrisponda esattamente a quello reale di Netlify, mai osservato direttamente per questo sito. E `router/netlify/functions/__tests__/status.test.js` (nessuno stato ancora scritto, failover già attivo, override `ACTIVE_TARGET`, store irraggiungibile) — stessa tecnica delle altre suite (store Blobs finto in memoria, fetch finto, nessuna rete/credenziale reale), eseguibili con `npm test` dalla radice del repository. Grazie al comportamento di `schedule()` spiegato sopra, questi stessi test invocano l'handler reale, non un doppio finto.
 
-**Variabili d'ambiente nuove, solo sul sito principale** (mai un valore reale scritto in questo file):
+**Variabili d'ambiente, solo sul sito principale** (mai un valore reale scritto in questo file):
 
 | Variabile | A cosa serve |
 |---|---|
-| `CRM_VISITOR_USER` / `CRM_VISITOR_PASSWORD` | Credenziali HTTP Basic per superare la Visitor Access del dominio CRM, se configurata così. Se assenti, il controllo CRM lo segnala esplicitamente invece di dare un falso "ok". |
+| `CRM_VISITOR_PASSWORD` | Password della Visitor Access del dominio CRM, usata per il login reale (vedi sopra). **Non più `CRM_VISITOR_USER`/Basic Auth** (rimosso, era sbagliato — vedi sopra). Se assente, il controllo CRM lo segnala esplicitamente (`crm_visitor_password_non_configurata`) invece di dare un falso "ok". |
 
 ## Test end-to-end settimanale (spazio ospite)
 
