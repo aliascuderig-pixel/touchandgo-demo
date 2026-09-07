@@ -123,6 +123,25 @@ function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
+// Campi paese/città REALI (strutturati) — introdotti accanto al vecchio
+// addressLabel testuale, vedi MANUALE.md, sezione "Paese e città reali
+// della spedizione". Non validati da isValidPurchase() (mai bloccanti,
+// stesso principio di recordCustomsReference sopra): un valore non
+// stringa o fuori misura viene semplicemente scartato (impostato a null),
+// non fa rifiutare l'intero acquisto — il turista non deve mai perdere una
+// spedizione per un campo informativo.
+const MAX_STRUCTURED_FIELD_LEN = 100;
+function sanitizeStructuredDestination(item) {
+  for (const key of ["country", "city"]) {
+    const value = item[key];
+    if (typeof value !== "string" || !value.trim() || value.length > MAX_STRUCTURED_FIELD_LEN) {
+      item[key] = null;
+    } else {
+      item[key] = value.trim();
+    }
+  }
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
@@ -132,6 +151,7 @@ exports.handler = async (event) => {
     if (!isValidPurchase(item)) {
       return { statusCode: 400, body: JSON.stringify({ error: "Dati spedizione non validi" }) };
     }
+    sanitizeStructuredDestination(item);
 
     const withinLimit = await checkRateLimit(`save-purchase:${getClientIp(event)}`);
     if (!withinLimit) {
