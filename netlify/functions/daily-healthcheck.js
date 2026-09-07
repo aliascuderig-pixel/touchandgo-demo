@@ -124,49 +124,88 @@ async function checkRouter() {
   }
 }
 
-// CRM (repository interno, sito protetto da password a livello di dominio
-// — Netlify Visitor Access): la sonda è una POST a crm.js con una action
-// sconosciuta, che risponde 400 "Unknown action" a costo zero (nessuna
-// lettura/scrittura Blobs, nessuna azione reale) — vedi indagine
-// preliminare (Parte 1) riportata all'utente. Se CRM_VISITOR_USER/
-// CRM_VISITOR_PASSWORD non sono configurate, la richiesta parte comunque
-// senza autenticazione: se il sito è protetto, verrà bloccata dalla
-// Visitor Access stessa (401/403) e il problema viene riportato in modo
-// esplicito ("non configurato"), MAI spacciato per "ok" — non possiamo
-// verificare qui se il CRM applicativo è davvero raggiungibile finché
-// quelle variabili non vengono impostate su Netlify.
+// CRM (repository interno, sito protetto a livello di dominio dalla
+// "Password Protection"/Visitor Access di Netlify — piano a pagamento).
+//
+// *** Cambio di approccio (settembre 2026) ***
+// Due tentativi precedenti hanno provato a superare la Visitor Access come
+// farebbe un browser: prima con un header "Authorization: Basic" (sbagliato,
+// la Visitor Access non è Basic Auth), poi simulando il login vero e proprio
+// (POST della password -> cookie di sessione). Il secondo approccio era
+// tecnicamente fattibile ma è stato scartato: Netlify non pubblica né
+// documenta un meccanismo ufficiale per automatizzare quel login (a
+// differenza, per dire, dell'header di bypass automazione di Vercel) —
+// simularlo significa dipendere da un'interfaccia interna non pubblica, che
+// può cambiare senza preavviso e rompere di nuovo il controllo in modo
+// silenzioso, lo stesso problema che si vuole risolvere qui.
+//
+// Approccio attuale: non ci si autentica più come un browser contro il
+// sito. Si interroga invece la Netlify Management API (ufficiale,
+// documentata, stabile: https://docs.netlify.com/api/get-started/) per
+// leggere lo stato dell'ULTIMO deploy del progetto CRM — un segnale
+// diverso ("il progetto ha un deploy recente e sano?") ma altrettanto
+// valido per uno scopo di monitoraggio, e molto più robusto perché non
+// dipende da nessun dettaglio non documentato di Netlify.
+const CRM_SITE_ID = "81ef474e-77e4-4852-bfae-0e159f6a2931"; // site ID del progetto Netlify del CRM (touchandgo-internal) — non è un segreto
+const NETLIFY_API_BASE = "https://api.netlify.com/api/v1";
+// Una build "in corso" da più di questa soglia senza essere né "ready" né
+// "error" è trattata come un problema (bloccata) — 10 minuti sono ampi per
+// un sito statico come questo (nessuno step di build reale, solo publish).
+const DEPLOY_STUCK_THRESHOLD_MS = 10 * 60 * 1000;
+
 async function checkCrm() {
   const start = Date.now();
-  const user = process.env.CRM_VISITOR_USER;
-  const pass = process.env.CRM_VISITOR_PASSWORD;
-  const headers = { "Content-Type": "application/json" };
-  if (user && pass) {
-    headers.Authorization = "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
+  const token = process.env.NETLIFY_HEALTHCHECK_TOKEN;
+  if (!token) {
+    return { status: "problem", responseTimeMs: Date.now() - start, error: "crm_healthcheck_token_non_configurato" };
   }
+
   try {
-    const { res, responseTimeMs } = await timedFetch(TARGETS.crm + ".netlify/functions/crm", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ action: "__daily_healthcheck_probe__" }),
+    const { res, responseTimeMs } = await timedFetch(`${NETLIFY_API_BASE}/sites/${CRM_SITE_ID}/deploys?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.status === 401 || res.status === 403) {
-      return {
-        status: "problem",
-        responseTimeMs,
-        error: user && pass ? "crm_visitor_auth_fallita" : "crm_visitor_auth_non_configurata",
-      };
+
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      // Netlify risponde 404 (non 403) anche quando il token non ha i
+      // permessi su questo sito, per non rivelarne l'esistenza a chi non è
+      // autorizzato — comportamento REST standard documentato, non
+      // un'assunzione specifica di questo sito (a differenza del vecchio
+      // tentativo di login). Da qui non possiamo distinguere "sito non
+      // esiste" da "token senza permessi": in entrambi i casi serve
+      // rigenerare/verificare il token, quindi stesso errore.
+      return { status: "problem", responseTimeMs, error: "crm_healthcheck_token_invalido" };
     }
-    if (res.status === 400) {
-      let body = null;
-      try {
-        body = await res.json();
-      } catch (e) {
-        // corpo non-JSON: trattato come risposta inattesa sotto
-      }
-      if (body && body.error === "Unknown action") return { status: "ok", responseTimeMs };
-      return { status: "problem", responseTimeMs, error: "crm_risposta_inattesa" };
+    if (res.status !== 200) {
+      return { status: "problem", responseTimeMs, error: "http_" + res.status };
     }
-    return { status: "problem", responseTimeMs, error: "http_" + res.status };
+
+    let deploys;
+    try {
+      deploys = await res.json();
+    } catch (e) {
+      return { status: "problem", responseTimeMs, error: "crm_api_risposta_inattesa" };
+    }
+    if (!Array.isArray(deploys) || deploys.length === 0) {
+      return { status: "problem", responseTimeMs, error: "crm_api_risposta_inattesa" };
+    }
+
+    const latest = deploys[0];
+    if (latest.state === "ready") {
+      return { status: "ok", responseTimeMs };
+    }
+    if (latest.state === "error") {
+      return { status: "problem", responseTimeMs, error: "crm_deploy_in_errore" };
+    }
+    // Qualunque altro stato (building, enqueued, uploading, processing,
+    // ecc.): un deploy in corso è normale per qualche minuto, un problema
+    // solo se resta bloccato oltre la soglia — altrimenti sarebbe un falso
+    // "problem" ad ogni deploy in corso al momento esatto del controllo.
+    const startedAt = Date.parse(latest.created_at || latest.published_at || "");
+    const stuck = !Number.isNaN(startedAt) && Date.now() - startedAt > DEPLOY_STUCK_THRESHOLD_MS;
+    if (stuck) {
+      return { status: "problem", responseTimeMs, error: "crm_deploy_non_pronto" };
+    }
+    return { status: "ok", responseTimeMs };
   } catch (err) {
     return timeoutOrUnreachable(err, start);
   }
@@ -254,3 +293,6 @@ exports.handler = schedule("0 6 * * *", async () => {
 // Esportate per i test — vedi __tests__/daily-healthcheck.test.js.
 exports.runDailyHealthcheck = runDailyHealthcheck;
 exports.TARGETS = TARGETS;
+exports.CRM_SITE_ID = CRM_SITE_ID;
+exports.NETLIFY_API_BASE = NETLIFY_API_BASE;
+exports.DEPLOY_STUCK_THRESHOLD_MS = DEPLOY_STUCK_THRESHOLD_MS;

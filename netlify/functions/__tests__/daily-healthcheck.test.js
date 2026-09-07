@@ -4,11 +4,23 @@
 // "problem" solo per quel dispositivo, gli altri tre restano "ok", e il
 // report viene comunque salvato per intero — nessun abort al primo
 // errore). Fetch e store Netlify Blobs finti, nessuna rete reale.
+//
+// Sezione CRM (Netlify Management API): due tentativi precedenti provavano
+// ad autenticarsi come un browser contro la Visitor Access del sito
+// (Basic Auth, poi un login simulato con cookie) — scartati perché
+// dipendevano da un meccanismo non documentato/non pubblico di Netlify.
+// L'approccio attuale interroga la Management API ufficiale
+// (https://docs.netlify.com/api/get-started/) per leggere lo stato
+// dell'ultimo deploy del progetto — endpoint stabile e documentato, quindi
+// questi test (fetch finto, nessuna rete reale) provano davvero il
+// comportamento contro il contratto reale dell'API, non solo contro
+// un'assunzione sul formato di un login mai osservato.
 
 const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const path = require("node:path");
+const fs = require("node:fs");
 
 // ---- Fake minimale di @netlify/blobs, in memoria, azzerabile tra i test ----
 let stores = {};
@@ -51,6 +63,26 @@ function freshModule() {
   return require(handlerPath);
 }
 
+// Guardia di regressione: i codici errore della Visitor Access (Basic Auth
+// prima, login simulato poi) appartengono a due approcci scartati — non
+// devono ricomparire nel sorgente, nemmeno in un ramo morto/un blocco catch
+// dimenticato. Un errore in codice testuale, non nel comportamento a
+// runtime: legge il file sorgente direttamente, quindi cattura anche una
+// stringa residua che nessun test comportamentale rileverebbe se non fosse
+// mai raggiunta da nessun percorso testato.
+test("nessuna stringa residua dei vecchi codici errore Visitor Access nel sorgente di daily-healthcheck.js", () => {
+  const source = fs.readFileSync(handlerPath, "utf8");
+  const OLD_ERROR_CODES = [
+    "crm_visitor_auth_fallita",
+    "crm_visitor_auth_non_configurata",
+    "crm_visitor_login_fallito",
+    "crm_visitor_password_non_configurata",
+  ];
+  for (const code of OLD_ERROR_CODES) {
+    assert.ok(!source.includes(code), `il vecchio codice errore "${code}" non deve comparire più nel sorgente — approccio scartato (Basic Auth/login simulato)`);
+  }
+});
+
 const originalFetch = global.fetch;
 const originalEnv = { ...process.env };
 
@@ -59,8 +91,7 @@ beforeEach(() => {
   process.env.NETLIFY_BLOBS_SITE_ID = "test-site";
   process.env.NETLIFY_BLOBS_TOKEN = "test-token";
   delete process.env.GUEST_MODE;
-  delete process.env.CRM_VISITOR_USER;
-  delete process.env.CRM_VISITOR_PASSWORD;
+  delete process.env.NETLIFY_HEALTHCHECK_TOKEN;
 });
 
 afterEach(() => {
@@ -68,7 +99,7 @@ afterEach(() => {
   process.env = { ...originalEnv };
 });
 
-// Mappa URL -> risposta finta, usata dai due test principali sotto.
+// Mappa URL -> risposta finta, usata dai test principali sotto.
 function fetchRouter(responses) {
   return async (url) => {
     for (const [match, respond] of responses) {
@@ -78,7 +109,20 @@ function fetchRouter(responses) {
   };
 }
 
-const ALL_OK_RESPONSES = [
+// Un deploy "ready" dell'ultimo minuto — la risposta di successo tipica di
+// GET /api/v1/sites/{id}/deploys?per_page=1.
+function readyDeploy(overrides) {
+  return [{ state: "ready", created_at: new Date().toISOString(), commit_ref: "abc123", context: "production", ...overrides }];
+}
+
+function crmOkEntry() {
+  return [
+    "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+    () => ({ status: 200, json: async () => readyDeploy() }),
+  ];
+}
+
+const ALL_OK_RESPONSES_BASE = [
   ["benevolent-longma-57c78a.netlify.app/.netlify/functions/health", () => ({ status: 200, json: async () => ({ ok: true }) })],
   ["touchandgo-guest.netlify.app/.netlify/functions/health", () => ({ status: 200, json: async () => ({ ok: true }) })],
   [
@@ -88,11 +132,11 @@ const ALL_OK_RESPONSES = [
       json: async () => ({ ok: true, mode: "auto", redirectsTo: "https://benevolent-longma-57c78a.netlify.app/" }),
     }),
   ],
-  ["cute-moxie-cd1e4b.netlify.app/.netlify/functions/crm", () => ({ status: 400, json: async () => ({ error: "Unknown action" }) })],
 ];
 
-test("caso tutto ok: quattro dispositivi ok, overallStatus ok, report salvato", async () => {
-  global.fetch = fetchRouter(ALL_OK_RESPONSES);
+test("caso tutto ok: quattro dispositivi ok (CRM con deploy 'ready' via Management API), overallStatus ok, report salvato", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE, crmOkEntry()]);
   const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
 
@@ -109,16 +153,17 @@ test("caso tutto ok: quattro dispositivi ok, overallStatus ok, report salvato", 
 });
 
 test("caso router irraggiungibile: report parziale salvato, solo router in problem", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
   global.fetch = fetchRouter([
-    ALL_OK_RESPONSES[0],
-    ALL_OK_RESPONSES[1],
+    ALL_OK_RESPONSES_BASE[0],
+    ALL_OK_RESPONSES_BASE[1],
     [
       "touchandgo-router.netlify.app/.netlify/functions/status",
       () => {
         throw new Error("ECONNREFUSED");
       },
     ],
-    ALL_OK_RESPONSES[3],
+    crmOkEntry(),
   ]);
   const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
@@ -138,19 +183,140 @@ test("caso router irraggiungibile: report parziale salvato, solo router in probl
   assert.equal(parsed.devices.main.status, "ok");
 });
 
-test("CRM senza credenziali Visitor Access configurate e bloccato: motivo esplicito, non falso ok", async () => {
+test("CRM: NETLIFY_HEALTHCHECK_TOKEN non configurato -> errore esplicito, nessuna chiamata di rete tentata per il CRM", async () => {
+  // Nessuna entry CRM nel router: se checkCrm() tentasse comunque una
+  // fetch (bug), il router lancerebbe "URL non atteso" — quell'eccezione
+  // verrebbe intercettata da checkCrm() e trasformata in un errore di tipo
+  // "unreachable", diverso da quello atteso qui sotto, quindi l'assert
+  // fallirebbe comunque se il codice tentasse una chiamata.
+  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_healthcheck_token_non_configurato");
+  assert.equal(report.overallStatus, "problem");
+});
+
+test("CRM: token non valido/senza permessi (401) -> errore esplicito, distinto da un vero errore di deploy", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-scaduto";
   global.fetch = fetchRouter([
-    ALL_OK_RESPONSES[0],
-    ALL_OK_RESPONSES[1],
-    ALL_OK_RESPONSES[2],
-    ["cute-moxie-cd1e4b.netlify.app/.netlify/functions/crm", () => ({ status: 401, json: async () => ({}) })],
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 401, json: async () => ({ message: "Invalid token" }) })],
   ]);
   const mod = freshModule();
   const report = await mod.runDailyHealthcheck();
 
   assert.equal(report.devices.crm.status, "problem");
-  assert.equal(report.devices.crm.error, "crm_visitor_auth_non_configurata");
-  assert.equal(report.overallStatus, "problem");
+  assert.equal(report.devices.crm.error, "crm_healthcheck_token_invalido");
+});
+
+test("CRM: 404 (Netlify nasconde i siti a cui il token non ha accesso) -> stesso errore di token invalido", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-senza-permessi";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 404, json: async () => ({ message: "Not found" }) })],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_healthcheck_token_invalido");
+});
+
+test("CRM: ultimo deploy in stato 'error' -> crm_deploy_in_errore, mai un falso ok", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => ({ status: 200, json: async () => readyDeploy({ state: "error" }) }),
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_deploy_in_errore");
+});
+
+test("CRM: deploy ancora 'building' ma recente -> ok (non è un falso 'problem' su ogni deploy in corso)", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => ({ status: 200, json: async () => readyDeploy({ state: "building", created_at: new Date(Date.now() - 60 * 1000).toISOString() }) }),
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "ok");
+});
+
+test("CRM: deploy bloccato in 'building' da oltre la soglia -> crm_deploy_non_pronto", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  const mod0 = freshModule();
+  const stuckSince = new Date(Date.now() - (mod0.DEPLOY_STUCK_THRESHOLD_MS + 60 * 1000)).toISOString();
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => ({ status: 200, json: async () => readyDeploy({ state: "building", created_at: stuckSince }) }),
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_deploy_non_pronto");
+});
+
+test("CRM: risposta 200 ma corpo non è un array (contratto API violato) -> errore esplicito, non un crash", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 200, json: async () => ({ unexpected: true }) })],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_api_risposta_inattesa");
+});
+
+test("CRM: risposta 200 ma array vuoto (nessun deploy mai avvenuto) -> errore esplicito", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    ["api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys", () => ({ status: 200, json: async () => [] })],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "crm_api_risposta_inattesa");
+});
+
+test("CRM: errore di rete verso api.netlify.com -> unreachable, MAI confuso con un errore applicativo", async () => {
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([
+    ...ALL_OK_RESPONSES_BASE,
+    [
+      "api.netlify.com/api/v1/sites/81ef474e-77e4-4852-bfae-0e159f6a2931/deploys",
+      () => {
+        throw new Error("ECONNREFUSED");
+      },
+    ],
+  ]);
+  const mod = freshModule();
+  const report = await mod.runDailyHealthcheck();
+
+  assert.equal(report.devices.crm.status, "problem");
+  assert.equal(report.devices.crm.error, "ECONNREFUSED");
+  assert.notEqual(report.devices.crm.error, "crm_deploy_in_errore");
+  assert.notEqual(report.devices.crm.error, "crm_healthcheck_token_invalido");
 });
 
 test("spazio ospite (GUEST_MODE=true): la function si ferma subito, nessun controllo eseguito", async () => {
@@ -164,7 +330,8 @@ test("spazio ospite (GUEST_MODE=true): la function si ferma subito, nessun contr
 });
 
 test("pulizia storico: mantiene solo gli ultimi 30 giorni dopo la scrittura", async () => {
-  global.fetch = fetchRouter(ALL_OK_RESPONSES);
+  process.env.NETLIFY_HEALTHCHECK_TOKEN = "token-di-prova";
+  global.fetch = fetchRouter([...ALL_OK_RESPONSES_BASE, crmOkEntry()]);
   const mod = freshModule();
 
   // Pre-popola 32 giorni finti più vecchi di oggi.
