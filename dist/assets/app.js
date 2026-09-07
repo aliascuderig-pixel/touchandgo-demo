@@ -71,6 +71,46 @@ const DESTINATIONS = [
   { name: "Altro / non specificata", name_en: "Other / not specified", zone: "worldwide" },
 ];
 
+// Elenco paese REALE (ISO 3166, nomi italiani correnti) per la raccolta
+// dati di destinazione — SEPARATO e indipendente da DESTINATIONS sopra.
+// DESTINATIONS resta l'unico selettore che determina la zona di
+// tariffazione (SHIPPING_RATES) e non va toccato da questo elenco: qui si
+// raccoglie solo il paese/città reali della spedizione, un dato puramente
+// informativo che non deve mai influenzare il prezzo calcolato. Vedi
+// MANUALE.md, sezione "Paese e città reali della spedizione".
+const ISO_COUNTRIES = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua e Barbuda", "Arabia Saudita",
+  "Argentina", "Armenia", "Australia", "Austria", "Azerbaigian", "Bahamas", "Bahrein", "Bangladesh",
+  "Barbados", "Belgio", "Belize", "Benin", "Bhutan", "Bielorussia", "Birmania (Myanmar)", "Bolivia",
+  "Bosnia ed Erzegovina", "Botswana", "Brasile", "Brunei", "Bulgaria", "Burkina Faso", "Burundi",
+  "Cambogia", "Camerun", "Canada", "Capo Verde", "Ciad", "Cile", "Cina", "Cipro", "Colombia", "Comore",
+  "Corea del Nord", "Corea del Sud", "Costa d'Avorio", "Costa Rica", "Croazia", "Cuba", "Danimarca",
+  "Dominica", "Ecuador", "Egitto", "El Salvador", "Emirati Arabi Uniti", "Eritrea", "Estonia",
+  "Eswatini", "Etiopia", "Figi", "Filippine", "Finlandia", "Francia", "Gabon", "Gambia", "Georgia",
+  "Germania", "Ghana", "Giamaica", "Giappone", "Gibuti", "Giordania", "Grecia", "Grenada", "Guatemala",
+  "Guinea", "Guinea-Bissau", "Guinea Equatoriale", "Guyana", "Haiti", "Honduras", "India", "Indonesia",
+  "Iran", "Iraq", "Irlanda", "Islanda", "Israele", "Italia", "Kazakistan", "Kenya", "Kirghizistan",
+  "Kiribati", "Kosovo", "Kuwait", "Laos", "Lesotho", "Lettonia", "Libano", "Liberia", "Libia",
+  "Liechtenstein", "Lituania", "Lussemburgo", "Macedonia del Nord", "Madagascar", "Malawi", "Malaysia",
+  "Maldive", "Mali", "Malta", "Marocco", "Isole Marshall", "Mauritania", "Maurizio", "Messico",
+  "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Mozambico", "Namibia", "Nauru",
+  "Nepal", "Nicaragua", "Niger", "Nigeria", "Norvegia", "Nuova Zelanda", "Oman", "Paesi Bassi",
+  "Pakistan", "Palau", "Palestina", "Panama", "Papua Nuova Guinea", "Paraguay", "Perù", "Polonia",
+  "Portogallo", "Qatar", "Regno Unito", "Repubblica Ceca", "Repubblica Centrafricana",
+  "Repubblica del Congo", "Repubblica Democratica del Congo", "Repubblica Dominicana", "Romania",
+  "Ruanda", "Russia", "Saint Kitts e Nevis", "Saint Lucia", "Saint Vincent e Grenadine", "Samoa",
+  "San Marino", "São Tomé e Príncipe", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore",
+  "Siria", "Slovacchia", "Slovenia", "Somalia", "Spagna", "Sri Lanka", "Stati Uniti", "Sudafrica",
+  "Sudan", "Sudan del Sud", "Suriname", "Svezia", "Svizzera", "Tagikistan", "Taiwan", "Tanzania",
+  "Thailandia", "Timor Est", "Togo", "Tonga", "Trinidad e Tobago", "Tunisia", "Turchia",
+  "Turkmenistan", "Tuvalu", "Ucraina", "Uganda", "Ungheria", "Uruguay", "Uzbekistan", "Vanuatu",
+  "Città del Vaticano", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe",
+];
+
+function isKnownRealCountry(name) {
+  return ISO_COUNTRIES.includes(name);
+}
+
 // Tariffe a fasce di peso per zona — costo GREZZO del corriere, prima del
 // margine Touch&Go (vedi SHIPPING_MARGIN sotto). Valori aggiornati da
 // ricerca reale sui corrieri aggregati da Packlink (BRT/Poste per il
@@ -489,6 +529,7 @@ const I18N = {
     addr_street_placeholder: "Via e numero civico",
     addr_city_placeholder: "Città",
     addr_cap_placeholder: "CAP",
+    addr_realcountry_placeholder: "Paese (digita per cercare, es. Francia)",
 
     // ---- DocumentsScreen ----
     docs_not_found: "Documenti non trovati.",
@@ -735,6 +776,7 @@ const I18N = {
     addr_street_placeholder: "Street and house number",
     addr_city_placeholder: "City",
     addr_cap_placeholder: "ZIP code",
+    addr_realcountry_placeholder: "Country (type to search, e.g. France)",
 
     // ---- DocumentsScreen ----
     docs_not_found: "Documents not found.",
@@ -4275,7 +4317,7 @@ function IdentifyScreen() {
     const name = document.getElementById("name-input").value.trim();
     const email = document.getElementById("email-input").value.trim();
     const addr = readAddressForm("identify");
-    if (!addr.city || !addr.country) return;
+    if (!addr.city || !addr.country || !isKnownRealCountry(addr.realCountry)) return;
     if (!email || !email.includes("@")) {
       alert(t("identify_email_invalid_alert"));
       return;
@@ -4341,6 +4383,11 @@ function AddressFormFields(prefix) {
       <input class="addr-input" id="${prefix}-city" placeholder="${t("addr_city_placeholder")}" />
       <input class="addr-input addr-cap" id="${prefix}-cap" placeholder="${t("addr_cap_placeholder")}" />
     </div>
+    <input class="addr-input addr-realcountry" id="${prefix}-realcountry" list="${prefix}-realcountry-list"
+      autocomplete="off" placeholder="${t("addr_realcountry_placeholder")}" />
+    <datalist id="${prefix}-realcountry-list">
+      ${ISO_COUNTRIES.map((c) => `<option value="${c}"></option>`).join("")}
+    </datalist>
     <select class="dest-select addr-country" id="${prefix}-country">
       ${DESTINATIONS.map((d) => `<option value="${d.name}">${destinationDisplayName(d.name)}</option>`).join("")}
     </select>`;
@@ -4360,6 +4407,7 @@ function readAddressForm(prefix) {
     city: g(`${prefix}-city`),
     cap: g(`${prefix}-cap`),
     country: g(`${prefix}-country`),
+    realCountry: g(`${prefix}-realcountry`),
   };
 }
 
@@ -4464,7 +4512,7 @@ function AddAddressScreen() {
   const saveBtn = el("button", "btn-primary", "Salva indirizzo →");
   saveBtn.addEventListener("click", () => {
     const addr = readAddressForm("newaddr");
-    if (!addr.city || !addr.country) return;
+    if (!addr.city || !addr.country || !isKnownRealCountry(addr.realCountry)) return;
     addr.label = document.getElementById("newaddr-label").value.trim() || "Indirizzo";
     addr.id = "addr-" + Date.now();
     state.addresses.push(addr);
@@ -4577,6 +4625,15 @@ function ChooseAddressScreen() {
         pickupSource: itemPickupPoint === state.pickupPoint ? state.pickupSource : null,
         addressId: addr ? addr.id : null,
         addressLabel: addr ? `${addr.label || "Indirizzo"} — ${formatAddress(addr)}` : "—",
+        // Paese/città REALI e strutturati (vedi ISO_COUNTRIES sopra) — solo
+        // per indirizzi salvati dopo l'introduzione di questo campo; un
+        // indirizzo storico (creato prima) non ha mai addr.realCountry,
+        // quindi questi restano null e il CRM continua a usare il fallback
+        // di parsing su addressLabel per quel record. Non influenzano mai
+        // il prezzo: quello resta legato solo a currentDestinationName()/
+        // DESTINATIONS, invariati.
+        country: addr && addr.realCountry ? addr.realCountry : null,
+        city: addr && addr.city ? addr.city : null,
         price: state.price ? state.price.grandTotal : 0,
         touristName: state.touristName,
         partnerCode: state.activePartnerCode || null,

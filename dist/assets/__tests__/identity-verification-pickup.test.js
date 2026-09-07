@@ -184,6 +184,7 @@ async function completeIdentification(window, document, { hasSignature }) {
   document.getElementById("email-input").value = "cinque@example.com";
   document.getElementById("identify-city").value = "Roma";
   document.getElementById("identify-country").value = "Italia";
+  document.getElementById("identify-realcountry").value = "Italia";
 
   const fileInput = document.querySelector(".id-upload-card input[type=file]");
   const file = new window.File(["fake-bytes"], "id.jpg", { type: "image/jpeg" });
