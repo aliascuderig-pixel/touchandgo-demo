@@ -20,6 +20,7 @@ const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const path = require("node:path");
+const fs = require("node:fs");
 
 // ---- Fake minimale di @netlify/blobs, in memoria, azzerabile tra i test ----
 let stores = {};
@@ -61,6 +62,26 @@ function freshModule() {
   delete require.cache[require.resolve(handlerPath)];
   return require(handlerPath);
 }
+
+// Guardia di regressione: i codici errore della Visitor Access (Basic Auth
+// prima, login simulato poi) appartengono a due approcci scartati — non
+// devono ricomparire nel sorgente, nemmeno in un ramo morto/un blocco catch
+// dimenticato. Un errore in codice testuale, non nel comportamento a
+// runtime: legge il file sorgente direttamente, quindi cattura anche una
+// stringa residua che nessun test comportamentale rileverebbe se non fosse
+// mai raggiunta da nessun percorso testato.
+test("nessuna stringa residua dei vecchi codici errore Visitor Access nel sorgente di daily-healthcheck.js", () => {
+  const source = fs.readFileSync(handlerPath, "utf8");
+  const OLD_ERROR_CODES = [
+    "crm_visitor_auth_fallita",
+    "crm_visitor_auth_non_configurata",
+    "crm_visitor_login_fallito",
+    "crm_visitor_password_non_configurata",
+  ];
+  for (const code of OLD_ERROR_CODES) {
+    assert.ok(!source.includes(code), `il vecchio codice errore "${code}" non deve comparire più nel sorgente — approccio scartato (Basic Auth/login simulato)`);
+  }
+});
 
 const originalFetch = global.fetch;
 const originalEnv = { ...process.env };
