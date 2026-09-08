@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touch&Go — Tutorial animato della suite</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700&family=Montserrat:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+  /* ---- token reali verificati in dist/assets/style.css (tema chiaro, App/Partner/Sito) ---- */
+  :root{
+    --r-ink:#0F0F0F; --r-paper:#FAF8F4; --r-surface:#fff; --r-ivory:#F4EFE6;
+    --r-gold:#C9A96E; --r-gold-soft:#E8D5B0; --r-clay:#7A5C0A;
+    --r-line:#EAE4D8; --r-muted:#777; --r-muted-on-ink:#B8B0A0;
+    --r-good:#2E7D32; --r-good-bg:#EAF3EA;
+    --r-display:'Cormorant Garamond',ui-serif,Georgia,serif;
+    --r-body:'Montserrat',system-ui,sans-serif;
+    --r-radius:2px;
+  }
+  /* ---- token Manifesto (verificati davvero live, ma solo sul CRM) ---- */
+  :root{
+    --m-ink:#0A0806; --m-panel:#151109; --m-line:rgba(217,164,65,.2); --m-gold:#D9A441; --m-text:#F2EDE3;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:#1C1A16;color:#EDE7DC;
+    font-family:var(--r-body);
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    min-height:100vh;padding:32px 16px 60px;
+  }
+  .caption{text-align:center;margin-bottom:18px;max-width:480px}
+  .caption .eyebrow{color:var(--r-gold);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+  .caption h1{font-family:var(--r-display);font-size:24px;margin:0 0 6px;font-weight:600;color:#fff}
+  .caption p{color:#B8B0A0;font-size:13px;margin:0}
+
+  .tabs{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;justify-content:center}
+  .tab-btn{background:#26221C;border:1px solid #3A3427;color:#B8B0A0;font-family:var(--r-body);font-size:12.5px;padding:8px 15px;border-radius:999px;cursor:pointer;transition:.15s}
+  .tab-btn:hover{border-color:var(--r-gold);color:#fff}
+  .tab-btn.on{background:var(--r-gold);color:var(--r-ink);border-color:var(--r-gold);font-weight:600}
+
+  .device-wrap{display:none}
+  .device-wrap.active{display:flex;flex-direction:column;align-items:center}
+
+  /* ============ TELEFONO — tema chiaro reale (App / Partner) ============ */
+  .phone{width:300px;height:600px;border:8px solid #000;border-radius:32px;position:relative;overflow:hidden;background:var(--r-paper);box-shadow:0 30px 60px rgba(0,0,0,.5)}
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:22px;background:#000;border-radius:0 0 14px 14px;z-index:20}
+  .r-header{background:var(--r-ink);padding:30px 18px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2A251C}
+  .r-header .brand{font-family:var(--r-display);font-weight:600;font-size:19px;color:var(--r-gold-soft)}
+  .r-header .badge{background:var(--r-gold);color:var(--r-ink);font-size:9px;font-weight:700;padding:3px 9px;border-radius:var(--r-radius)}
+
+  .r-screens{position:relative;height:512px}
+  .r-screen{position:absolute;inset:0;padding:18px 20px;opacity:0;transform:translateX(24px);transition:opacity .5s ease,transform .5s ease;pointer-events:none;overflow:hidden}
+  .r-screen.active{opacity:1;transform:translateX(0);pointer-events:auto}
+
+  .r-progress{position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:6px;z-index:15}
+  .r-progress span{width:6px;height:6px;border-radius:50%;background:var(--r-line);transition:background .3s}
+  .r-progress span.on{background:var(--r-gold)}
+
+  .r-eyebrow{font-family:var(--r-display);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--r-clay);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .r-eyebrow::before{content:"";width:14px;height:1px;background:var(--r-clay)}
+
+  .r-capture{background:var(--r-ink);border-radius:var(--r-radius);padding:24px 18px;text-align:center;color:var(--r-ivory)}
+  .r-capture .ic{font-size:26px;margin-bottom:8px}
+  .r-capture h3{font-family:var(--r-display);font-size:17px;margin:0 0 6px;font-weight:600}
+  .r-capture p{font-size:11.5px;color:var(--r-muted-on-ink);margin:0}
+
+  .r-field{background:var(--r-surface);border:1px solid var(--r-line);border-radius:var(--r-radius);padding:9px 12px;margin-bottom:8px;font-size:12.5px;color:var(--r-ink);min-height:17px}
+  .r-field .fl{font-family:var(--r-display);font-size:9px;letter-spacing:.04em;color:var(--r-clay);text-transform:uppercase;display:block;margin-bottom:3px}
+  .r-caret{display:inline-block;width:1px;height:12px;background:var(--r-clay);margin-left:1px;vertical-align:middle;animation:blink .9s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  .r-title{font-family:var(--r-display);font-size:19px;font-weight:600;margin:6px 0 4px;color:var(--r-ink)}
+  .r-sub{font-size:11.5px;color:var(--r-muted);margin-bottom:12px}
+  .r-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--r-line);margin-bottom:12px;border:1px solid var(--r-line)}
+  .r-grid > div{background:var(--r-surface);padding:10px 12px}
+  .r-grid .g-lbl{font-family:var(--r-display);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--r-muted)}
+  .r-grid .g-val{font-size:12px;margin-top:2px;color:var(--r-ink);font-weight:500}
+
+  .r-price-card{background:var(--r-surface);border:1px solid var(--r-line);padding:14px 16px;margin-top:6px}
+  .r-price-card .pl{font-family:var(--r-display);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--r-clay)}
+  .r-info-row{display:flex;justify-content:space-between;font-size:12px;color:var(--r-muted);padding:4px 0}
+  .r-info-row.total{border-top:1px solid var(--r-ink);margin-top:6px;padding-top:8px;font-weight:700;color:var(--r-ink)}
+  .r-info-row.total b{font-family:var(--r-display);font-size:19px;font-weight:700}
+  .r-strike{font-size:11px;color:var(--r-muted);text-decoration:line-through;margin-right:5px}
+
+  .r-btn{width:100%;background:var(--r-ink);color:var(--r-ivory);border:none;border-radius:var(--r-radius);padding:13px 16px;font-family:var(--r-body);font-size:13px;font-weight:700;text-align:center;margin-top:10px}
+
+  .r-qr-wrap{text-align:center;padding-top:10px}
+  .r-booked-icon{width:44px;height:44px;border-radius:999px;background:var(--r-good-bg);color:var(--r-good);font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+  .r-booked-title{font-family:var(--r-display);font-size:17px;font-weight:600;color:var(--r-ink);margin-bottom:8px}
+  .r-qr-card{background:var(--r-surface);border:1px solid var(--r-line);padding:16px;margin:8px auto;max-width:190px}
+  .r-qr-box{width:110px;height:110px;margin:0 auto 8px;background:#fff}
+  .r-qr-code{font-family:var(--r-display);font-size:14px;font-weight:600;color:var(--r-ink);letter-spacing:.05em}
+  .r-qr-note{font-size:9px;color:var(--r-clay);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+  .r-note{font-size:10.5px;color:var(--r-muted);text-align:center;margin-top:8px;max-width:220px;margin-left:auto;margin-right:auto}
+
+  .r-stars{font-size:22px;letter-spacing:3px;color:var(--r-line);text-align:center;margin:6px 0 4px}
+  .r-stars .lit{color:var(--r-gold)}
+  .r-stars-label{text-align:center;font-family:var(--r-display);font-size:14px;color:var(--r-clay);margin-bottom:10px;min-height:19px}
+
+  .r-stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .r-stat-card{background:var(--r-surface);border:1px solid var(--r-line);padding:11px 12px}
+  .r-stat-card .sl{font-family:var(--r-display);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--r-clay)}
+  .r-stat-card .sv{font-family:var(--r-display);font-weight:600;font-size:19px;color:var(--r-ink);margin-top:3px}
+
+  .r-row{display:flex;justify-content:space-between;align-items:center;background:var(--r-surface);border:1px solid var(--r-line);padding:9px 11px;margin-bottom:6px;font-size:11px;color:var(--r-ink)}
+  .r-row .pill{font-size:9px;font-weight:700;padding:2px 8px;background:var(--r-gold-soft);color:var(--r-clay);border-radius:var(--r-radius)}
+
+  .r-discount{background:var(--r-ivory);border:1px solid var(--r-line);padding:16px;text-align:center;margin-top:6px}
+  .r-discount .dl{font-family:var(--r-display);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--r-clay)}
+  .r-discount .dc{font-family:var(--r-display);font-weight:700;font-size:20px;margin:6px 0 2px;color:var(--r-ink);opacity:0;transition:opacity .3s}
+  .r-discount .dc.show{opacity:1}
+  .r-discount .dn{font-size:9.5px;color:var(--r-muted)}
+
+  /* ============ BROWSER — sito, stesso tema chiaro ============ */
+  .browser{width:320px;height:600px;background:var(--r-paper);border-radius:12px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.5);display:flex;flex-direction:column}
+  .browser-bar{background:var(--r-ink);border-bottom:1px solid #2A251C;padding:10px 14px;display:flex;align-items:center;gap:6px}
+  .browser-bar .dot{width:7px;height:7px;border-radius:50%;background:var(--r-gold-soft);opacity:.5}
+  .browser-bar .url{margin-left:8px;font-size:10px;color:var(--r-muted-on-ink);background:#26221C;border-radius:999px;padding:3px 10px;flex:1}
+  .browser .r-screens{height:540px}
+  .hero-pill{display:inline-block;background:var(--r-ivory);border:1px solid var(--r-line);color:var(--r-clay);font-size:9.5px;padding:4px 12px;border-radius:999px;margin-bottom:12px;font-family:var(--r-display)}
+  .hero-title{font-family:var(--r-display);font-size:24px;line-height:1.15;margin-bottom:8px;color:var(--r-ink)}
+  .hero-title b{color:var(--r-clay);font-weight:700}
+  .plan-row{display:flex;flex-direction:column;gap:7px}
+  .plan-card{background:var(--r-surface);border:1px solid var(--r-line);padding:11px 14px;display:flex;justify-content:space-between;align-items:center}
+  .plan-card.hi{border-color:var(--r-gold);background:var(--r-ivory)}
+  .plan-card .pn{font-family:var(--r-display);font-size:14.5px;color:var(--r-ink)}
+  .plan-card .pp{font-size:11.5px;color:var(--r-clay)}
+
+  /* ============ CRM — Manifesto, davvero live, stile invariato ============ */
+  .m-phone{width:300px;height:600px;border:8px solid #000;border-radius:32px;position:relative;overflow:hidden;background:var(--m-ink);box-shadow:0 30px 60px rgba(0,0,0,.5)}
+  .m-header{padding:30px 18px 10px;display:flex;justify-content:space-between;align-items:center;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;letter-spacing:.02em;color:var(--m-text);text-transform:uppercase}
+  .m-header .badge{background:var(--m-gold);color:var(--m-ink);font-size:9px;font-weight:700;padding:3px 9px;border-radius:3px}
+  .m-screens{position:relative;height:534px}
+  .m-screen{position:absolute;inset:0;padding:6px 18px 18px;opacity:0;transform:translateX(24px);transition:opacity .5s ease,transform .5s ease;pointer-events:none;overflow:hidden}
+  .m-screen.active{opacity:1;transform:translateX(0);pointer-events:auto}
+  .m-progress{position:absolute;bottom:14px;left:0;right:0;display:flex;justify-content:center;gap:6px;z-index:15}
+  .m-progress span{width:6px;height:6px;background:rgba(217,164,65,.25)}
+  .m-progress span.on{background:var(--m-gold)}
+  .m-step-lbl{font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:.05em;color:var(--m-gold);text-transform:uppercase;margin-bottom:10px;font-weight:600}
+  .m-card{background:var(--m-panel);border:1px solid var(--m-line);padding:20px 16px;text-align:center}
+  .m-card .ct{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;color:var(--m-text);margin-bottom:8px}
+  .m-pw-dots{display:flex;gap:8px;justify-content:center;margin:18px 0}
+  .m-pw-dot{width:11px;height:11px;border:1px solid var(--m-line);background:transparent}
+  .m-pw-dot.filled{background:var(--m-gold);border-color:var(--m-gold)}
+  .m-stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .m-stat-card{background:var(--m-panel);border:1px solid var(--m-line);padding:12px}
+  .m-stat-card .sl{font-size:8.5px;color:#A79C8A;text-transform:uppercase;font-family:'Space Grotesk',sans-serif}
+  .m-stat-card .sv{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;color:var(--m-gold);margin-top:4px}
+  .m-section-lbl{font-family:'Space Grotesk',sans-serif;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:#A79C8A;margin:12px 0 7px;border-top:1px solid var(--m-line);padding-top:10px}
+  .m-row{display:flex;justify-content:space-between;align-items:center;background:var(--m-panel);border:1px solid var(--m-line);padding:9px 11px;margin-bottom:6px;font-size:11px;color:var(--m-text)}
+  .m-row .pill{font-family:'Space Grotesk',sans-serif;font-size:8.5px;font-weight:600;padding:2px 8px;background:rgba(217,164,65,.15);color:var(--m-gold)}
+  .m-row .pill.warn{background:rgba(224,150,80,.18);color:#e0a860}
+  .m-row .pill.wait{background:rgba(217,164,65,.1);color:#A79C8A}
+  .m-sub{font-size:10.5px;color:#A79C8A;text-align:left}
+
+  .replay{margin-top:20px;background:none;border:1px solid #3A3427;color:#B8B0A0;border-radius:999px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:var(--r-body)}
+  .replay:hover{border-color:var(--r-gold);color:var(--r-gold)}
+</style>
+</head>
+<body>
+
+  <div class="caption">
+    <div class="eyebrow">Touch&Go — Tutorial animato</div>
+    <h1>La suite in movimento</h1>
+    <p>Stessa grafica reale dell'app oggi in produzione — così ogni passaggio ti sarà familiare quando lo rivedrai davvero.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn on" data-target="app">App turista</button>
+    <button class="tab-btn" data-target="partner">Area partner</button>
+    <button class="tab-btn" data-target="sito">Sito</button>
+    <button class="tab-btn" data-target="crm">CRM</button>
+  </div>
+
+  <!-- ============ APP TURISTA — 6 schermate, tema chiaro reale ============ -->
+  <div class="device-wrap active" id="dev-app">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="r-header"><span class="brand">Touch&Go</span><span class="badge">Turista</span></div>
+      <div class="r-screens">
+        <div class="r-screen active" data-screen="0">
+          <div class="r-eyebrow">Passo 1 · Fotografa l'acquisto</div>
+          <div class="r-capture">
+            <div class="ic">📷</div>
+            <h3>Fotografa l'oggetto</h3>
+            <p>Tocca per aprire la fotocamera</p>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="1">
+          <div class="r-eyebrow">Passo 2 · Risultato</div>
+          <div class="r-title">Borsa in pelle, artigianale</div>
+          <div class="r-sub">✓ Identificato · confidenza alta</div>
+          <div class="r-grid">
+            <div><div class="g-lbl">Peso stimato</div><div class="g-val">1,2 kg</div></div>
+            <div><div class="g-lbl">Destinazione</div><div class="g-val">Francia</div></div>
+          </div>
+          <div class="r-price-card">
+            <div class="pl">Stima per spedizione singola</div>
+            <div class="r-info-row total"><span>Totale</span><b>€64,00</b></div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="2">
+          <div class="r-eyebrow">Passo 3 · Concludi il soggiorno</div>
+          <div class="r-row"><span>Borsa in pelle</span><span class="pill">€64,00</span></div>
+          <div class="r-row"><span>Scarpe artigianali</span><span class="pill">€58,00</span></div>
+          <div class="r-sub" style="margin-top:8px">2 oggetti verranno consolidati in 1 spedizione</div>
+          <div class="r-price-card">
+            <div class="pl">Totale da confermare e pagare</div>
+            <div class="r-info-row total"><span></span><b><span class="r-strike">€122,00</span>€98,00</b></div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="3">
+          <div class="r-eyebrow">Ultimo passo · Registrati per spedire</div>
+          <div class="r-field"><span class="fl">Il tuo nome</span><span id="app-type-name"></span><span class="r-caret" id="app-caret-name"></span></div>
+          <div class="r-field"><span class="fl">Email</span><span id="app-type-email"></span><span class="r-caret" id="app-caret-email" style="display:none"></span></div>
+          <div class="r-field"><span class="fl">Città</span><span id="app-type-city"></span><span class="r-caret" id="app-caret-city" style="display:none"></span></div>
+          <div class="r-btn" id="app-save-btn">Salva e continua →</div>
+        </div>
+        <div class="r-screen" data-screen="4">
+          <div class="r-qr-wrap">
+            <div class="r-booked-icon">✓</div>
+            <div class="r-booked-title">Ordine confermato e pagato</div>
+            <div class="r-qr-card">
+              <svg class="r-qr-box" viewBox="0 0 100 100" width="110" height="110">
+                <rect width="100" height="100" fill="#fff"/>
+                <g fill="#0F0F0F">
+                  <rect x="6" y="6" width="22" height="22"/><rect x="10" y="10" width="14" height="14" fill="#fff"/><rect x="14" y="14" width="6" height="6"/>
+                  <rect x="72" y="6" width="22" height="22"/><rect x="76" y="10" width="14" height="14" fill="#fff"/><rect x="80" y="14" width="6" height="6"/>
+                  <rect x="6" y="72" width="22" height="22"/><rect x="10" y="76" width="14" height="14" fill="#fff"/><rect x="14" y="80" width="6" height="6"/>
+                  <rect x="34" y="8" width="4" height="4"/><rect x="42" y="8" width="4" height="4"/><rect x="50" y="14" width="4" height="4"/>
+                  <rect x="34" y="20" width="4" height="4"/><rect x="58" y="20" width="4" height="4"/><rect x="34" y="34" width="4" height="4"/>
+                  <rect x="44" y="34" width="4" height="4"/><rect x="52" y="34" width="4" height="4"/><rect x="60" y="34" width="4" height="4"/>
+                  <rect x="34" y="44" width="4" height="4"/><rect x="66" y="44" width="4" height="4"/><rect x="34" y="52" width="4" height="4"/>
+                  <rect x="44" y="52" width="4" height="4"/><rect x="60" y="52" width="4" height="4"/><rect x="34" y="60" width="4" height="4"/>
+                  <rect x="50" y="60" width="4" height="4"/><rect x="66" y="60" width="4" height="4"/><rect x="42" y="66" width="4" height="4"/>
+                  <rect x="58" y="66" width="4" height="4"/><rect x="34" y="76" width="4" height="4"/><rect x="44" y="82" width="4" height="4"/>
+                  <rect x="52" y="76" width="4" height="4"/><rect x="60" y="84" width="4" height="4"/><rect x="66" y="76" width="4" height="4"/>
+                  <rect x="84" y="36" width="4" height="4"/><rect x="84" y="46" width="4" height="4"/><rect x="84" y="58" width="4" height="4"/>
+                  <rect x="84" y="70" width="4" height="4"/><rect x="84" y="82" width="4" height="4"/>
+                </g>
+              </svg>
+              <div class="r-qr-code">TG-A7K92M</div>
+              <div class="r-qr-note">2 oggetti · Francia</div>
+            </div>
+            <div class="r-note">Il corriere ritira tutto entro 24 ore</div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="5">
+          <div class="r-eyebrow">Dopo la consegna · Lascia una recensione</div>
+          <div class="r-stars" id="app-stars">★★★★★</div>
+          <div class="r-stars-label" id="app-stars-label"></div>
+          <div class="r-field" style="min-height:36px"><span class="fl">Il tuo commento</span><span id="app-type-review"></span><span class="r-caret" id="app-caret-review" style="display:none"></span></div>
+          <div class="r-note">Resta sempre privata — nessuna pubblicazione automatica</div>
+        </div>
+        <div class="r-screen" data-screen="6">
+          <div class="r-eyebrow">La tua spesa</div>
+          <div class="r-stat-row">
+            <div class="r-stat-card"><div class="sl">Acquisti registrati</div><div class="sv">3</div></div>
+            <div class="r-stat-card"><div class="sl">Speso in servizi</div><div class="sv">€152,80</div></div>
+          </div>
+          <div class="r-eyebrow" style="margin-top:12px">Risparmieresti abbonandoti</div>
+          <div class="r-price-card">
+            <div class="r-info-row total"><span></span><b>€28,00</b></div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="7">
+          <div class="r-eyebrow">I tuoi acquisti</div>
+          <div class="r-row"><span>Borsa in pelle</span><span class="pill">In sospeso</span></div>
+          <div class="r-row"><span>Scarpe artigianali</span><span class="pill">In confezionamento</span></div>
+          <div class="r-btn" style="margin-top:2px">📦 Richiedi ritiro</div>
+          <div class="r-note" style="margin-top:10px">Parte solo quando concludi il soggiorno</div>
+        </div>
+        <div class="r-screen" data-screen="8">
+          <div class="r-eyebrow">Lettera di vettura</div>
+          <div class="r-row"><span>Riferimento</span><span class="pill">TG-A7K92M</span></div>
+          <div class="r-row"><span>Contenuto</span><span class="pill">Borsa in pelle</span></div>
+          <div class="r-row"><span>Esenzione IVA</span><span class="pill">Art. 8 DPR 633/72</span></div>
+          <div class="r-note" style="margin-top:8px">Generata automaticamente, nessun modulo da compilare</div>
+        </div>
+        <div class="r-screen" data-screen="9">
+          <div class="r-eyebrow">Primo avvio · Onboarding</div>
+          <div class="r-capture">
+            <h3>Confermi ritiro e destinazione</h3>
+            <p>Poi lasci l'oggetto con un QR, e alla fine concludiamo e consolidiamo</p>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="10">
+          <div class="r-eyebrow">Destinazione</div>
+          <div class="r-field"><span class="fl">Paese di destinazione</span><span>Francia</span></div>
+          <div class="r-field"><span class="fl">Indirizzo di destinazione</span><span>Casa — Parigi</span></div>
+          <div class="r-note" style="margin-top:8px">← Rifai la foto, se serve tornare indietro</div>
+        </div>
+        <div class="r-screen" data-screen="11">
+          <div class="r-eyebrow">Verifica imballo</div>
+          <div class="r-capture">
+            <div class="ic">📦</div>
+            <h3>Fotografa l'imballo pronto</h3>
+            <p>Dimensioni consigliate: 34 × 22 × 12 cm</p>
+          </div>
+          <div class="r-price-card" style="text-align:center;margin-top:10px"><b style="color:var(--r-good)">✓ Imballo conforme</b></div>
+        </div>
+        <div class="r-screen" data-screen="12">
+          <div class="r-qr-wrap">
+            <div style="font-size:26px;margin-bottom:8px">🕓</div>
+            <div class="r-booked-title">QR generato — in sospeso</div>
+            <div class="r-note">Mostra questo QR al negozio. Il ritiro non parte ancora: resta in sospeso finché non concludi il soggiorno</div>
+          </div>
+        </div>
+      </div>
+      <div class="r-progress" id="app-progress">
+        <span data-dot="0" class="on"></span><span data-dot="1"></span><span data-dot="2"></span>
+        <span data-dot="3"></span><span data-dot="4"></span><span data-dot="5"></span>
+        <span data-dot="6"></span><span data-dot="7"></span><span data-dot="8"></span>
+        <span data-dot="9"></span><span data-dot="10"></span><span data-dot="11"></span><span data-dot="12"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ AREA PARTNER — 4 schermate, stesso tema chiaro (mai ricevuto Manifesto) ============ -->
+  <div class="device-wrap" id="dev-partner">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="r-header"><span class="brand">Touch&Go</span><span class="badge">Partner</span></div>
+      <div class="r-screens">
+        <div class="r-screen active" data-screen="0">
+          <div class="r-eyebrow">Accesso</div>
+          <div class="r-capture">
+            <h3>Accedi con il codice</h3>
+            <p style="margin-bottom:14px">Nessuna password — il codice è la chiave</p>
+            <div class="r-field" style="text-align:left;background:#1c1a16;border-color:#3A3427"><span class="fl" style="color:var(--r-gold-soft)">Codice partner</span><span id="pt-type-code" style="color:var(--r-ivory)"></span><span class="r-caret" id="pt-caret-code"></span></div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="1">
+          <div class="r-eyebrow">Panoramica</div>
+          <div class="r-title" style="font-size:16px">Negozio Demo</div>
+          <div class="r-sub">Piano Boutique · Attivo</div>
+          <div class="r-stat-row">
+            <div class="r-stat-card"><div class="sl">Credito</div><div class="sv">€128</div></div>
+            <div class="r-stat-card"><div class="sl">Vendite</div><div class="sv">14</div></div>
+          </div>
+          <div class="r-eyebrow" style="margin-top:12px">Andamento</div>
+          <div class="r-row"><span>Spedizione TG-9F2K1</span><span class="pill">+€6,40</span></div>
+          <div class="r-row"><span>Spedizione TG-7B3M0</span><span class="pill">+€5,20</span></div>
+        </div>
+        <div class="r-screen" data-screen="2">
+          <div class="r-eyebrow">Credito e sconti</div>
+          <div class="r-sub">Genera un codice sconto per un cliente</div>
+          <div class="r-discount">
+            <div class="dl">Codice sconto generato</div>
+            <div class="dc" id="pt-discount-code">SCONTO7X2</div>
+            <div class="dn">10% sulla fee di servizio, valido una volta</div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="3">
+          <div class="r-qr-wrap">
+            <div class="r-booked-icon">✓</div>
+            <div class="r-booked-title" style="font-size:15px">QR del negozio</div>
+            <div class="r-qr-card">
+              <svg class="r-qr-box" viewBox="0 0 100 100" width="110" height="110">
+                <rect width="100" height="100" fill="#fff"/>
+                <g fill="#0F0F0F">
+                  <rect x="6" y="6" width="22" height="22"/><rect x="10" y="10" width="14" height="14" fill="#fff"/><rect x="14" y="14" width="6" height="6"/>
+                  <rect x="72" y="6" width="22" height="22"/><rect x="76" y="10" width="14" height="14" fill="#fff"/><rect x="80" y="14" width="6" height="6"/>
+                  <rect x="6" y="72" width="22" height="22"/><rect x="10" y="76" width="14" height="14" fill="#fff"/><rect x="14" y="80" width="6" height="6"/>
+                  <rect x="38" y="10" width="4" height="4"/><rect x="46" y="16" width="4" height="4"/><rect x="54" y="10" width="4" height="4"/>
+                  <rect x="36" y="36" width="4" height="4"/><rect x="46" y="36" width="4" height="4"/><rect x="56" y="36" width="4" height="4"/>
+                  <rect x="36" y="46" width="4" height="4"/><rect x="66" y="46" width="4" height="4"/><rect x="36" y="56" width="4" height="4"/>
+                  <rect x="46" y="56" width="4" height="4"/><rect x="60" y="56" width="4" height="4"/><rect x="36" y="66" width="4" height="4"/>
+                  <rect x="50" y="66" width="4" height="4"/><rect x="66" y="66" width="4" height="4"/><rect x="44" y="80" width="4" height="4"/>
+                  <rect x="56" y="80" width="4" height="4"/><rect x="84" y="38" width="4" height="4"/><rect x="84" y="52" width="4" height="4"/>
+                  <rect x="84" y="66" width="4" height="4"/><rect x="84" y="80" width="4" height="4"/>
+                </g>
+              </svg>
+              <div class="r-qr-code">NDP924</div>
+              <div class="r-qr-note">Codice negozio</div>
+            </div>
+            <div class="r-note">Il cliente lo scansiona in negozio</div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="4">
+          <div class="r-eyebrow">Andamento</div>
+          <div class="r-row"><span>Sett. scorsa</span><span class="pill">+€18,60</span></div>
+          <div class="r-row"><span>2 settimane fa</span><span class="pill">+€22,10</span></div>
+          <div class="r-row"><span>3 settimane fa</span><span class="pill">+€14,90</span></div>
+          <div class="r-note" style="margin-top:8px">14 vendite generate finora tramite il tuo codice</div>
+        </div>
+        <div class="r-screen" data-screen="5">
+          <div class="r-eyebrow">Cambia piano</div>
+          <div class="r-row"><span>Free</span><span class="pill">€0/mese</span></div>
+          <div class="r-row" style="border-color:var(--r-gold)"><span>Boutique · attivo</span><span class="pill">€49/mese</span></div>
+          <div class="r-row"><span>Flagship</span><span class="pill">€99/mese</span></div>
+          <div class="r-note" style="margin-top:8px">Solo i piani a pagamento maturano commissione</div>
+        </div>
+      </div>
+      <div class="r-progress" id="partner-progress"><span data-dot="0" class="on"></span><span data-dot="1"></span><span data-dot="2"></span><span data-dot="3"></span><span data-dot="4"></span><span data-dot="5"></span></div>
+    </div>
+  </div>
+
+  <!-- ============ SITO — 4 schermate, tema chiaro reale ============ -->
+  <div class="device-wrap" id="dev-sito">
+    <div class="browser">
+      <div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">touchandgo.it</span></div>
+      <div class="r-screens">
+        <div class="r-screen active" data-screen="0">
+          <div style="padding-top:30px">
+            <div class="hero-pill">Nuovo · disponibile in tutta Italia</div>
+            <div class="hero-title">Compri in Italia.<br><b>Lo ritrovi</b> a casa.</div>
+            <div class="r-sub">Classificazione doganale AI, esenzione IVA automatica, spedizione consolidata.</div>
+            <div class="r-btn" style="width:auto;display:inline-block;padding:11px 22px">Scopri come funziona →</div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="1">
+          <div style="padding-top:26px">
+            <div class="r-eyebrow">Per i partner</div>
+            <div class="plan-row">
+              <div class="plan-card"><span class="pn">Free</span><span class="pp">€0/mese</span></div>
+              <div class="plan-card hi"><span class="pn">Boutique</span><span class="pp">€49/mese</span></div>
+              <div class="plan-card"><span class="pn">Flagship</span><span class="pp">€99/mese</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="2">
+          <div style="padding-top:28px">
+            <div class="r-eyebrow">Sei già registrato?</div>
+            <div class="r-capture">
+              <h3>Hai già un account partner?</h3>
+              <div class="r-btn">Accedi alla tua area →</div>
+            </div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="3">
+          <div style="padding-top:30px;text-align:center">
+            <div class="r-eyebrow" style="justify-content:center">Contatti</div>
+            <div class="r-capture">
+              <div style="font-size:20px;margin-bottom:8px">✉️</div>
+              <div class="r-btn">Scrivici → partnership@touchandgo.it</div>
+            </div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="4">
+          <div style="padding-top:26px">
+            <div class="r-eyebrow">Come funziona</div>
+            <div class="r-row"><span>1 · Fotografa l'acquisto</span><span class="pill">AI</span></div>
+            <div class="r-row"><span>2 · Lascia l'oggetto col QR</span><span class="pill">Negozio</span></div>
+            <div class="r-row"><span>3 · Ricevi tutto a casa</span><span class="pill">Corriere</span></div>
+          </div>
+        </div>
+        <div class="r-screen" data-screen="5">
+          <div style="padding-top:26px">
+            <div class="r-eyebrow">Registra il tuo negozio</div>
+            <div class="r-field"><span class="fl">Nome negozio</span><span>Boutique Rossi</span></div>
+            <div class="r-field"><span class="fl">Piano</span><span>Boutique — €49/mese</span></div>
+            <div class="r-btn">Registrati come partner →</div>
+          </div>
+        </div>
+      </div>
+      <div class="r-progress" id="sito-progress"><span data-dot="0" class="on"></span><span data-dot="1"></span><span data-dot="2"></span><span data-dot="3"></span><span data-dot="4"></span><span data-dot="5"></span></div>
+    </div>
+  </div>
+
+  <!-- ============ CRM — Manifesto, davvero live ============ -->
+  <div class="device-wrap" id="dev-crm">
+    <div class="m-phone">
+      <div class="notch"></div>
+      <div class="m-header"><span>Gestionale</span><span class="badge">Staff</span></div>
+      <div class="m-screens">
+        <div class="m-screen active" data-screen="0">
+          <div class="m-step-lbl">Accesso riservato</div>
+          <div class="m-card">
+            <div class="ct">Password</div>
+            <div class="m-pw-dots">
+              <span class="m-pw-dot" id="crm-dot-0"></span><span class="m-pw-dot" id="crm-dot-1"></span>
+              <span class="m-pw-dot" id="crm-dot-2"></span><span class="m-pw-dot" id="crm-dot-3"></span>
+              <span class="m-pw-dot" id="crm-dot-4"></span><span class="m-pw-dot" id="crm-dot-5"></span>
+            </div>
+          </div>
+        </div>
+        <div class="m-screen" data-screen="1">
+          <div class="m-step-lbl">Panoramica</div>
+          <div class="m-stat-row">
+            <div class="m-stat-card"><div class="sl">Acquisti totali</div><div class="sv">128</div></div>
+            <div class="m-stat-card"><div class="sl">Ricavo servizi</div><div class="sv">€3.140</div></div>
+          </div>
+          <div class="m-section-lbl">Andamento 14 giorni</div>
+          <div class="m-row"><span>Sedia, TG-Y1N2</span><span class="pill">Ritirato</span></div>
+          <div class="m-row"><span>Cornici, TG-G4VP</span><span class="pill">Ritirato</span></div>
+        </div>
+        <div class="m-screen" data-screen="2">
+          <div class="m-step-lbl">Acquisti</div>
+          <div class="m-row"><span>Borsa, TG-A7K92M</span><span class="pill">In sospeso</span></div>
+          <div class="m-row"><span>Sedia, TG-Y1N258</span><span class="pill warn">⚠ Segnalato</span></div>
+          <div class="m-row"><span>Radio, TG-D7U4BZ</span><span class="pill">Ritirato</span></div>
+          <div class="m-section-lbl">Dettaglio</div>
+          <div class="m-sub">Secondo acquisto senza abbonamento — solo segnalazione, nessun blocco automatico</div>
+        </div>
+        <div class="m-screen" data-screen="3">
+          <div class="m-step-lbl">Recensioni</div>
+          <div class="m-row"><span>★★★★★ Negozio Demo</span><span class="pill">⭐ In evidenza</span></div>
+          <div class="m-row"><span>★★★★☆ Acquisto TG-D7U4</span><span class="pill wait">In attesa</span></div>
+          <div class="m-sub" style="margin-top:8px">Approva o rifiuta — la pubblicazione resta sempre manuale</div>
+        </div>
+        <div class="m-screen" data-screen="4">
+          <div class="m-step-lbl">Sistema</div>
+          <div class="m-row"><span>Sito principale</span><span class="pill">OK · 210ms</span></div>
+          <div class="m-row"><span>Spazio ospite</span><span class="pill">OK · 198ms</span></div>
+          <div class="m-row"><span>Router</span><span class="pill">OK · 84ms</span></div>
+          <div class="m-row"><span>CRM</span><span class="pill">OK · 156ms</span></div>
+          <div class="m-section-lbl">Controllo automatico — ogni giorno alle 06:00</div>
+        </div>
+        <div class="m-screen" data-screen="5">
+          <div class="m-step-lbl">Partner & Commissioni</div>
+          <div class="m-row"><span>Negozio Demo</span><span class="pill">€128 credito</span></div>
+          <div class="m-row"><span>Boutique Rossi</span><span class="pill">⭐ In evidenza</span></div>
+          <div class="m-sub" style="margin-top:8px">Il piano Free non matura mai commissione</div>
+        </div>
+        <div class="m-screen" data-screen="6">
+          <div class="m-step-lbl">Riconciliazione</div>
+          <div class="m-row"><span>Acquisti da spazio ospite</span><span class="pill">0 in attesa</span></div>
+          <div class="m-row"><span>Ultimo controllo</span><span class="pill">Oggi 06:00</span></div>
+          <div class="m-sub" style="margin-top:8px">Recupera i dati generati durante un eventuale guasto</div>
+        </div>
+      </div>
+      <div class="m-progress" id="crm-progress"><span data-dot="0" class="on"></span><span data-dot="1"></span><span data-dot="2"></span><span data-dot="3"></span><span data-dot="4"></span><span data-dot="5"></span><span data-dot="6"></span></div>
+    </div>
+  </div>
+
+  <button class="replay" id="replay-btn">↻ Rivedi la scheda corrente dall'inizio</button>
+
+<script>
+(function(){
+  const state = { current: 'app', timers: [] };
+
+  function clearTimers(){ state.timers.forEach(t => clearTimeout(t)); state.timers = []; }
+
+  function showScreen(deviceId, screenSel, progressId, i){
+    document.querySelectorAll('#' + deviceId + ' ' + screenSel).forEach(s => s.classList.toggle('active', +s.dataset.screen === i));
+    document.querySelectorAll('#' + progressId + ' span').forEach(d => d.classList.toggle('on', +d.dataset.dot === i));
+  }
+
+  function typeInto(elId, caretId, text, speed, onDone){
+    const el = document.getElementById(elId);
+    const caret = caretId ? document.getElementById(caretId) : null;
+    el.textContent = '';
+    if (caret) caret.style.display = 'inline-block';
+    let i = 0;
+    function step(){
+      if (i <= text.length){
+        el.textContent = text.slice(0, i);
+        i++;
+        state.timers.push(setTimeout(step, speed));
+      } else {
+        if (caret) caret.style.display = 'none';
+        if (onDone) onDone();
+      }
+    }
+    step();
+  }
+
+  function runSequence(deviceId, screenSel, progressId, durations, onEnter, loopFn){
+    showScreen(deviceId, screenSel, progressId, 0);
+    if (onEnter[0]) onEnter[0]();
+    let cumulative = 0;
+    for (let i = 0; i < durations.length; i++){
+      cumulative += durations[i];
+      const nextIndex = i + 1;
+      state.timers.push(setTimeout(((idx) => () => {
+        if (idx < durations.length){
+          showScreen(deviceId, screenSel, progressId, idx);
+          if (onEnter[idx]) onEnter[idx]();
+        } else {
+          loopFn();
+        }
+      })(nextIndex), cumulative));
+    }
+  }
+
+  // ---------------- APP (6 screens) ----------------
+  function appOnEnter3(){
+    typeInto('app-type-name','app-caret-name','Maria Rossi',55,()=>{
+      state.timers.push(setTimeout(()=>{
+        typeInto('app-type-email','app-caret-email','maria@esempio.com',40,()=>{
+          state.timers.push(setTimeout(()=>{
+            typeInto('app-type-city','app-caret-city','Parigi',70,()=>{
+              const btn = document.getElementById('app-save-btn');
+              state.timers.push(setTimeout(()=>{ btn.style.opacity='.6'; },500));
+            });
+          },250));
+        });
+      },250));
+    });
+  }
+  function appOnEnter5(){
+    const starsEl = document.getElementById('app-stars');
+    const labelEl = document.getElementById('app-stars-label');
+    const labels = ['','Scarso','Così così','Buono','Ottimo','Eccellente!'];
+    let n = 0;
+    function fillStar(){
+      n++;
+      starsEl.innerHTML = '<span class="lit">' + '★'.repeat(n) + '</span>' + '★'.repeat(5-n);
+      labelEl.textContent = labels[n];
+      if (n < 5) state.timers.push(setTimeout(fillStar, 160));
+      else state.timers.push(setTimeout(()=>{
+        typeInto('app-type-review','app-caret-review','Servizio eccellente!',45);
+      }, 300));
+    }
+    starsEl.innerHTML = '★★★★★';
+    fillStar();
+  }
+  function runApp(){
+    runSequence('dev-app','.r-screen','app-progress',
+      [2200, 2800, 2800, 3150, 2600, 2400, 2600, 2800, 2600, 2400, 2600, 2800, 2600],
+      { 3: appOnEnter3, 5: appOnEnter5 },
+      () => switchTo('partner')
+    );
+  }
+
+  // ---------------- PARTNER (4 screens) ----------------
+  function partnerOnEnter0(){ typeInto('pt-type-code','pt-caret-code','NDP924',90); }
+  function partnerOnEnter2(){
+    const codeEl = document.getElementById('pt-discount-code');
+    codeEl.classList.remove('show');
+    state.timers.push(setTimeout(()=>{ codeEl.classList.add('show'); }, 500));
+  }
+  function runPartner(){
+    runSequence('dev-partner','.r-screen','partner-progress',
+      [1800, 2800, 2800, 2600, 2600, 2600],
+      { 0: partnerOnEnter0, 2: partnerOnEnter2 },
+      () => switchTo('sito')
+    );
+  }
+
+  // ---------------- SITO (4 screens) ----------------
+  function runSito(){
+    runSequence('dev-sito','.r-screen','sito-progress', [2600, 2600, 2200, 2200, 2400, 2600], {}, () => switchTo('crm'));
+  }
+
+  // ---------------- CRM (5 screens) ----------------
+  function crmOnEnter0(){
+    document.querySelectorAll('.m-pw-dot').forEach(d => d.classList.remove('filled'));
+    for (let d = 0; d < 6; d++){
+      state.timers.push(setTimeout(() => {
+        const el = document.getElementById('crm-dot-' + d);
+        if (el) el.classList.add('filled');
+      }, 350 * (d + 1)));
+    }
+  }
+  function runCrm(){
+    runSequence('dev-crm','.m-screen','crm-progress',
+      [3000, 2800, 2800, 2800, 3000, 2600, 2600],
+      { 0: crmOnEnter0 },
+      () => switchTo('app')
+    );
+  }
+
+  const RUNNERS = { app: runApp, partner: runPartner, sito: runSito, crm: runCrm };
+  const DEVICES = { app: 'dev-app', partner: 'dev-partner', sito: 'dev-sito', crm: 'dev-crm' };
+
+  function switchTo(key){
+    clearTimers();
+    state.current = key;
+    Object.values(DEVICES).forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById(DEVICES[key]).classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('on', b.dataset.target === key));
+    RUNNERS[key]();
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTo(btn.dataset.target));
+  });
+  document.getElementById('replay-btn').addEventListener('click', () => switchTo(state.current));
+
+  switchTo('app');
+})();
+</script>
+
+</body>
+</html>
