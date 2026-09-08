@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touch&Go — Presentazione della suite e guida all'utilizzo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Familjen+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ink:#14100B;
+    --panel:#1D1710;
+    --panel-2:#241D14;
+    --line:rgba(217,164,65,.22);
+    --line-strong:rgba(217,164,65,.5);
+    --gold:#D9A441;
+    --gold-soft:rgba(217,164,65,.14);
+    --text:#F2EDE3;
+    --muted:#A79C8A;
+    --clay:#D9A441;
+    --ink-fixed-dark:#14100B;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Familjen Grotesk',system-ui,sans-serif;
+    line-height:1.5;
+  }
+  h1,h2,h3{font-family:'Cormorant Garamond',serif;font-weight:600;margin:0 0 .3em}
+  .wrap{max-width:980px;margin:0 auto;padding:56px 24px 120px}
+  a{color:inherit}
+
+  .cover{padding:56px 0 40px;text-align:center}
+  .eyebrow{color:var(--clay);font-size:13px;letter-spacing:.06em;margin-bottom:14px;text-transform:uppercase}
+  .cover h1{font-size:clamp(30px,5.5vw,48px);max-width:20ch;margin:0 auto}
+  .cover p{color:var(--muted);font-size:16px;max-width:56ch;margin:14px auto 0}
+  .cover-meta{display:flex;gap:20px;margin-top:28px;flex-wrap:wrap;justify-content:center}
+  .cover-meta div{font-size:12.5px;color:var(--muted)}
+  .cover-meta b{display:block;color:var(--text);font-size:14px;font-weight:500}
+
+  .hub-section{padding:36px 0 8px}
+  .hub-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-template-rows:auto auto auto;
+    gap:14px 22px;
+    max-width:820px;
+    margin:0 auto;
+    position:relative;
+  }
+  .hub-center{
+    grid-column:1/4;grid-row:2;
+    display:flex;align-items:center;justify-content:center;
+    padding:26px 20px;
+  }
+  .hub-device{
+    width:100%;max-width:300px;
+    background:linear-gradient(165deg,var(--panel-2) 0%,var(--panel) 100%);
+    border:1px solid var(--line-strong);
+    border-radius:18px;
+    padding:22px 20px 18px;
+    text-align:center;
+    box-shadow:0 0 0 6px rgba(217,164,65,.05);
+  }
+  .hub-device .hd-eyebrow{font-size:10.5px;letter-spacing:.08em;color:var(--clay);text-transform:uppercase;margin-bottom:6px}
+  .hub-device .hd-title{font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--text)}
+  .hub-device .hd-sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+  .hub-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px 14px;
+    text-decoration:none;
+    display:flex;flex-direction:column;gap:6px;
+    position:relative;
+    transition:border-color .15s;
+  }
+  .hub-card:hover{border-color:var(--line-strong)}
+  .hub-card .hc-num{font-size:11px;color:var(--clay);letter-spacing:.04em}
+  .hub-card .hc-icon{font-size:20px}
+  .hub-card .hc-title{font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--text);line-height:1.2}
+  .hub-card .hc-desc{font-size:11.5px;color:var(--muted);line-height:1.35}
+
+  .hub-card.row-top::after{
+    content:"";position:absolute;left:50%;bottom:-14px;width:1px;height:14px;
+    background:var(--line-strong);
+  }
+  .hub-card.row-bottom::before{
+    content:"";position:absolute;left:50%;top:-14px;width:1px;height:14px;
+    background:var(--line-strong);
+  }
+
+  @media (max-width:640px){
+    .hub-grid{grid-template-columns:1fr}
+    .hub-center{grid-column:1;grid-row:auto;order:-1}
+    .hub-card.row-top::after,.hub-card.row-bottom::before{display:none}
+  }
+
+  .summary-row{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
+    max-width:820px;margin:36px auto 0;
+  }
+  .summary-box{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:14px;
+    padding:18px 16px;
+  }
+  .summary-box .sb-title{font-size:12px;letter-spacing:.04em;color:var(--clay);text-transform:uppercase;margin-bottom:10px}
+  .summary-box ul{list-style:none;margin:0;padding:0}
+  .summary-box li{font-size:13px;color:var(--text);padding:4px 0;display:flex;gap:8px}
+  .summary-box li span.dot{color:var(--gold)}
+  .summary-box.flow{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:8px}
+  .summary-box.flow .flow-steps{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+  .summary-box.flow .flow-steps span{font-size:11.5px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+  .summary-box.flow .flow-steps b{color:var(--gold);font-weight:400}
+  .summary-box.ladder{display:flex;flex-direction:column;justify-content:center}
+  .ladder-track{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:6px}
+  .ladder-bar{flex:1;background:linear-gradient(180deg,var(--gold) 0%,rgba(217,164,65,.25) 100%);border-radius:4px 4px 0 0}
+  .ladder-labels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:6px}
+
+  @media (max-width:640px){ .summary-row{grid-template-columns:1fr} }
+
+  section.detail{padding:52px 0;border-top:1px solid var(--line)}
+  .sec-num{color:var(--clay);font-size:13px;margin-bottom:6px}
+  section.detail h2{font-size:28px;margin-bottom:10px}
+  .sec-intro{color:var(--muted);max-width:62ch;margin-bottom:28px}
+
+  .flow{display:flex;align-items:flex-start;gap:0;margin:24px 0 32px;overflow-x:auto;padding-bottom:8px}
+  .flow-step{flex:0 0 auto;width:150px;text-align:center;position:relative}
+  .flow-dot{
+    width:36px;height:36px;border-radius:50%;
+    background:var(--panel-2);border:1px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--clay);font-size:14px;font-weight:600;
+    margin:0 auto 10px;
+  }
+  .flow-line{flex:1 1 auto;height:1px;background:var(--line);margin-top:18px;min-width:20px}
+  .flow-title{font-size:13.5px;font-weight:500;margin-bottom:4px}
+  .flow-desc{font-size:12px;color:var(--muted);line-height:1.4}
+
+  .linkcard{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:15px 18px;margin-bottom:10px;gap:16px;flex-wrap:wrap;
+  }
+  .linkcard .lc-label{font-size:12.5px;color:var(--muted)}
+  .linkcard .lc-url{font-size:14px;color:var(--text);word-break:break-all}
+  .linkcard a.btn{
+    color:var(--ink-fixed-dark);background:var(--gold);text-decoration:none;
+    font-size:13px;font-weight:600;padding:8px 15px;border-radius:999px;white-space:nowrap;
+  }
+
+  .demobox{
+    background:var(--gold-soft);border:1px solid var(--line);border-radius:14px;
+    padding:18px 22px;margin:22px 0;
+  }
+  .demobox .db-label{font-size:11.5px;letter-spacing:.03em;color:var(--clay);margin-bottom:8px}
+  .demobox .db-code{font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--text)}
+  .demobox .db-note{font-size:13px;color:var(--muted);margin-top:6px}
+
+  .checklist{list-style:none;margin:0;padding:0}
+  .checklist li{display:flex;gap:14px;padding:13px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+  .checklist li:last-child{border-bottom:none}
+  .cl-box{flex:0 0 auto;width:19px;height:19px;border:1px solid var(--gold);border-radius:5px;margin-top:2px}
+  .cl-text b{display:block;font-size:14.5px;margin-bottom:2px}
+  .cl-text span{color:var(--muted);font-size:13px}
+
+  .tabgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:18px 0}
+  .tabgrid div{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px}
+  .tabgrid div b{display:block;font-size:13px;margin-bottom:2px}
+  .tabgrid div span{color:var(--muted);font-size:11.5px}
+
+  .note{font-size:12.5px;color:var(--muted);border-left:2px solid var(--gold);padding:4px 0 4px 14px;margin-top:18px}
+
+  .back-to-hub{display:inline-block;margin-top:18px;font-size:12px;color:var(--clay);text-decoration:none}
+
+  /* ---- widget chat "Chiedi a Touch&Go" ---- */
+  #tg-chat-toggle{
+    position:fixed;bottom:22px;right:22px;z-index:9999;
+    background:var(--gold);color:var(--ink-fixed-dark);border:none;border-radius:999px;
+    padding:13px 20px;font-family:'Familjen Grotesk',sans-serif;font-size:14px;font-weight:600;
+    cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);
+    display:flex;align-items:center;gap:8px;
+  }
+  #tg-chat-toggle:hover{filter:brightness(1.08)}
+  #tg-chat-panel{
+    position:fixed;bottom:80px;right:22px;z-index:9999;
+    width:340px;max-width:calc(100vw - 32px);height:460px;max-height:70vh;
+    background:var(--panel);border:1px solid var(--line-strong);border-radius:16px;
+    display:none;flex-direction:column;overflow:hidden;
+    box-shadow:0 20px 50px rgba(0,0,0,.5);
+  }
+  #tg-chat-panel.open{display:flex}
+  #tg-chat-head{
+    padding:14px 16px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  #tg-chat-head .th-title{font-family:'Cormorant Garamond',serif;font-size:17px;color:var(--text)}
+  #tg-chat-head .th-sub{font-size:10.5px;color:var(--muted)}
+  #tg-chat-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px}
+  #tg-chat-close:hover{color:var(--text)}
+  #tg-chat-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+  .tg-msg{max-width:85%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.4}
+  .tg-msg.user{align-self:flex-end;background:var(--gold-soft);color:var(--text);border:1px solid var(--line)}
+  .tg-msg.bot{align-self:flex-start;background:var(--panel-2);color:var(--text);border:1px solid var(--line)}
+  .tg-msg.bot.loading{color:var(--muted);font-style:italic}
+  .tg-msg.bot.error{color:#e0a860;border-color:rgba(224,150,80,.4)}
+  #tg-chat-foot{padding:12px 14px;border-top:1px solid var(--line);display:flex;gap:8px}
+  #tg-chat-input{
+    flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;
+    padding:9px 14px;color:var(--text);font-family:'Familjen Grotesk',sans-serif;font-size:13px;
+  }
+  #tg-chat-input:focus{outline:1px solid var(--gold)}
+  #tg-chat-send{
+    background:var(--gold);color:var(--ink-fixed-dark);border:none;border-radius:999px;
+    padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;
+  }
+  #tg-chat-send:disabled{opacity:.5;cursor:default}
+  @media (max-width:480px){
+    #tg-chat-panel{right:16px;left:16px;width:auto}
+    #tg-chat-toggle{right:16px}
+  }
+
+  footer{padding:44px 0 0;color:var(--muted);font-size:12px;border-top:1px solid var(--line);margin-top:40px}
+</style>
+</head>
+<body>
+<div class="wrap" id="top">
+
+  <div class="cover">
+    <div class="eyebrow">Touch&Go — Presentazione della suite e guida all'utilizzo</div>
+    <h1>La suite in un colpo d'occhio</h1>
+    <p>Sei porte d'accesso, un solo prodotto. Clicca una scheda per entrare direttamente nella parte che vuoi esplorare.</p>
+    <div class="cover-meta">
+      <div><b>Prototipo Touch&Go</b>Catania, 2026 · Pre-seed</div>
+      <div><b>Classificazione AI reale</b>Quote e pagamenti simulati per il test</div>
+      <div><b>Aggiornato</b>3 settembre 2026</div>
+    </div>
+  </div>
+
+  <div class="hub-section">
+    <div class="hub-grid">
+      <a href="#s-app" class="hub-card row-top">
+        <div class="hc-num">01</div>
+        <div class="hc-icon">📷</div>
+        <div class="hc-title">App turista</div>
+        <div class="hc-desc">Foto → classificazione → QR → ritiro</div>
+      </a>
+      <a href="#s-broadcasting" class="hub-card row-top">
+        <div class="hc-num">01B</div>
+        <div class="hc-icon">⭐</div>
+        <div class="hc-title">Broadcasting</div>
+        <div class="hc-desc">Recensioni post-consegna, sempre private</div>
+      </a>
+      <a href="#s-partner" class="hub-card row-top">
+        <div class="hc-num">02</div>
+        <div class="hc-icon">🤝</div>
+        <div class="hc-title">Area partner</div>
+        <div class="hc-desc">Codice, vendite, commissioni</div>
+      </a>
+
+      <div class="hub-center">
+        <div class="hub-device">
+          <div class="hd-eyebrow">Prototipo navigabile</div>
+          <div class="hd-title">Touch&Go</div>
+          <div class="hd-sub">Tutto è cliccabile — dati reali del progetto</div>
+        </div>
+      </div>
+
+      <a href="#s-sito" class="hub-card row-bottom">
+        <div class="hc-num">03</div>
+        <div class="hc-icon">🌐</div>
+        <div class="hc-title">Sito istituzionale</div>
+        <div class="hc-desc">Presentazione, piani, contatti</div>
+      </a>
+      <a href="#s-crm" class="hub-card row-bottom">
+        <div class="hc-num">04</div>
+        <div class="hc-icon">🗂️</div>
+        <div class="hc-title">Gestionale (CRM)</div>
+        <div class="hc-desc">Cosa vede lo staff, sotto il cofano</div>
+      </a>
+      <a href="#s-report" class="hub-card row-bottom">
+        <div class="hc-num">04B</div>
+        <div class="hc-icon">📈</div>
+        <div class="hc-title">Report di rendimento</div>
+        <div class="hc-desc">Controllo automatico giornaliero</div>
+      </a>
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-box">
+        <div class="sb-title">Cosa puoi provare</div>
+        <ul>
+          <li><span class="dot">●</span> Un acquisto reale, con AI vera</li>
+          <li><span class="dot">●</span> Il consolidamento di più spedizioni</li>
+          <li><span class="dot">●</span> L'accesso partner e le commissioni</li>
+          <li><span class="dot">●</span> Cosa vede lo staff nel CRM</li>
+        </ul>
+      </div>
+      <div class="summary-box flow">
+        <div class="sb-title">Come funziona la guida</div>
+        <div class="flow-steps">
+          <span>Apri</span><b>→</b><span>Prova</span><b>→</b><span>Verifica</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Ogni scheda ha link diretti e una checklist</div>
+      </div>
+      <div class="summary-box ladder">
+        <div class="sb-title">Dal primo test alla piena comprensione</div>
+        <div class="ladder-track">
+          <div class="ladder-bar" style="height:30%"></div>
+          <div class="ladder-bar" style="height:55%"></div>
+          <div class="ladder-bar" style="height:80%"></div>
+          <div class="ladder-bar" style="height:100%"></div>
+        </div>
+        <div class="ladder-labels"><span>Primo tocco</span><span>Percorso guidato</span></div>
+      </div>
+    </div>
+
+    <p class="note" style="max-width:820px;margin:28px auto 0;text-align:center">Perché non è solo un mockup, i numeri del progetto, e l'accesso rapido a tutti i link sono nella sezione introduttiva subito sotto.</p>
+  </div>
+
+  <section class="detail">
+    <div class="sec-num">IL PROGETTO</div>
+    <h2>Cos'è Touch&Go, e perché ha senso ora</h2>
+
+    <h3 style="font-size:19px;margin-top:0">Il problema</h3>
+    <p class="sec-intro">Oggi un turista che compra in Italia affronta un percorso frammentato per portare a casa l'acquisto: pratiche doganali da gestire a parte, esenzione IVA all'export complicata da ottenere, e — se compra in più negozi durante il soggiorno — spedizioni separate da organizzare una per una, spesso con corrieri diversi e costi che si sommano invece di scalare.</p>
+
+    <h3 style="font-size:19px">La soluzione</h3>
+    <p class="sec-intro">Touch&Go automatizza l'intero percorso in un'unica esperienza: classificazione doganale AI in pochi secondi da una foto, esenzione IVA export gestita automaticamente (art. 8 DPR 633/72, mai più un modulo da compilare a mano), e — quando più acquisti dello stesso soggiorno vanno verso la stessa destinazione — un'unica spedizione consolidata con un prezzo realmente inferiore alla somma delle spedizioni singole, non solo un'etichetta diversa sullo stesso costo.</p>
+
+    <h3 style="font-size:19px">Perché i numeri reggono</h3>
+    <div class="tabgrid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+      <div><b>87%</b><span>Margine di contribuzione sullo scenario domestico di riferimento</span></div>
+      <div><b>18×</b><span>Rapporto LTV/CAC (LTV €50,59, CAC reale €2,80)</span></div>
+      <div><b>10%</b><span>Commissione ai negozi partner su ogni spedizione generata — incentivo allineato, non un costo imposto</span></div>
+    </div>
+
+    <p class="note">Il prodotto descritto in questa guida non è una promessa su carta: ogni funzionalità elencata più sotto è live, verificata, e provabile in prima persona seguendo i link che seguono.</p>
+  </section>
+
+  <section class="detail">
+    <div class="sec-num">ACCESSO RAPIDO</div>
+    <h2>Tutti i link, in un unico posto</h2>
+    <p class="sec-intro">Ogni link è approfondito nella sezione corrispondente più avanti — questa è solo una vista d'insieme per chi vuole partire subito.</p>
+
+    <div class="linkcard">
+      <div><div class="lc-label">App turista (link stabile, con continuità automatica)</div><div class="lc-url">touchandgo-router.netlify.app</div></div>
+      <a class="btn" href="https://touchandgo-router.netlify.app/">Apri</a>
+    </div>
+    <div class="linkcard">
+      <div><div class="lc-label">Area partner (accesso diretto con NDP924)</div><div class="lc-url">benevolent-longma-57c78a.netlify.app/?mode=partner</div></div>
+      <a class="btn" href="https://benevolent-longma-57c78a.netlify.app/?mode=partner">Apri</a>
+    </div>
+    <div class="linkcard">
+      <div><div class="lc-label">Sito istituzionale</div><div class="lc-url">benevolent-longma-57c78a.netlify.app/site/index.html</div></div>
+      <a class="btn" href="https://benevolent-longma-57c78a.netlify.app/site/index.html">Apri</a>
+    </div>
+    <div class="linkcard">
+      <div><div class="lc-label">CRM — richiede una password (da richiedere separatamente)</div><div class="lc-url">cute-moxie-cd1e4b.netlify.app/site/admin.html</div></div>
+      <a class="btn" href="https://cute-moxie-cd1e4b.netlify.app/site/admin.html">Apri</a>
+    </div>
+  </section>
+
+  <section class="detail">
+    <div class="sec-num">PRIMA DI INIZIARE</div>
+    <h2>Perché non è solo un mockup</h2>
+    <p class="sec-intro">Quello che segue non è una vetrina statica: è un prodotto in fase pre-seed che ha già affrontato — e risolto — problemi tipici di un servizio in produzione vera. Alcuni esempi concreti, verificabili direttamente esplorando la suite.</p>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Classificazione doganale AI reale, non simulata</b><span>Ogni foto viene analizzata davvero da un modello di visione (Claude Vision) per stimare codice HS, peso e dimensioni — non un catalogo di esempi predefiniti</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Continuità operativa automatica in caso di guasto</b><span>Esiste una copia indipendente dell'intera app turista, con il proprio storage isolato. Se la classificazione AI del sito principale smette di funzionare, un sistema di controllo se ne accorge da solo e reindirizza automaticamente i turisti verso questa copia — senza intervento umano, senza interrompere il servizio. Il ritorno al sito principale resta invece sempre una decisione manuale, per evitare che il sistema "sbatta" avanti e indietro durante un guasto intermittente</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Riconciliazione dati garantita, non "a occhio"</b><span>Ogni acquisto generato durante un'interruzione viene poi riportato nel sistema principale con un meccanismo che garantisce zero duplicati e zero commissioni perse ai partner, anche se il processo viene interrotto a metà e rilanciato più volte</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Prezzo di spedizione realmente consolidato</b><span>Più acquisti dello stesso turista verso la stessa destinazione vengono aggregati in un'unica spedizione, con un ricalcolo vero su peso e volume combinati — non semplicemente la somma dei prezzi dei singoli oggetti</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Controllo automatico giornaliero di tutti i dispositivi</b><span>Ogni mattina alle 6:00, un sistema verifica in autonomia che l'app, lo spazio di continuità, il router e il gestionale interno siano tutti raggiungibili e funzionanti, conservando uno storico consultabile nel CRM</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Sicurezza trattata come requisito, non come rifinitura</b><span>Ogni campo che un utente può scrivere liberamente (nome, descrizione, indirizzo, recensione) viene reso sicuro prima di essere mostrato ad altri — verificato non a parole, ma con veri tentativi di attacco simulati contro il codice, sia prima sia dopo ogni correzione</span></div></li>
+    </ul>
+
+    <p class="note">Questo livello di attenzione — failover automatico, riconciliazione garantita, controlli automatici quotidiani, verifica di sicurezza sistematica — è insolito per uno stadio così iniziale di un prodotto, ed è il frutto di un processo di sviluppo disciplinato: ogni funzionalità viene verificata riga per riga prima di essere pubblicata, non solo dichiarata pronta.</p>
+  </section>
+
+  <section class="detail" id="s-app">
+    <div class="sec-num">01</div>
+    <h2>App turista — il percorso d'acquisto</h2>
+    <p class="sec-intro">Dalla foto dell'oggetto acquistato fino al ritiro e alla conferma di consegna. La classificazione doganale è AI reale (Claude Vision), non simulata.</p>
+
+    <div class="flow">
+      <div class="flow-step"><div class="flow-dot">1</div><div class="flow-title">Foto</div><div class="flow-desc">Fotografa o descrivi l'oggetto acquistato</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">2</div><div class="flow-title">Conferma</div><div class="flow-desc">Verifica ritiro, destinazione e prezzo stimato</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">3</div><div class="flow-title">Concludi</div><div class="flow-desc">Consolida più acquisti verso la stessa destinazione, paga</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">4</div><div class="flow-title">Fatto</div><div class="flow-desc">QR di ritiro, poi conferma di consegna e recensione</div></div>
+    </div>
+
+    <div class="linkcard">
+      <div><div class="lc-label">Link stabile (passa automaticamente allo spazio di continuità in caso di guasto)</div><div class="lc-url">touchandgo-router.netlify.app</div></div>
+      <a class="btn" href="https://touchandgo-router.netlify.app/">Apri</a>
+    </div>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Fai una foto o descrivi un oggetto</b><span>Es. "borsa in pelle" — osserva la classificazione automatica (codice HS, peso, dimensioni)</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Conferma ritiro e destinazione</b><span>Vedi il prezzo stimato per la spedizione singola</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Aggiungi un secondo oggetto verso la stessa destinazione</b><span>In "Concludi", nota il prezzo consolidato — inferiore alla somma dei due prezzi singoli</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Genera il QR di ritiro</b><span>Il codice (es. TG-XXXXXX) è il riferimento univoco della spedizione</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Dopo la consegna, lascia una recensione</b><span>L'invito compare in Home — la recensione resta privata finché lo staff non decide di pubblicarla</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>"La tua spesa"</b><span>Riepilogo totale acquisti, servizio pagato, e quanto risparmieresti abbonandoti</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>"I tuoi acquisti"</b><span>Storico completo con stato di ciascun oggetto e il bottone "📦 Richiedi ritiro" quando è pronto</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Lettera di vettura e fattura proforma</b><span>Generate automaticamente per ogni oggetto, con l'esenzione IVA (art. 8 DPR 633/72) già applicata — nessun modulo da compilare</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Al primo avvio, l'onboarding</b><span>Tre passaggi spiegati: confermi ritiro/destinazione, lasci l'oggetto con un QR, concludi e consolidiamo</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Schermata Destinazione</b><span>Paese e indirizzo di consegna, prima ancora di classificare l'oggetto</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Verifica imballo</b><span>Fotografa l'imballo pronto — dimensioni consigliate mostrate, conformità verificata subito</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>QR per singolo oggetto</b><span>Generato subito dopo ogni acquisto lasciato in negozio — il ritiro vero parte solo dopo aver concluso il soggiorno</span></div></li>
+    </ul>
+
+    <p class="note">Se consulti da PC: la fotocamera live e la posizione GPS sono pensate per un telefono in negozio — su desktop usa "Scegli dalla galleria" per caricare una foto esistente, e inserisci l'indirizzo di ritiro/destinazione a mano se la posizione rilevata non è precisa.</p>
+    <p class="note">Se hai più indirizzi salvati da test precedenti: nella schermata "Scegli indirizzo" (dopo aver generato il QR), verifica sempre di aver selezionato esplicitamente l'indirizzo giusto prima di confermare — resta evidenziato quello già scelto in precedenza se non ne tocchi uno nuovo.</p>
+    <a class="back-to-hub" href="#top">↑ Torna alle sei schede</a>
+  </section>
+
+  <section class="detail" id="s-broadcasting">
+    <div class="sec-num">01B</div>
+    <h2>Touch&Go Broadcasting — recensioni post-consegna</h2>
+    <p class="sec-intro">Dopo la conferma di consegna, il turista viene invitato a lasciare una recensione. Resta <b>sempre privata</b>: nessuna pubblicazione automatica sui social in nessun punto del sistema — è lo staff, dal CRM, a decidere se e quando pubblicarla.</p>
+
+    <div class="flow">
+      <div class="flow-step"><div class="flow-dot">1</div><div class="flow-title">Consegna confermata</div><div class="flow-desc">Il turista conferma "Hai ricevuto il pacco?"</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">2</div><div class="flow-title">Invito a recensire</div><div class="flow-desc">Voto 1-5 + testo libero, o QR per farlo da un altro dispositivo</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">3</div><div class="flow-title">Coda di moderazione</div><div class="flow-desc">Lo staff la vede nel CRM, tab Recensioni</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">4</div><div class="flow-title">Decisione manuale</div><div class="flow-desc">Pubblicazione sui social sempre fuori dal sistema</div></div>
+    </div>
+
+    <div class="linkcard">
+      <div><div class="lc-label">App turista — è qui che compare l'invito a recensire dopo la consegna</div><div class="lc-url">touchandgo-router.netlify.app</div></div>
+      <a class="btn" href="https://touchandgo-router.netlify.app/">Apri</a>
+    </div>
+    <div class="linkcard">
+      <div><div class="lc-label">CRM — tab Recensioni, per moderare (richiede password, da richiedere separatamente)</div><div class="lc-url">cute-moxie-cd1e4b.netlify.app/site/admin.html</div></div>
+      <a class="btn" href="https://cute-moxie-cd1e4b.netlify.app/site/admin.html">Apri</a>
+    </div>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Completa un acquisto e conferma la consegna (sezione 01)</b><span>L'invito alla recensione compare subito in Home</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Lascia un voto e un breve commento</b><span>Le stelle mostrano un'etichetta ("Ottimo!", "Eccellente!") mentre scegli</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Nel CRM (sezione 04), tab Recensioni</b><span>La recensione appare "In attesa" — un partner "in evidenza" viene mostrato per primo nella coda</span></div></li>
+    </ul>
+    <a class="back-to-hub" href="#top">↑ Torna alle sei schede</a>
+  </section>
+
+  <section class="detail" id="s-partner">
+    <div class="sec-num">02</div>
+    <h2>Area partner — registrazione, accesso, commissioni</h2>
+    <p class="sec-intro">Un negozio partner guadagna una commissione del 10% su ogni spedizione generata tramite il proprio codice, sui piani a pagamento.</p>
+
+    <div class="flow">
+      <div class="flow-step"><div class="flow-dot">1</div><div class="flow-title">Registrazione</div><div class="flow-desc">Nome negozio, email, scelta del piano</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">2</div><div class="flow-title">Codice generato</div><div class="flow-desc">Es. NDP924 — chiave di accesso, nessuna password</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">3</div><div class="flow-title">Accesso area riservata</div><div class="flow-desc">Vendite, credito e sconti, QR del negozio</div></div>
+    </div>
+
+    <div class="demobox">
+      <div class="db-label">CODICE PARTNER DI PROVA (REALE, GIÀ REGISTRATO)</div>
+      <div class="db-code">NDP924</div>
+      <div class="db-note">"Negozio Demo Prontuario" — piano Boutique (€49/mese). Usalo nell'area partner dell'app per vedere vendite, credito e generare il QR del negozio, senza dover registrare un nuovo account.</div>
+    </div>
+
+    <div class="linkcard">
+      <div><div class="lc-label">Accesso diretto all'area partner (salta la Home turista)</div><div class="lc-url">benevolent-longma-57c78a.netlify.app/?mode=partner</div></div>
+      <a class="btn" href="https://benevolent-longma-57c78a.netlify.app/?mode=partner">Apri</a>
+    </div>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Accedi con il codice NDP924</b><span>Nessuna password — il codice stesso è la chiave</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Esplora le sezioni: Panoramica, Andamento, Credito, QR negozio</b><span>Ogni sezione è una scheda separata, non serve scorrere una pagina lunga</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Genera il QR del negozio</b><span>È quello che un cliente reale scansionerebbe in negozio per usare il codice</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Genera e condividi un codice sconto</b><span>Un tap copia il codice o lo condivide direttamente — il cliente lo usa al checkout per ottenere il 10% di sconto sulla fee di servizio, una sola volta</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Sezione Andamento</b><span>Vendite generate settimana per settimana tramite il tuo codice</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Cambia piano</b><span>Passa in qualunque momento tra Free, Boutique e Flagship — solo i piani a pagamento maturano commissione</span></div></li>
+    </ul>
+    <a class="back-to-hub" href="#top">↑ Torna alle sei schede</a>
+  </section>
+
+  <section class="detail" id="s-sito">
+    <div class="sec-num">03</div>
+    <h2>Sito istituzionale</h2>
+    <p class="sec-intro">Presentazione del prodotto, area dedicata ai partner commerciali con registrazione self-service, contatti.</p>
+
+    <div class="linkcard">
+      <div><div class="lc-label">Sito</div><div class="lc-url">benevolent-longma-57c78a.netlify.app/site/index.html</div></div>
+      <a class="btn" href="https://benevolent-longma-57c78a.netlify.app/site/index.html">Apri</a>
+    </div>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Scorri la sezione "Per i partner"</b><span>Listino piani, un piano evidenziato come consigliato</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Prova "Hai già un account partner? Accedi"</b><span>Con il codice NDP924, ti porta dritto all'area partner dell'app</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Guarda la sezione Contatti</b><span>Email diretta, nessun form da compilare</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>"Come funziona"</b><span>I tre passaggi del servizio spiegati in breve: fotografa, lascia con QR, ricevi a casa</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Prova il form di registrazione partner</b><span>Nome negozio e scelta del piano — genera davvero un codice partner nuovo</span></div></li>
+    </ul>
+    <a class="back-to-hub" href="#top">↑ Torna alle sei schede</a>
+  </section>
+
+  <section class="detail" id="s-crm">
+    <div class="sec-num">04</div>
+    <h2>Gestionale interno (CRM)</h2>
+    <p class="sec-intro">La vista che usa lo staff per seguire acquisti, partner e commissioni — utile per capire cosa succede "sotto il cofano" del prodotto.</p>
+
+    <div class="linkcard">
+      <div><div class="lc-label">CRM — richiede una password di accesso (da richiedere separatamente)</div><div class="lc-url">cute-moxie-cd1e4b.netlify.app/site/admin.html</div></div>
+      <a class="btn" href="https://cute-moxie-cd1e4b.netlify.app/site/admin.html">Apri</a>
+    </div>
+
+    <div class="tabgrid">
+      <div><b>Panoramica</b><span>KPI, andamento 14gg</span></div>
+      <div><b>Acquisti</b><span>Stato di ogni spedizione, badge di segnalazione</span></div>
+      <div><b>Partner & Commissioni</b><span>Anagrafica, credito, partner "in evidenza"</span></div>
+      <div><b>Recensioni</b><span>Coda di moderazione, approva/rifiuta</span></div>
+      <div><b>Riconciliazione</b><span>Continuità operativa</span></div>
+      <div><b>Sistema</b><span>Storico controllo automatico giornaliero</span></div>
+      <div><b>Documenti / Legale</b><span>Kit riservato</span></div>
+    </div>
+
+    <p class="note">Il tema visivo del CRM ("Manifesto": nero, ottone, tipografia tecnica) è deliberatamente diverso da quello dell'app turista ("Concierge": più caldo e accogliente) — rispecchia i due pubblici diversi, staff operativo contro turista in vacanza.</p>
+    <p class="note">I dati mostrati nel CRM riflettono lo stato reale del database — trattandosi di un prototipo in fase di test, includono anche i record generati seguendo questa stessa guida.</p>
+    <a class="back-to-hub" href="#top">↑ Torna alle sei schede</a>
+  </section>
+
+  <section class="detail" id="s-report">
+    <div class="sec-num">04B</div>
+    <h2>Report di rendimento — il controllo automatico giornaliero</h2>
+    <p class="sec-intro">Ogni mattina, senza alcun intervento umano, un sistema verifica che tutti i dispositivi della suite siano davvero raggiungibili e funzionanti, e ne conserva uno storico consultabile.</p>
+
+    <div class="flow">
+      <div class="flow-step"><div class="flow-dot">1</div><div class="flow-title">6:00 ogni mattina</div><div class="flow-desc">Il controllo parte da solo, senza bisogno di essere avviato</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">2</div><div class="flow-title">4 dispositivi verificati</div><div class="flow-desc">Sito principale, spazio di continuità, router, CRM</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">3</div><div class="flow-title">Report salvato</div><div class="flow-desc">Stato, tempo di risposta ed eventuali errori per ciascuno</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">4</div><div class="flow-title">Storico 30 giorni</div><div class="flow-desc">Consultabile nel CRM, tab Sistema</div></div>
+    </div>
+
+    <div class="linkcard">
+      <div><div class="lc-label">CRM — tab Sistema (richiede password, da richiedere separatamente)</div><div class="lc-url">cute-moxie-cd1e4b.netlify.app/site/admin.html</div></div>
+      <a class="btn" href="https://cute-moxie-cd1e4b.netlify.app/site/admin.html">Apri</a>
+    </div>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Nel CRM, tab Sistema</b><span>Una riga per ogni giorno controllato, con lo stato generale ("Tutto ok" o "Problema")</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Dettaglio per dispositivo</b><span>Per ciascuno dei quattro (sito, spazio ospite, router, CRM): stato OK/Problema e tempo di risposta in millisecondi</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Dettaglio errore, se presente</b><span>Se un dispositivo risulta irraggiungibile, il motivo esatto resta consultabile</span></div></li>
+    </ul>
+
+    <p class="note">Il controllo non consuma mai credito AI reale e non modifica mai lo stato del sistema — nemmeno verso il CRM, dove si limita a verificare che risponda, senza mai eseguire un'azione vera. Se un giorno il controllo trova un problema, il report lo segnala ma non interviene da solo: resta una decisione dello staff cosa fare.</p>
+    <a class="back-to-hub" href="#top">↑ Torna alle sei schede</a>
+  </section>
+
+  <section class="detail">
+    <div class="sec-num">05</div>
+    <h2>Il percorso consigliato, in 10 minuti</h2>
+    <p class="sec-intro">Se hai poco tempo, questo ordine mostra il ciclo completo, da un acquisto alla commissione del partner.</p>
+    <ol style="padding-left:20px;color:var(--text);font-size:15px;line-height:2">
+      <li>Apri l'app (sezione 01), fai un acquisto usando il codice partner <b>NDP924</b> in fase di ritiro/destinazione, se richiesto</li>
+      <li>Guarda il prezzo stimato, poi consolida con un secondo oggetto</li>
+      <li>Genera il QR e completa il flusso fino a "Fatto"</li>
+      <li>Accedi all'area partner con <b>NDP924</b> (sezione 02) — dovresti vedere la vendita registrata</li>
+      <li>Se hai accesso al CRM (sezione 04), verifica la stessa transazione nella tab Acquisti e la commissione maturata in Partner & Commissioni</li>
+    </ol>
+  </section>
+
+  <footer>
+    Touch&Go — presentazione della suite e guida all'utilizzo, ad uso interno, investitori e partner commerciali. I link puntano ad ambienti reali di test: i dati generati seguendo questa guida sono chiaramente riconoscibili come tali nel CRM.
+  </footer>
+
+</div>  <!-- ================= WIDGET CHIEDI A TOUCH&GO ================= -->
+  <button id="tg-chat-toggle" onclick="document.getElementById('tg-chat-panel').classList.add('open'); this.style.display='none'">
+    💬 Chiedi a Touch&Go
+  </button>
+
+  <div id="tg-chat-panel">
+    <div id="tg-chat-head">
+      <div>
+        <div class="th-title">Chiedi a Touch&Go</div>
+        <div class="th-sub">Domande sulla suite — risposta AI in tempo reale</div>
+      </div>
+      <button id="tg-chat-close" onclick="document.getElementById('tg-chat-panel').classList.remove('open'); document.getElementById('tg-chat-toggle').style.display='flex'">✕</button>
+    </div>
+    <div id="tg-chat-body">
+      <div class="tg-msg bot">Ciao! Chiedimi qualunque cosa su come funziona la suite — app, area partner, sito, CRM, recensioni, controlli automatici.</div>
+    </div>
+    <div id="tg-chat-foot">
+      <input id="tg-chat-input" type="text" placeholder="Scrivi una domanda…" onkeydown="if(event.key==='Enter') tgSendMessage()">
+      <button id="tg-chat-send" onclick="tgSendMessage()">Invia</button>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const ASSISTANT_URL = "/.netlify/functions/assistant";
+
+    function tgAppendMessage(text, cls){
+      const body = document.getElementById('tg-chat-body');
+      const div = document.createElement('div');
+      div.className = 'tg-msg ' + cls;
+      div.textContent = text;
+      body.appendChild(div);
+      body.scrollTop = body.scrollHeight;
+      return div;
+    }
+
+    window.tgSendMessage = async function(){
+      const input = document.getElementById('tg-chat-input');
+      const sendBtn = document.getElementById('tg-chat-send');
+      const message = input.value.trim();
+      if (!message) return;
+
+      tgAppendMessage(message, 'user');
+      input.value = '';
+      input.disabled = true;
+      sendBtn.disabled = true;
+      const loadingEl = tgAppendMessage('Sto scrivendo…', 'bot loading');
+
+      try {
+        const res = await fetch(ASSISTANT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'spiega_la_suite', message: message, lang: 'it' })
+        });
+        const data = await res.json();
+        loadingEl.remove();
+        if (!res.ok) {
+          const errMsg = (data && data.error && data.error.message) || 'Errore imprevisto — riprova tra qualche istante.';
+          tgAppendMessage('⚠️ ' + errMsg, 'bot error');
+        } else {
+          tgAppendMessage(data.reply, 'bot');
+        }
+      } catch (err) {
+        loadingEl.remove();
+        tgAppendMessage('⚠️ Impossibile contattare l\'assistente in questo momento — verifica la connessione e riprova.', 'bot error');
+      } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    };
+  })();
+  </script>
+
+</body>
+</html>
