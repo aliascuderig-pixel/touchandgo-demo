@@ -123,6 +123,53 @@ function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
+// ---------------------------------------------------------------------
+// Attribuzione partner persistente per touristEmail (settembre 2026) —
+// vedi MANUALE.md, sezione "Attribuzione partner persistente per
+// touristEmail". Un'agenzia/tour operator che genera la prima spedizione
+// di un turista tramite il "gestionale" partner (generatedByPartnerCode,
+// vedi PartnerGenerateShipmentScreen in app.js), o un turista che usa un
+// codice partner esplicito (QR/link ?partner=, salvato come
+// state.activePartnerCode -> item.partnerCode) NON deve perdere
+// l'attribuzione se quel turista passa poi al percorso self-service senza
+// alcun codice: l'ultimo codice usato esplicitamente resta "noto" per
+// quel touristEmail e viene riapplicato in automatico.
+//
+// Store dedicato, keyed per email normalizzata (stesso schema di
+// "blocklist" sopra) — non un campo sull'item stesso, perché deve essere
+// consultabile PRIMA di sapere quale sarà il prossimo acquisto di quel
+// cliente, e deve sopravvivere anche se quell'acquisto specifico viene
+// eliminato/mai più risincronizzato.
+//
+// "Codice esplicito" per questa mappatura = item.partnerCode (QR/link o,
+// in futuro, un inserimento manuale nell'app) OPPURE
+// item.generatedByPartnerCode (gestionale partner) — le tre fonti elencate
+// nella richiesta che ha originato questa feature. Un item generato dal
+// gestionale aggiorna la mappatura ma NON riceve mai lui stesso
+// item.partnerCode: quel campo resta riservato al meccanismo di
+// commissione esistente (vedi sotto), e un'agenzia non deve mai maturare
+// una commissione sulla spedizione che genera direttamente per il proprio
+// cliente. L'auto-attribuzione (sotto) si applica invece SOLO a un item
+// che non porta già uno dei due campi — mai a un item che ne porta già
+// uno, per non sovrascrivere una scelta esplicita già fatta su quello
+// stesso item.
+async function resolvePartnerAttribution(item, email, attribution) {
+  if (!email) return; // nessuna email nota per questo cliente: nessuna attribuzione possibile, comportamento invariato
+  const explicitCode = item.partnerCode || item.generatedByPartnerCode || null;
+  if (explicitCode) {
+    await attribution.setJSON(email, {
+      email,
+      partnerCode: explicitCode,
+      updatedAt: new Date().toISOString(),
+    });
+    return;
+  }
+  const known = await attribution.get(email, { type: "json" });
+  if (known && known.partnerCode) {
+    item.partnerCode = known.partnerCode;
+  }
+}
+
 // Campi paese/città REALI (strutturati) — introdotti accanto al vecchio
 // addressLabel testuale, vedi MANUALE.md, sezione "Paese e città reali
 // della spedizione". Non validati da isValidPurchase() (mai bloccanti,
@@ -164,6 +211,7 @@ exports.handler = async (event) => {
     };
     const purchases = getStore({ name: guestScopedStoreName("purchases"), ...blobsAuth });
     const blocklist = getStore({ name: guestScopedStoreName("blocklist"), ...blobsAuth });
+    const partnerAttribution = getStore({ name: guestScopedStoreName("partner-attribution"), ...blobsAuth });
 
     const email = normalizeEmail(item.touristEmail);
 
@@ -202,6 +250,16 @@ exports.handler = async (event) => {
           item.flaggedAt = new Date().toISOString();
         }
       }
+    }
+
+    // Attribuzione partner persistente per touristEmail — va applicata
+    // PRIMA del blocco di accredito commissione sotto: se questo item non
+    // porta un codice esplicito, resolvePartnerAttribution() può scrivere
+    // item.partnerCode con l'ultimo codice noto per questo cliente, e da
+    // quel momento il blocco sotto (invariato) lo tratta come qualunque
+    // altro item con partnerCode esplicito.
+    if (email) {
+      await resolvePartnerAttribution(item, email, partnerAttribution);
     }
 
     // Accredito partner al passaggio a "ritirato" — sincronizzato dal
