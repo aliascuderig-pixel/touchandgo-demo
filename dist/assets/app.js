@@ -191,6 +191,45 @@ function priceFor(weightKg, destinationName, dims) {
   return { grandTotal, eta: q.eta, quotes: q };
 }
 
+// ---------------------------------------------------------------------
+// Mappatura piano partner -> pricingTier per le spedizioni generate DA UN
+// PARTNER per conto di un cliente finale ("Genera spedizione", area
+// partner — vedi PartnerGenerateShipmentScreen() più sotto).
+//
+// DECISIONE DI PREZZO ANCORA DA PRENDERE: per ora ogni piano mappa su
+// "pieno" (fee di servizio piena, come un acquisto turista self-service
+// senza abbonamento) — nessun piano partner dà oggi diritto a uno sconto
+// sulle spedizioni che genera per conto dei clienti. Questa è una scelta
+// di business ancora provvisoria, non una conclusione tecnica: quando
+// verrà presa la decisione reale (es. i piani a canone più alto potrebbero
+// dare "abbonato"), l'unica modifica necessaria è cambiare i valori qui
+// sotto — pricingTierForPartnerPlan() e tutto il resto del flusso
+// "Genera spedizione" restano invariati, perché leggono sempre e solo
+// questa funzione, mai il piano direttamente.
+//
+// Chiavi allineate 1:1 a PARTNER_PLANS in netlify/functions/sync.js (7
+// piani reali esistenti, non i 3 nomi Free/Boutique/Flagship usati solo
+// come esempio illustrativo nella richiesta che ha originato questa
+// funzione) — duplicate qui deliberatamente: client e server non
+// condividono moduli in questo repository, vedi header di sync.js.
+const PARTNER_PLAN_TO_PRICING_TIER = {
+  free: "pieno",
+  boutique: "pieno",
+  enoteche: "pieno",
+  sport: "pieno",
+  hotel: "pieno",
+  agenzie: "pieno",
+  touroperator: "pieno",
+};
+
+// Fallback "pieno" per un piano non riconosciuto (es. record storico senza
+// campo "plan", già trattato come piano a pagamento altrove — vedi
+// save-purchase.js) — mai un tier a sconto per un piano che non riusciamo
+// a identificare con certezza.
+function pricingTierForPartnerPlan(plan) {
+  return PARTNER_PLAN_TO_PRICING_TIER[plan] || "pieno";
+}
+
 // Paese di destinazione di un item già in coda: risolto dall'indirizzo
 // salvato (state.addresses, tramite l'addressId già presente su ogni item
 // da sempre), non da un nuovo campo — così funziona anche per gli item già
@@ -976,6 +1015,24 @@ const state = {
   partnerUpgradeLoading: false,
   partnerUpgradeError: null,
   showPartnerQr: false,
+  // "Genera spedizione" (area partner, spazio dedicato per operatore da PC)
+  // — vedi PARTNER_PLAN_TO_PRICING_TIER e PartnerGenerateShipmentScreen()
+  // più sotto. partnerView governa quale spazio mostra PartnerScreen()
+  // dentro all'area partner già loggata: "dashboard" (default, quella di
+  // sempre) | "generate" | "shipments". Nessuno di questi campi tocca lo
+  // stato del percorso turista self-service (state.screen/result/price/
+  // pendingInput restano quelli di sempre, mai letti né scritti da qui).
+  partnerView: "dashboard",
+  partnerGenerateInput: null,
+  partnerGenerateResult: null,
+  partnerGenerateLoading: false,
+  partnerGenerateError: null,
+  partnerGenerateSaving: false,
+  partnerGenerateSaved: null,
+  partnerGenerateSaveError: null,
+  partnerShipments: [],
+  partnerShipmentsLoading: false,
+  partnerShipmentsError: null,
   editingItemId: null,
   viewingItemId: null,
   viewingDocsItemId: null,
@@ -1386,6 +1443,24 @@ function buildDiscountCodeActions(code, noteEl) {
 function PartnerScreen() {
   const wrap = el("div", "section");
 
+  // "Genera spedizione" / "Spedizioni generate" — spazi dedicati dentro
+  // l'area partner già loggata (stesso ?mode=partner, stesso codice —
+  // NESSUN nuovo login), pensati per un uso da PC prolungato, distinti
+  // dalla dashboard vendite/commissioni/QR di sempre sotto. Richiedono un
+  // login partner valido e non bloccato (stats.access.blocked, vedi
+  // PartnerLoginAndHistory sotto) — altrimenti si ricade sulla dashboard
+  // normale, che mostra login o il messaggio di blocco a seconda del caso.
+  const partnerReady =
+    state.partnerLoggedCode && state.partnerStats && !(state.partnerStats.access && state.partnerStats.access.blocked);
+  if (partnerReady && state.partnerView === "generate") {
+    wrap.appendChild(PartnerGenerateShipmentScreen());
+    return wrap;
+  }
+  if (partnerReady && state.partnerView === "shipments") {
+    wrap.appendChild(PartnerGeneratedShipmentsScreen());
+    return wrap;
+  }
+
   wrap.appendChild(el("div", "tg-lbl", "Per negozi, hotel e tour operator"));
   const intro = el("div", "info-card");
   intro.innerHTML = `<div class="info-line">Offri Touch&amp;Go ai tuoi clienti: spedizione doganale con codice AI, esenzione IVA export automatica e tracciamento incluso — con un guadagno su ogni spedizione venduta tramite il tuo codice.</div>
@@ -1506,6 +1581,22 @@ function PartnerLoginAndHistory() {
     state.partnerComunicatiLoading = false;
     state.partnerComunicatiError = null;
     state.partnerComunicatiOpenId = null;
+    // "Genera spedizione" / "Spedizioni generate" — mai lasciare lo spazio
+    // dedicato, un input/risultato di classificazione o uno storico in
+    // memoria dopo il logout: stesso principio dei comunicati sopra, un
+    // altro partner che accedesse subito dopo sullo stesso dispositivo non
+    // deve mai vedere anche solo per un istante dati che non sono suoi.
+    state.partnerView = "dashboard";
+    state.partnerGenerateInput = null;
+    state.partnerGenerateResult = null;
+    state.partnerGenerateLoading = false;
+    state.partnerGenerateError = null;
+    state.partnerGenerateSaving = false;
+    state.partnerGenerateSaved = null;
+    state.partnerGenerateSaveError = null;
+    state.partnerShipments = [];
+    state.partnerShipmentsLoading = false;
+    state.partnerShipmentsError = null;
     render();
   });
 
@@ -1540,6 +1631,37 @@ function PartnerLoginAndHistory() {
     <div class="info-row total"><span>Credito disponibile</span><b>€${stats.creditBalance.toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 
+  // Punto d'accesso a "Genera spedizione" / "Spedizioni generate" — spazio
+  // dedicato per un operatore che genera più spedizioni di fila per conto
+  // dei clienti finali (uso da PC prolungato), distinto dalla dashboard
+  // vendite/commissioni/QR qui sopra ma raggiungibile dallo stesso login
+  // partner, senza alcuna nuova autenticazione. Vedi PartnerScreen() per lo
+  // switch che sostituisce l'intero contenuto quando partnerView cambia.
+  const generateSection = el("div", "info-card partner-generate-entry");
+  generateSection.innerHTML = `<div class="doc-eyebrow">Gestionale spedizioni</div>
+    <div class="info-line">Genera spedizioni per conto dei tuoi clienti — foto, classificazione AI e dati cliente, dallo stesso codice partner.</div>`;
+  const generateBtn = el("button", "btn-primary", "Genera spedizione →");
+  generateBtn.id = "partner-generate-entry-btn";
+  generateBtn.addEventListener("click", () => {
+    state.partnerGenerateInput = null;
+    state.partnerGenerateResult = null;
+    state.partnerGenerateError = null;
+    state.partnerGenerateSaved = null;
+    state.partnerGenerateSaveError = null;
+    state.partnerView = "generate";
+    render();
+  });
+  generateSection.appendChild(generateBtn);
+  const shipmentsBtn = el("button", "btn-secondary", "Spedizioni generate →");
+  shipmentsBtn.id = "partner-shipments-entry-btn";
+  shipmentsBtn.addEventListener("click", () => {
+    state.partnerView = "shipments";
+    render();
+    loadPartnerGeneratedShipments();
+  });
+  generateSection.appendChild(shipmentsBtn);
+  wrap.appendChild(generateSection);
+
   wrap.appendChild(PartnerComunicatiSection());
 
   // Piano gratuito, non ancora scaduto: incentivo a passare a un piano a
@@ -1573,6 +1695,309 @@ function PartnerLoginAndHistory() {
   wrap.appendChild(PartnerQRSection(state.partnerLoggedCode));
 
   wrap.appendChild(logoutBtn);
+
+  return wrap;
+}
+
+// ---------------------------------------------------------------------
+// "Genera spedizione" — spazio dedicato nell'area partner già loggata
+// (nessun nuovo login) per un operatore che genera spedizioni per conto di
+// clienti finali, pensato per un uso da PC prolungato (più spedizioni di
+// fila). Riusa senza modifiche: upload foto (handleFile/handleImageDataUrl
+// esistenti NON riusati direttamente — leggono/scrivono state.pendingInput
+// e state.screen, campi del percorso turista self-service; qui si usano
+// invece stato e handler dedicati, così le due cose non si mescolano mai
+// nello stesso oggetto state), classifyImage/classifyText esistenti
+// (classify.js invariato), AddressFormFields/readAddressForm (paese/città
+// reali, PR #41), packagedDimensions/formatDims/localizeObjectName/
+// generateBookingCode/compressImage esistenti, e priceQuotes() PURA (mai
+// priceFor(), che legge stato turista come promoValid/isSubscribed — qui
+// il tier viene invece da PARTNER_PLAN_TO_PRICING_TIER, vedi sopra).
+//
+// save-purchase.js resta invariato: l'unico campo nuovo sull'item è
+// generatedByPartnerCode (il codice del partner che genera la spedizione),
+// mai presente su un acquisto turista self-service normale. NON si usa mai
+// item.partnerCode qui: quel campo esistente è riservato al meccanismo di
+// commissione/credito sugli sconti partner (vedi save-purchase.js, blocco
+// "Accredito partner al passaggio a ritirato") — questa feature non deve
+// mai toccarlo, per non generare commissioni non volute.
+function handlePartnerGenerateFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.partnerGenerateInput = { type: "image", base64: reader.result.split(",")[1], mediaType: file.type, dataUrl: reader.result };
+    state.partnerGenerateResult = null;
+    state.partnerGenerateError = null;
+    render();
+    runPartnerGenerateClassification(classifyImage(state.partnerGenerateInput.base64, state.partnerGenerateInput.mediaType));
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runPartnerGenerateClassification(promise) {
+  state.partnerGenerateLoading = true;
+  state.partnerGenerateError = null;
+  render();
+  try {
+    const result = await promise;
+    state.partnerGenerateResult = result;
+  } catch (err) {
+    state.partnerGenerateError = /401/.test(err.message) ? "Chiave AI non valida o mancante." : "Classificazione non riuscita. Riprova.";
+  }
+  state.partnerGenerateLoading = false;
+  render();
+}
+
+function PartnerGenerateShipmentScreen() {
+  const wrap = el("div", "section");
+
+  const back = el("div", "back", "← Torna all'area partner");
+  back.addEventListener("click", () => {
+    state.partnerView = "dashboard";
+    render();
+  });
+  wrap.appendChild(back);
+
+  wrap.appendChild(el("div", "tg-lbl", "Genera spedizione — per conto di un cliente"));
+  wrap.appendChild(
+    el(
+      "div",
+      "identify-intro",
+      `Codice partner: ${state.partnerLoggedCode}. La spedizione generata comparirà nel tuo storico "Spedizioni generate", mai in quello di un altro partner.`
+    )
+  );
+
+  if (state.partnerGenerateSaved) {
+    const doneCard = el("div", "info-card");
+    doneCard.innerHTML = `<div class="info-line">✅ Spedizione generata: <b>${escapeHtml(state.partnerGenerateSaved.id)}</b></div>
+      <div class="info-row"><span>Cliente</span><b>${escapeHtml(state.partnerGenerateSaved.touristName)}</b></div>
+      <div class="info-row"><span>Tier di prezzo applicato</span><b>${escapeHtml(state.partnerGenerateSaved.pricingTier)}</b></div>
+      <div class="info-row total"><span>Totale</span><b>€${state.partnerGenerateSaved.price.toFixed(2)}</b></div>`;
+    wrap.appendChild(doneCard);
+    const newBtn = el("button", "btn-primary", "Genera un'altra spedizione →");
+    newBtn.addEventListener("click", () => {
+      state.partnerGenerateInput = null;
+      state.partnerGenerateResult = null;
+      state.partnerGenerateError = null;
+      state.partnerGenerateSaved = null;
+      state.partnerGenerateSaveError = null;
+      render();
+    });
+    wrap.appendChild(newBtn);
+    return wrap;
+  }
+
+  // Passo 1: foto -> classificazione AI (input file nativo, già
+  // compatibile desktop — nessun mirino fotocamera custom qui, quella
+  // feature è pensata per lo smartphone del turista, non per un operatore
+  // al PC che carica foto già scattate).
+  const fileField = el("div", "dest-field-block");
+  fileField.innerHTML = `<div class="dest-lbl">1. Foto dell'oggetto</div>
+    <input type="file" id="partner-generate-file" accept="image/*" />`;
+  wrap.appendChild(fileField);
+  fileField.querySelector("#partner-generate-file").addEventListener("change", (e) => {
+    handlePartnerGenerateFile(e.target.files[0]);
+  });
+
+  if (state.partnerGenerateInput && state.partnerGenerateInput.dataUrl) {
+    const preview = el("img", "capture-preview");
+    preview.src = state.partnerGenerateInput.dataUrl;
+    preview.alt = "Anteprima foto oggetto";
+    wrap.appendChild(preview);
+  }
+
+  if (state.partnerGenerateLoading) {
+    wrap.appendChild(el("div", "identify-intro", "Classificazione AI in corso…"));
+  }
+  if (state.partnerGenerateError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerGenerateError)}`));
+  }
+
+  const result = state.partnerGenerateResult;
+  if (result) {
+    const resultCard = el("div", "info-card");
+    resultCard.innerHTML = `<div class="doc-eyebrow">2. Risultato classificazione</div>
+      <div class="info-row"><span>Oggetto</span><b>${escapeHtml(localizeObjectName(result))}</b></div>
+      <div class="info-row"><span>Codice HS</span><b>${escapeHtml(result.hs_code || "—")}</b></div>
+      <div class="info-row"><span>Peso</span><b>${result.weight_kg} kg</b></div>
+      <div class="info-row"><span>Valore dichiarato</span><b>€${(result.value_eur || 0).toFixed ? result.value_eur.toFixed(2) : result.value_eur}</b></div>`;
+    wrap.appendChild(resultCard);
+
+    // Passo 3: dati del cliente finale — nome/email + paese/città reale
+    // (standard PR #41, riusato senza modifiche) per il destinatario. La
+    // zona dest-country determina il prezzo (SHIPPING_RATES, invariato);
+    // paese/città reale restano puramente informativi, come per il turista.
+    wrap.appendChild(el("div", "doc-eyebrow", "3. Dati del cliente finale"));
+    const clientField = el("div", "dest-field-block");
+    clientField.innerHTML = `
+      <input class="addr-input" id="partner-generate-client-name" placeholder="Nome cliente" />
+      <input class="addr-input" id="partner-generate-client-email" placeholder="Email cliente" type="email" />`;
+    wrap.appendChild(clientField);
+    wrap.appendChild(AddressFormFields("partner-generate-dest"));
+
+    if (state.partnerGenerateSaveError) {
+      wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerGenerateSaveError)}`));
+    }
+
+    const submitBtn = el("button", "btn-primary", state.partnerGenerateSaving ? "Genero spedizione…" : "Genera spedizione →");
+    submitBtn.id = "partner-generate-submit-btn";
+    submitBtn.disabled = state.partnerGenerateSaving;
+    submitBtn.addEventListener("click", () => submitPartnerGeneratedShipment());
+    wrap.appendChild(submitBtn);
+  }
+
+  return wrap;
+}
+
+// Costruzione item + invio a save-purchase.js — stesso schema dell'item
+// turista self-service (vedi ChooseAddressScreen/ConcludeScreen più sopra),
+// con SOLO due differenze deliberate: generatedByPartnerCode valorizzato
+// (mai su un acquisto turista) e pricingTier da pricingTierForPartnerPlan()
+// invece che dallo stato turista breakeven/abbonato/pieno. Invio diretto
+// (await fetch, non syncPurchaseToCRM/coda di ritentativo locale): un
+// operatore al banco deve vedere subito se il salvataggio è riuscito,
+// non fidarsi di un retry silenzioso pensato per il turista offline.
+async function submitPartnerGeneratedShipment() {
+  const result = state.partnerGenerateResult;
+  if (!result) return;
+  const clientName = (document.getElementById("partner-generate-client-name").value || "").trim();
+  const clientEmail = (document.getElementById("partner-generate-client-email").value || "").trim();
+  const dest = readAddressForm("partner-generate-dest");
+  if (!clientName) {
+    state.partnerGenerateSaveError = "Inserisci il nome del cliente finale.";
+    render();
+    return;
+  }
+  if (!dest.country) {
+    state.partnerGenerateSaveError = "Seleziona la destinazione (zona di tariffazione).";
+    render();
+    return;
+  }
+
+  state.partnerGenerateSaving = true;
+  state.partnerGenerateSaveError = null;
+  render();
+
+  const plan = (state.partnerStats && state.partnerStats.plan) || "free";
+  const pricingTier = pricingTierForPartnerPlan(plan);
+  const q = priceQuotes(result.weight_kg, dest.country, result);
+  const price = pricingTier === "breakeven" ? q.breakeven : pricingTier === "abbonato" ? q.subscribed : q.full;
+
+  const photo = state.partnerGenerateInput && state.partnerGenerateInput.dataUrl
+    ? await compressImage(state.partnerGenerateInput.dataUrl, 480, 0.6)
+    : null;
+
+  const item = {
+    id: generateBookingCode(),
+    objectName: localizeObjectName(result),
+    hsCode: result.hs_code || "—",
+    category: result.category || null,
+    material: result.material || null,
+    weightKg: result.weight_kg,
+    dims: { length_cm: result.length_cm, width_cm: result.width_cm, height_cm: result.height_cm },
+    packageDims: packagedDimensions(result),
+    itemValue: typeof result.value_eur === "number" ? result.value_eur : 0,
+    pricingTier,
+    addressLabel: `${dest.street || ""}, ${[dest.cap, dest.city].filter(Boolean).join(" ")}, ${dest.country}`.replace(/^,\s*/, ""),
+    country: dest.realCountry || null,
+    city: dest.city || null,
+    price,
+    touristName: clientName,
+    touristEmail: clientEmail || null,
+    // Campo nuovo, isolato: il codice del partner che HA GENERATO questa
+    // spedizione per conto del cliente — mai item.partnerCode (riservato al
+    // meccanismo di commissione sconti, vedi commento sopra la funzione).
+    generatedByPartnerCode: state.partnerLoggedCode,
+    status: "in sospeso",
+    date: new Date().toISOString(),
+    photo,
+  };
+
+  try {
+    const res = await fetch("/.netlify/functions/save-purchase", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    });
+    if (!res.ok) throw new Error("save-purchase failed: " + res.status);
+    state.partnerGenerateSaved = item;
+  } catch (e) {
+    state.partnerGenerateSaveError = "Salvataggio non riuscito. Verifica la connessione e riprova.";
+  }
+  state.partnerGenerateSaving = false;
+  render();
+}
+
+// ---------------------------------------------------------------------
+// "Spedizioni generate" — storico delle spedizioni generate DA QUESTO
+// partner per conto di clienti (generatedByPartnerCode), mai quelle di un
+// altro partner: il filtro per codice è applicato lato server (vedi
+// action "list-generated-shipments" in netlify/functions/sync.js), non
+// solo lato client — stesso principio già usato per "list-comunicati".
+async function loadPartnerGeneratedShipments() {
+  state.partnerShipmentsLoading = true;
+  state.partnerShipmentsError = null;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list-generated-shipments", code: state.partnerLoggedCode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Errore nel caricamento");
+    state.partnerShipments = data.items || [];
+  } catch (e) {
+    state.partnerShipmentsError = "Impossibile caricare lo storico. Riprova.";
+  }
+  state.partnerShipmentsLoading = false;
+  render();
+}
+
+function PartnerGeneratedShipmentsScreen() {
+  const wrap = el("div", "section");
+
+  const back = el("div", "back", "← Torna all'area partner");
+  back.addEventListener("click", () => {
+    state.partnerView = "dashboard";
+    render();
+  });
+  wrap.appendChild(back);
+
+  wrap.appendChild(el("div", "tg-lbl", "Spedizioni generate"));
+  wrap.appendChild(el("div", "identify-intro", `Solo le spedizioni generate dal tuo codice partner (${state.partnerLoggedCode}).`));
+
+  if (state.partnerShipmentsLoading) {
+    wrap.appendChild(el("div", "identify-intro", "Carico lo storico…"));
+    return wrap;
+  }
+  if (state.partnerShipmentsError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerShipmentsError)}`));
+    const retryBtn = el("button", "btn-secondary", "Riprova");
+    retryBtn.addEventListener("click", () => loadPartnerGeneratedShipments());
+    wrap.appendChild(retryBtn);
+    return wrap;
+  }
+  if (!state.partnerShipments.length) {
+    wrap.appendChild(el("div", "identify-intro", "Nessuna spedizione generata finora."));
+    return wrap;
+  }
+
+  const list = el("div", "history-list");
+  state.partnerShipments
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .forEach((it) => {
+      const dt = new Date(it.date);
+      const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+      const row = el("div", "history-item");
+      row.innerHTML = `
+        <div class="history-top"><span class="history-name">${escapeHtml(it.objectName || "—")}</span><span class="history-status ${historyStatusClass(it.status)}">${escapeHtml(it.status || "—")}</span></div>
+        <div class="history-meta">Cliente: <b>${escapeHtml(it.touristName || "—")}</b> · Tier: ${escapeHtml(it.pricingTier || "—")} · €${(it.price || 0).toFixed(2)}</div>
+        <div class="history-meta">ID ${escapeHtml(it.id)} · ${dateStr}</div>`;
+      list.appendChild(row);
+    });
+  wrap.appendChild(list);
 
   return wrap;
 }

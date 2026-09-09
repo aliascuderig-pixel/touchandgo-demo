@@ -341,6 +341,29 @@ exports.handler = async (event) => {
       return ok({ id, readByMe: true });
     }
 
+    // "Spedizioni generate" (area partner, spazio dedicato "Genera
+    // spedizione") — storico delle spedizioni che QUESTO partner ha
+    // generato per conto di clienti finali (item.generatedByPartnerCode,
+    // scritto da save-purchase.js invariato quando l'app partner invia
+    // l'item — mai su un acquisto turista self-service). Stesso schema di
+    // "list-comunicati" sopra: verifica che il codice corrisponda a un
+    // partner reale, poi scansione filtrata dell'intero store "purchases",
+    // protetta dallo stesso rate limit — un partner non deve mai vedere le
+    // spedizioni generate da un altro partner.
+    if (action === "list-generated-shipments") {
+      const withinLimit = await checkRateLimit(`list-generated-shipments:${getClientIp(event)}`);
+      if (!withinLimit) return bad("Troppe richieste, riprova tra qualche minuto.", 429);
+      const normalized = (body.code || "").trim().toUpperCase();
+      if (!normalized) return bad("Missing partner code");
+      const partner = await partners.get(normalized, { type: "json" });
+      if (!partner) return bad("Partner non trovato", 404);
+
+      const { blobs } = await purchases.list();
+      const all = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
+      const items = all.filter((it) => it.generatedByPartnerCode === normalized);
+      return ok({ items });
+    }
+
     return bad("Unknown action");
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
