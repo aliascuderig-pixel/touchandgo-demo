@@ -1082,6 +1082,105 @@ const state = {
 };
 const app = document.getElementById("app");
 
+// ---------------- Trail di supporto (assistenza predittiva) ----------------
+// Primo pezzo del sistema di ticket assistenza predittivo: una raccolta
+// locale di un breve storico delle azioni del turista (schermate visitate +
+// azioni compiute), pensata per essere allegata automaticamente quando in
+// futuro il turista apre un ticket — così lo staff vede cosa è successo
+// prima di un problema, senza dover chiedere "cosa stavi facendo?".
+//
+// VINCOLO DI PRIVACY NON NEGOZIABILE: il trail registra SOLO nomi di eventi
+// (quale schermata, quale azione) — MAI il contenuto di un campo digitato
+// dal turista (mai un'email, un nome, un indirizzo, un codice specifico
+// inserito). Fa eccezione il testo di un messaggio di errore mostrato
+// dall'app: quello è informazione di sistema già visibile sullo schermo del
+// turista, non un dato personale che lui ha digitato. Ogni chiamata a
+// recordTrailEntry("action", ...) in questo file passa sempre un'etichetta
+// fissa/generica (o il testo di un errore di sistema) — MAI un valore letto
+// direttamente da un campo del form (vedi i singoli punti di aggancio più
+// sotto nel file per la verifica caso per caso).
+//
+// Nessuna chiamata di rete qui: il trail resta solo locale in questo pezzo.
+// L'invio a un ticket di assistenza è un pezzo separato futuro — vedi
+// MANUALE.md, sezione "Trail di supporto (assistenza predittiva)".
+const TRAIL_STORAGE_KEY = "tg_support_trail";
+const TRAIL_MAX_ENTRIES = 15;
+
+function loadTrail() {
+  try {
+    const raw = localStorage.getItem(TRAIL_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+let supportTrail = loadTrail();
+
+// Etichetta leggibile per ogni valore di state.screen — solo per chi legge
+// il trail (staff assistenza): non introduce nuove schermate, riusa i
+// valori già esistenti come chiave.
+const TRAIL_SCREEN_LABELS = {
+  cover: "Copertina",
+  onboarding: "Onboarding",
+  "biometric-lock": "Blocco biometrico",
+  identify: "Identificazione",
+  home: "Home",
+  destination: "Destinazione",
+  "add-address": "Aggiungi indirizzo",
+  "choose-address": "Scegli indirizzo",
+  analyzing: "Analisi in corso",
+  result: "Risultato",
+  queued: "In coda",
+  conclude: "Conclusione soggiorno",
+  shipped: "Spedito",
+  history: "Storico",
+  "edit-item-address": "Modifica indirizzo oggetto",
+  "view-item-photo": "Foto oggetto",
+  dashboard: "Dashboard",
+  documents: "Documenti",
+  "package-check": "Verifica pacco",
+  review: "Recensione",
+};
+
+// Voce generica del trail — usata sia per le schermate (type:"screen") sia
+// per le azioni (type:"action"). Tronca sempre alle ultime TRAIL_MAX_ENTRIES
+// voci: le più vecchie escono quando se ne aggiunge una nuova oltre il
+// limite.
+function recordTrailEntry(type, label) {
+  supportTrail.push({ type, label, at: new Date().toISOString() });
+  if (supportTrail.length > TRAIL_MAX_ENTRIES) {
+    supportTrail = supportTrail.slice(supportTrail.length - TRAIL_MAX_ENTRIES);
+  }
+  try {
+    localStorage.setItem(TRAIL_STORAGE_KEY, JSON.stringify(supportTrail));
+  } catch (e) {
+    // localStorage non disponibile/pieno: il trail resta comunque valido in
+    // memoria per la sessione corrente, solo non sopravvive a un reload.
+  }
+}
+
+// Ultimo state.screen già registrato nel trail — evita di aggiungere una
+// voce "screen" duplicata ad ogni render() che non cambia schermata (render()
+// viene chiamato molto più spesso di quanto cambi effettivamente la
+// schermata, es. dopo un aggiornamento di stato all'interno della stessa
+// schermata).
+let lastTrailScreen = null;
+function recordScreenChange(screen) {
+  if (screen === lastTrailScreen) return;
+  lastTrailScreen = screen;
+  recordTrailEntry("screen", TRAIL_SCREEN_LABELS[screen] || screen);
+}
+
+// Punto centrale richiamabile in futuro (es. dal bottone "Contatta
+// assistenza", pezzo separato non ancora costruito) — restituisce una COPIA
+// dell'array corrente, mai il riferimento interno, così un chiamante non può
+// mutare accidentalmente supportTrail dall'esterno.
+function getRecentTrail() {
+  return supportTrail.slice();
+}
+
 // Filtro SVG "schizzo architettonico" per lo sfondo della Cover quando è
 // disponibile una foto reale del punto di ritiro (state.locationPhoto),
 // al posto della foto fotorealistica — desatura, rileva i bordi, inverte
@@ -1130,6 +1229,7 @@ function GuestModeBanner() {
 }
 
 function render() {
+  recordScreenChange(state.screen);
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
   // Spazio ospite: mostrato PRIMA del controllo onboarding qui sotto (che
@@ -3035,6 +3135,7 @@ function DestinationScreen() {
     if (!state.pendingInput) return;
     if (state.isOffline) {
       state.error = t("dest_error_offline");
+      recordTrailEntry("action", "Errore: " + state.error);
       render();
       return;
     }
@@ -3429,6 +3530,9 @@ function PartnerDiscountField(fee) {
 }
 
 async function applyPartnerDiscountCode(code, fee) {
+  // Label generico e fisso — MAI il valore di "code" (vincolo di privacy
+  // del trail, vedi commento sopra recordTrailEntry()).
+  recordTrailEntry("action", "Codice partner inserito");
   state.partnerDiscountChecking = true;
   state.partnerDiscountError = null;
   render();
@@ -3963,6 +4067,7 @@ async function submitReview(item) {
       throw new Error(data.error || "Invio non riuscito, riprova.");
     }
     markReviewed(item.id);
+    recordTrailEntry("action", "Recensione inviata");
     state.reviewJustSubmitted = true;
     state.reviewDraftRating = 0;
     state.reviewDraftText = "";
@@ -4471,6 +4576,7 @@ function ConcludeScreen() {
     `Conferma e paga €${grandTotal.toFixed(2)} — ordine di ritiro consolidato →`
   );
   confirmBtn.addEventListener("click", () => {
+    recordTrailEntry("action", "Concludi e paga cliccato");
     if (!hasValidIdentity()) {
       state.identifyPrompt = state.idDocument
         ? "Il documento caricato non mostra una firma visibile: ricaricane uno che la includa prima di confermare il ritiro."
@@ -5077,6 +5183,7 @@ function ChooseAddressScreen() {
       saveHistory();
       syncPurchaseToCRM(item);
       state.lastQueuedItem = item;
+      recordTrailEntry("action", "QR generato per un oggetto");
       state.screen = "queued";
       render();
     }, 700);
@@ -5493,6 +5600,7 @@ function PurchaseHistoryList(items, emptyText, editable) {
         const pickupBtn = el("button", "queue-item-change", "📦 Richiedi ritiro");
         pickupBtn.addEventListener("click", (e) => {
           e.stopPropagation();
+          recordTrailEntry("action", "Richiedi ritiro cliccato");
           if (!hasValidIdentity()) {
             state.identifyPrompt = state.idDocument
               ? "Il documento caricato non mostra una firma visibile: ricaricane uno che la includa prima di richiedere il ritiro."
@@ -5606,6 +5714,7 @@ async function runClassification(promise) {
     refreshDutyEstimate(result, currentDestinationName());
   } catch (err) {
     state.error = /401/.test(err.message) ? t("dest_error_api_key") : t("dest_error_ai_generic");
+    recordTrailEntry("action", "Errore: " + state.error);
     state.screen = "destination";
   }
   render();
@@ -5679,6 +5788,7 @@ function handleFile(file) {
 // pronto (es. lo scatto del mirino fotocamera custom in openCameraViewfinder,
 // che produce direttamente un data URL via canvas invece che un File).
 function handleImageDataUrl(dataUrl, mediaType) {
+  recordTrailEntry("action", "Foto caricata/scattata");
   state.pendingInput = { type: "image", base64: dataUrl.split(",")[1], mediaType, dataUrl };
   state.screen = "destination";
   render();
