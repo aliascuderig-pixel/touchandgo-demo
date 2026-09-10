@@ -228,6 +228,14 @@ button{font-family:inherit;cursor:pointer}
   position:absolute;right:6px;top:50%;transform:translateY(-50%);
   width:34px;height:34px;border-radius:999px;background:var(--ink);color:var(--ivory);border:none;
 }
+/* Il pulsante microfono (addVoiceButton) convive con l'arrow-button "→"
+   già presente in ogni .describe-box (home_describe/promo/discount) — il
+   wrapper deve occupare tutta la larghezza (altrimenti l'input non è più
+   width:100%) e l'icona microfono va spostata a sinistra dell'arrow-button
+   esistente, mai sopra di esso. */
+.describe-box .voice-field-wrap{width:100%}
+.describe-box .voice-field-wrap input{padding-right:74px}
+.describe-box .voice-btn{right:42px}
 
 .analyzing{padding:60px 20px;text-align:center}
 .analyzing .spinner{

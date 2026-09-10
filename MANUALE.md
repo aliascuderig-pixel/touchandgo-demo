@@ -213,7 +213,26 @@ Per i turisti di fretta o con difficoltà a digitare, alcuni campi testuali poss
 
 **Browser senza `SpeechRecognition`/`webkitSpeechRecognition` (bug corretto)**: prima di questa correzione, in assenza dell'API il bottone semplicemente **non veniva aggiunto** (`return` silenzioso) — nessuna icona, nessun messaggio, e nessuna indicazione al turista che la dettatura non fosse disponibile su quel browser (tipicamente Firefox, che non implementa mai l'API, o versioni di Safari con supporto storicamente incompleto). Investigato con un vero test end-to-end in `AssistantChatModal` (non solo lettura del codice): con l'API presente, sia il rendering del pulsante sia la gestione errori (es. permesso negato → toast) funzionano correttamente in quel contesto specifico — la causa reale era quindi esclusivamente l'assenza di un fallback per l'API non supportata, non un problema di rendering/gestione permessi limitato alla modale assistente. Ora il pulsante compare comunque (attenuato, classe `.voice-btn-unsupported`), con titolo/`aria-label` espliciti e un tap mostra "🎤 Dettatura vocale non disponibile su questo browser — puoi comunque scrivere qui a mano." tramite lo stesso `.voice-toast` già usato per gli altri errori.
 
-È applicata a: nome del turista (`name-input`), etichetta indirizzo (`newaddr-label`), codice partner in `PartnerLoginAndHistory()` (`partner-code-input`), i campi via/città/CAP generati da `AddressFormFields()` (quindi automaticamente su ogni indirizzo, non solo uno) e il campo messaggio di `AssistantChatModal()`. **Non** è applicata al campo email — dettare un indirizzo email a voce è troppo impreciso.
+**Elenco completo dei campi coperti** (verificato leggendo il codice riga per riga, non assunto — investigazione ripetuta in occasione dell'estensione di copertura di settembre 2026, vedi sotto):
+
+- `name-input` (nome del turista, `IdentifyScreen`)
+- `newaddr-label` (etichetta indirizzo, `AddAddressScreen`)
+- `partner-code-input` (codice partner, `PartnerLoginAndHistory()`)
+- `${prefix}-street`/`${prefix}-city`/`${prefix}-cap`/`${prefix}-realcountry` — i quattro campi generati da `AddressFormFields(prefix)`, quindi automaticamente su ogni indirizzo che la usa (non solo uno): `identify`, `newaddr`, `partner-generate-dest`, ecc. (`${prefix}-realcountry` aggiunto a settembre 2026, vedi sotto — gli altri tre erano già coperti).
+- `assistant-chat-input` (messaggio dell'assistente AI, `AssistantChatModal()`)
+- La textarea di `ReviewScreen()` (testo libero della recensione)
+- `support-message-input` (messaggio di "Contatta assistenza", `SupportRequestModal()` — **aggiunto a settembre 2026**)
+- `partner-generate-client-name` (nome cliente nel modulo "Genera spedizione" partner, `PartnerGenerateShipmentScreen()` — **aggiunto a settembre 2026**)
+- `pickup-input` (punto di ritiro manuale, `PickupField()` in `DestinationScreen`) — **aggiunto a settembre 2026**
+- `item-pickup-input` (punto di ritiro per il singolo acquisto, `ChooseAddressScreen()`) — **aggiunto a settembre 2026**
+- Il campo "descrivilo" in `HomeScreen()` (testo libero che avvia `classifyText()`, il percorso di classificazione senza foto) — **aggiunto a settembre 2026**
+- Il campo codice promozionale in `HomeScreen()` e il campo codice sconto partner in `PartnerDiscountField()` (`ResultScreen`) — **aggiunti a settembre 2026**: sono campi alfanumerici brevi, non prosa libera, ma stesso principio già applicato a `partner-code-input` (anch'esso un codice, non prosa) — coerenza con quel precedente già in uso nel repository.
+
+**Non** è applicata ai campi email (`support-email-input`, `partner-generate-client-email`, `email-input`) — dettare un indirizzo email a voce è troppo impreciso, principio invariato.
+
+**Nota sulla lingua di riconoscimento**: `recognition.lang` resta `navigator.language` (mai `state.lang`, la lingua di visualizzazione dell'app) — verificato e confermato deliberatamente anche nell'estensione di settembre 2026: un turista può visualizzare l'app in una lingua diversa da quella in cui preferisce dettare (es. interfaccia in inglese ma dettatura in italiano), e forzare `recognition.lang = state.lang` peggiorerebbe l'accuratezza per chi si trova in questo caso, non la migliorerebbe.
+
+**Verifica** (settembre 2026, prima suite di test scritta per questa funzionalità — non esisteva prima): 15 test in `dist/assets/__tests__/voice-input.test.js`. Copre il comportamento reale di `addVoiceButton()` (pulsante SEMPRE presente, mai il campo rotto — con e senza `SpeechRecognition`/`webkitSpeechRecognition` finta nel contesto vm), il testo trascritto accodato correttamente al campo con un evento `input` reale dispatchato, l'errore di permesso negato, nessuna regressione sull'uso da tastiera in entrambi i casi, e l'esistenza del pulsante su ciascuno dei campi elencati sopra (email escluse per verifica negativa esplicita).
 
 ### Multilingua italiano/inglese (in corso — FASE 1 + FASE 2 contenuti dinamici)
 
