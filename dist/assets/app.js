@@ -1569,6 +1569,7 @@ function SupportRequestModal() {
     state.supportMessage = e.target.value;
   });
   modal.appendChild(msgField);
+  addVoiceButton(msgInput);
 
   const emailField = el("div", "assistant-chat-field");
   emailField.innerHTML = `<input class="addr-input" type="email" id="support-email-input" placeholder="${t(
@@ -2121,6 +2122,7 @@ function PartnerGenerateShipmentScreen() {
       <input class="addr-input" id="partner-generate-client-name" placeholder="Nome cliente" />
       <input class="addr-input" id="partner-generate-client-email" placeholder="Email cliente" type="email" />`;
     wrap.appendChild(clientField);
+    addVoiceButton(clientField.querySelector("#partner-generate-client-name"));
     wrap.appendChild(AddressFormFields("partner-generate-dest"));
 
     if (state.partnerGenerateSaveError) {
@@ -3244,6 +3246,7 @@ function HomeScreen() {
   });
   describeBox.appendChild(input);
   describeBox.appendChild(goBtn);
+  addVoiceButton(input);
   section.appendChild(describeLbl);
   section.appendChild(describeBox);
 
@@ -3273,6 +3276,7 @@ function HomeScreen() {
       });
       promoBox.appendChild(promoInput);
       promoBox.appendChild(promoGo);
+      addVoiceButton(promoInput);
       section.appendChild(promoBox);
       if (state.promoChecked && !state.promoValid) {
         section.appendChild(el("div", "promo-invalid", t("code_invalid_generic")));
@@ -3364,6 +3368,7 @@ function PickupField() {
     addRecentPickup(state.pickupPoint);
     render();
   });
+  addVoiceButton(input);
   wrap.appendChild(field);
 
   const useLocBtn = el("button", "pickup-use-location", t("pickup_use_location"));
@@ -3708,6 +3713,7 @@ function PartnerDiscountField(fee) {
   });
   box.appendChild(input);
   box.appendChild(go);
+  addVoiceButton(input);
   wrap.appendChild(box);
 
   if (state.partnerDiscountError) {
@@ -5113,6 +5119,7 @@ function AddressFormFields(prefix) {
   addVoiceButton(wrap.querySelector(`#${prefix}-street`));
   addVoiceButton(wrap.querySelector(`#${prefix}-city`));
   addVoiceButton(wrap.querySelector(`#${prefix}-cap`));
+  addVoiceButton(wrap.querySelector(`#${prefix}-realcountry`));
   return wrap;
 }
 
@@ -5295,6 +5302,7 @@ function ChooseAddressScreen() {
   const pickupField = el("div", "dest-field");
   pickupField.innerHTML = `<div class="dest-lbl">Se diverso dal punto vendita rilevato</div><input class="dest-input" id="item-pickup-input" value="${escapeHtml(state.pickupPoint)}" />`;
   wrap.appendChild(pickupField);
+  addVoiceButton(pickupField.querySelector("#item-pickup-input"));
   wrap.appendChild(
     el("div", "home-foot", "Utile se chi imballa/consegna l'oggetto non è lo stesso negozio dove hai fatto l'acquisto.")
   );
