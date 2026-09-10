@@ -393,6 +393,19 @@ const I18N = {
     assistant_chat_sending: "Un attimo…",
     assistant_chat_error: "Non sono riuscito a rispondere. Riprova.",
 
+    // ---- Contatta assistenza (SupportRequestModal, netlify/functions/sync.js action "submit-support-request") ----
+    header_support_btn: "🆘 Contatta assistenza",
+    support_modal_title: "Contatta l'assistenza",
+    support_modal_close_aria: "Chiudi",
+    support_message_placeholder: "Descrivi il problema che hai incontrato…",
+    support_email_placeholder: "La tua email (facoltativa)",
+    support_send_btn: "Invia richiesta",
+    support_sending: "Invio…",
+    support_error_empty_message: "Scrivi un messaggio prima di inviare.",
+    support_error_generic: "Invio non riuscito. Riprova.",
+    support_confirm_intro: "Richiesta inviata — ti risponderemo al più presto.",
+    support_confirm_close_btn: "Chiudi",
+
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Punto di ritiro rilevato",
     cover_tap: "Tocca per iniziare →",
@@ -639,6 +652,19 @@ const I18N = {
     assistant_chat_send: "Send",
     assistant_chat_sending: "One moment…",
     assistant_chat_error: "I couldn't get an answer. Please try again.",
+
+    // ---- Contact support (SupportRequestModal, netlify/functions/sync.js action "submit-support-request") ----
+    header_support_btn: "🆘 Contact support",
+    support_modal_title: "Contact support",
+    support_modal_close_aria: "Close",
+    support_message_placeholder: "Describe the problem you ran into…",
+    support_email_placeholder: "Your email (optional)",
+    support_send_btn: "Send request",
+    support_sending: "Sending…",
+    support_error_empty_message: "Write a message before sending.",
+    support_error_generic: "Sending failed. Please try again.",
+    support_confirm_intro: "Request sent — we'll get back to you soon.",
+    support_confirm_close_btn: "Close",
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Pickup point detected",
@@ -1079,6 +1105,19 @@ const state = {
   assistantChatReply: null,
   assistantChatError: null,
   assistantChatLoading: false,
+  // Modale "Contatta assistenza" (SupportRequestModal) — invia una
+  // richiesta di assistenza reale, con il trail locale allegato (vedi
+  // MANUALE.md, sezione "Trail di supporto (assistenza predittiva)" e
+  // "Contatta assistenza"). Nomi con prefisso supportModal*/support* per
+  // non confondersi con assistantChat* sopra (feature diversa: quello è
+  // l'assistente conversazionale AI, questo è l'invio di un ticket reale
+  // allo staff).
+  supportModalOpen: false,
+  supportMessage: "",
+  supportContactEmail: "",
+  supportSubmitting: false,
+  supportSubmitError: null,
+  supportSubmitted: false,
 };
 const app = document.getElementById("app");
 
@@ -1270,6 +1309,7 @@ function render() {
   // non perde il contesto (es. può farsi una domanda da ResultScreen e
   // ritrovarsi esattamente lì chiudendo la chat).
   if (state.assistantChatOpen) app.appendChild(AssistantChatModal());
+  if (state.supportModalOpen) app.appendChild(SupportRequestModal());
 }
 
 function el(tag, cls, html) {
@@ -1311,6 +1351,7 @@ function Header() {
         <button class="lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>
       </div>
       ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
+      ${state.mode === "turista" ? `<button class="header-support-btn" id="header-support-btn" type="button">${t("header_support_btn")}</button>` : ""}
       <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">${t("header_site_link")}</a>
       <button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
     </div>`;
@@ -1323,6 +1364,23 @@ function Header() {
   if (assistantBtn) {
     assistantBtn.addEventListener("click", () => {
       state.assistantChatOpen = true;
+      render();
+    });
+  }
+  // "Contatta assistenza" — sempre raggiungibile da qualunque schermata
+  // (stesso principio del bottone assistente sopra: overlay, non una
+  // navigazione, l'utente non perde il contesto), non nascosto in fondo a
+  // una schermata specifica. Precompila l'email di contatto con
+  // state.touristEmail se già nota (nessuna richiesta di digitarla di
+  // nuovo se il turista si è già identificato), altrimenti vuota/facoltativa.
+  const supportBtn = header.querySelector("#header-support-btn");
+  if (supportBtn) {
+    supportBtn.addEventListener("click", () => {
+      state.supportModalOpen = true;
+      state.supportMessage = "";
+      state.supportContactEmail = state.touristEmail || "";
+      state.supportSubmitError = null;
+      state.supportSubmitted = false;
       render();
     });
   }
@@ -1450,6 +1508,136 @@ async function sendAssistantChatMessage() {
     state.assistantChatError = t("assistant_chat_error");
   }
   state.assistantChatLoading = false;
+  render();
+}
+
+// ---------------- "Contatta assistenza" (ticket reale allo staff) ----------------
+//
+// A differenza di AssistantChatModal sopra (un assistente conversazionale
+// AI, mai visto da un umano), questo invia un ticket reale che lo staff
+// legge nel CRM (touchandgo-internal, tab "Assistenza") — primo pezzo
+// separato: netlify/functions/sync.js, action "submit-support-request",
+// scrive sullo store condiviso "support-requests" con ESATTAMENTE i campi
+// già attesi da quel lato (id/createdAt/message/contactEmail/context/
+// status/updatedAt — verificati leggendo il codice reale del CRM prima di
+// scrivere questo pezzo) più un campo nuovo, "trail": l'intero array
+// restituito da getRecentTrail() (PR #46, "Trail di supporto (assistenza
+// predittiva)") al momento dell'invio — MAI trasformato, passato così
+// com'è. getRecentTrail() stesso non è toccato qui, solo letto.
+function SupportRequestModal() {
+  const overlay = el("div", "assistant-chat-overlay");
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeSupportModal();
+  });
+
+  const modal = el("div", "assistant-chat-modal");
+  modal.addEventListener("click", (e) => e.stopPropagation());
+
+  const header = el("div", "assistant-chat-header");
+  header.innerHTML = `<div class="assistant-chat-title">${t("support_modal_title")}</div>`;
+  const closeBtn = el("button", "assistant-chat-close", "✕");
+  closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", t("support_modal_close_aria"));
+  closeBtn.addEventListener("click", closeSupportModal);
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  // Stato di conferma: il messaggio appena inviato dal turista è testo
+  // libero, quindi va SEMPRE da escapeHtml() prima di finire in innerHTML
+  // qui — stesso principio già stabilito ovunque nel progetto (vedi
+  // xss-escape.test.js). Il CRM applica la propria disciplina di escaping
+  // lato suo, invariata: questo è solo il rendering di conferma lato client.
+  if (state.supportSubmitted) {
+    modal.innerHTML += `
+      <div class="support-confirm">${escapeHtml(t("support_confirm_intro"))}</div>
+      <div class="support-confirm-message">"${escapeHtml(state.supportMessage)}"</div>`;
+    const closeConfirmBtn = el("button", "btn-primary assistant-chat-send", t("support_confirm_close_btn"));
+    closeConfirmBtn.type = "button";
+    closeConfirmBtn.addEventListener("click", closeSupportModal);
+    modal.appendChild(closeConfirmBtn);
+    overlay.appendChild(modal);
+    return overlay;
+  }
+
+  const msgField = el("div", "assistant-chat-field");
+  msgField.innerHTML = `<textarea class="support-textarea" id="support-message-input" rows="4" placeholder="${t(
+    "support_message_placeholder"
+  )}"></textarea>`;
+  const msgInput = msgField.querySelector("#support-message-input");
+  msgInput.value = state.supportMessage;
+  msgInput.addEventListener("input", (e) => {
+    state.supportMessage = e.target.value;
+  });
+  modal.appendChild(msgField);
+
+  const emailField = el("div", "assistant-chat-field");
+  emailField.innerHTML = `<input class="addr-input" type="email" id="support-email-input" placeholder="${t(
+    "support_email_placeholder"
+  )}" />`;
+  const emailInput = emailField.querySelector("#support-email-input");
+  emailInput.value = state.supportContactEmail;
+  emailInput.addEventListener("input", (e) => {
+    state.supportContactEmail = e.target.value;
+  });
+  modal.appendChild(emailField);
+
+  if (state.supportSubmitError) {
+    modal.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.supportSubmitError)}`));
+  }
+
+  const sendBtn = el(
+    "button",
+    "btn-primary assistant-chat-send",
+    state.supportSubmitting ? t("support_sending") : t("support_send_btn")
+  );
+  sendBtn.type = "button";
+  sendBtn.disabled = state.supportSubmitting;
+  sendBtn.addEventListener("click", submitSupportRequest);
+  modal.appendChild(sendBtn);
+
+  overlay.appendChild(modal);
+  return overlay;
+}
+
+function closeSupportModal() {
+  state.supportModalOpen = false;
+  render();
+}
+
+async function submitSupportRequest() {
+  const message = (state.supportMessage || "").trim();
+  if (!message) {
+    state.supportSubmitError = t("support_error_empty_message");
+    render();
+    return;
+  }
+  state.supportSubmitting = true;
+  state.supportSubmitError = null;
+  render();
+  try {
+    const res = await fetch("/.netlify/functions/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "submit-support-request",
+        message,
+        contactEmail: (state.supportContactEmail || "").trim(),
+        // Stesso identico valore/formato usato per le voci "screen" del
+        // trail stesso (recordScreenChange(), vedi sopra) — TRAIL_SCREEN_LABELS
+        // è la mappa già esistente, non una nuova lista di etichette.
+        context: TRAIL_SCREEN_LABELS[state.screen] || state.screen,
+        // Letto qui, al momento dell'invio, MAI trasformato: il CRM (pezzo
+        // futuro) deve poterlo interpretare esattamente in questo formato.
+        trail: getRecentTrail(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || t("support_error_generic"));
+    state.supportSubmitted = true;
+  } catch (e) {
+    state.supportSubmitError = e.message || t("support_error_generic");
+  }
+  state.supportSubmitting = false;
   render();
 }
 
