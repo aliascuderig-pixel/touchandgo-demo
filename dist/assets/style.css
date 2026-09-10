@@ -507,6 +507,7 @@ button{font-family:inherit;cursor:pointer}
 .header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .header-site-link{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);text-decoration:none;border:1px solid var(--ink-border);padding:6px 10px}
 .header-assistant-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--ink);background:var(--gold-soft);border:1px solid var(--gold-soft);padding:6px 10px;cursor:pointer}
+.header-support-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--text);background:none;border:1px solid var(--line);padding:6px 10px;cursor:pointer}
 .offline-banner{background:var(--offline-bg);color:var(--gold-soft);font-size:11px;padding:10px 20px;line-height:1.6}
 /* Spazio ospite (continuità operativa) — vedi state.guestMode in app.js.
    Verde "rassicurante" (stessa coppia --good/--good-bg già usata per
@@ -586,6 +587,13 @@ button{font-family:inherit;cursor:pointer}
 .assistant-chat-send{margin:14px 0}
 .assistant-chat-reply{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);padding:14px 16px;font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap}
 .assistant-chat-reply::before{content:"Touch&Go";display:block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold-deep);margin-bottom:6px}
+
+/* ---------- "Contatta assistenza" (SupportRequestModal) — riusa il chrome
+   dell'overlay assistente sopra (.assistant-chat-*), solo i campi/lo stato
+   di conferma sono specifici. ---------- */
+.support-textarea{width:100%;border:1px solid var(--line);padding:11px 14px;font-family:var(--body);font-size:12.5px;background:var(--surface);box-sizing:border-box;margin-bottom:8px;resize:vertical}
+.support-confirm{font-size:13px;color:var(--text);margin-bottom:10px}
+.support-confirm-message{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:14px}
 
 /* ---------- Trust row ---------- */
 .trust-row{display:flex;background:var(--paper);border-bottom:1px solid var(--line)}

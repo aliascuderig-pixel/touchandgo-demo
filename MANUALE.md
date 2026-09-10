@@ -915,3 +915,68 @@ Pagina HTML statica fornita già pronta, servita da `dist/site/tutorial.html` �
 **Nessuna modifica alla logica applicativa esistente**: ogni punto sopra è una singola riga `recordTrailEntry(...)` aggiunta, mai una modifica a una condizione o a un comportamento già presente. Nessuna chiamata di rete aggiunta in questo pezzo.
 
 **Verifica**: 14 nuovi test in `dist/assets/__tests__/support-trail.test.js` — accumulo di voci "screen" solo sui cambi reali (mai un duplicato su re-render della stessa schermata), le 7 azioni sopra registrate con il label atteso nei punti reali del codice (incluso: un invio di recensione fallito NON registra nulla), il testo di un errore reale (offline e fallimento classificazione) nel trail, limite di 15 voci con troncamento delle più vecchie, `getRecentTrail()` restituisce una copia (mutarla non altera il trail interno) — e un test dedicato **critico**: un flusso completo con un'email/nome/indirizzo di test realmente presenti sullo stato e sull'item salvato (verificato esplicitamente che l'item generato li contenga davvero) non li fa mai comparire in nessuna voce del trail, nemmeno come frammento di un testo libero di recensione. Suite completa del repository verde (`npm test`).
+
+## Contatta assistenza — secondo pezzo del sistema di ticket assistenza predittivo (settembre 2026)
+
+**Perché esiste**: secondo pezzo (dopo il trail di supporto sopra, PR #46) del sistema di ticket assistenza predittivo. Questo pezzo costruisce il punto d'accesso vero e proprio: un turista può ora inviare una richiesta di assistenza reale, allo staff, con il trail locale delle sue ultime azioni allegato automaticamente — così chi legge il ticket nel CRM vede cosa è successo prima del problema, senza dover chiedere "cosa stavi facendo?".
+
+**Investigazione preliminare (prima di scrivere codice)**: letto il codice reale del CRM (`touchandgo-internal`, repository privato, `netlify/functions/crm.js` azioni `list-support-requests`/`update-support-request-status`, e `dist/site/admin.js` `renderSupportRequests()`) per verificare esattamente quali campi si aspetta di leggere dallo store condiviso `"support-requests"`, invece di indovinarli. Il CRM legge: `id`, `createdAt`, `message`, `contactEmail` (opzionale, mostra `—` se assente), `context` (opzionale, mostra `—` se assente), `status` (riconosce **solo** la stringa esatta `'gestita'` come "gestita" — qualunque altro valore, incluso assente, è "Nuova"), `updatedAt` (scritto da `update-support-request-status`, mai mostrato). **Nessun campo trail/cronologia esisteva ancora da nessuna parte nel CRM**, e **nessuna distinzione turista/partner** (`source`/`requesterType`) esisteva già — confermato con grep mirato, zero occorrenze in entrambi i casi.
+
+### Punto d'accesso — "Contatta assistenza"
+
+Bottone nell'header (`Header()`, `dist/assets/app.js`), **accanto** al bottone esistente "💬 Chiedi a Touch&Go" (`#header-assistant-btn`) — stesso principio di visibilità (solo modalità turista, `state.mode === "turista"`) e stesso pattern architetturale: un **overlay modale** (`SupportRequestModal()`), non una schermata a sé, così il turista non perde il contesto di dove si trovava (può aprire "Contatta assistenza" da qualunque schermata e ritrovarsi esattamente lì chiudendola) — sempre raggiungibile, mai nascosto in fondo a una schermata specifica. L'email di contatto viene precompilata con `state.touristEmail` se già nota (nessuna richiesta di ridigitarla se il turista si è già identificato), altrimenti resta vuota e facoltativa.
+
+### `netlify/functions/sync.js` — azione `"submit-support-request"`
+
+Scrive sullo store Blobs condiviso `"support-requests"` (stesso store già letto dal CRM) con i nomi di campo **allineati deliberatamente** a quelli già attesi da quel lato (nessun codice condiviso tra i due repository — solo lo stesso schema dati, stessa "duplicazione deliberata" già in uso per altre coppie di campi tra i repository Touch&Go, es. `DESTINATIONS_MAP` tra `touchandgo-demo`/`touchandgo-internal`):
+
+```js
+{
+  id: "SR-XXXXXX",           // generato qui, stesso stile "PREFISSO-" + alfanumerico casuale di generateDiscountCode()/generateBookingCode()
+  createdAt: "2026-09-10T08:00:00.000Z",  // ISO-8601
+  message: "Testo del problema, trim() applicato",
+  contactEmail: "turista@example.com" | null,  // null se non fornita, MAI un motivo di rifiuto
+  context: "Scegli indirizzo" | null,           // etichetta leggibile della schermata al momento dell'invio
+  trail: [ /* vedi sotto */ ],
+  // "status" volutamente ASSENTE: il CRM tratta qualunque record senza
+  // status==="gestita" come "Nuova" — un campo assente è già lo stato
+  // corretto, nessun valore esplicito "nuova" da inventare.
+}
+```
+
+- **`id`**: `generateSupportRequestId()`, stesso stile `"PREFISSO-" + 6 caratteri alfanumerici casuali maiuscoli` già in uso per `generateDiscountCode()`/`generatePartnerCode()` in questo stesso file e `generateBookingCode()` in `app.js` — prefisso `"SR-"` (Support Request). Retry-loop contro collisioni (fino a 10 tentativi, poi fallback con `Date.now()` appeso), stesso schema di `generatePartnerCode()`/`generateDiscountCode()`.
+- **`message`**: obbligatorio — un messaggio vuoto o solo spazi è rifiutato con 400, **nessuna scrittura** sullo store.
+- **`contactEmail`**/**`context`**: opzionali, mai un motivo di rifiuto — `null` se assenti/vuoti.
+- **Rate limiting**: stesso schema (20 richieste/60 minuti per IP, store Blobs `"rate-limits"`) di `get-purchases-by-email`/`list-comunicati`/`list-generated-shipments` nello stesso file.
+
+### Il campo `"trail"` — formato esatto (riferimento per il prossimo pezzo, il CRM)
+
+**Campo nuovo**, non ancora letto da nessuna parte nel CRM (pezzo futuro separato). Contiene **esattamente** l'array restituito da `getRecentTrail()` (PR #46, "Trail di supporto (assistenza predittiva)") **al momento dell'invio**, così com'è — **nessuna trasformazione** in nessun punto della catena:
+
+- **Client** (`submitSupportRequest()` in `app.js`): `trail: getRecentTrail()` passato diretto nel corpo della richiesta, nessuna mappatura/filtro.
+- **Server** (`sync.js`): `const trail = Array.isArray(body.trail) ? body.trail : [];` — l'**unica** cautela è una garanzia di *tipo* (se il campo non è un array, viene sostituito con un array vuoto, mai un errore che blocca l'invio), **non** una trasformazione del contenuto quando è già un array valido: ogni voce arriva nello store byte per byte come inviata dal client.
+
+Formato di ogni voce (invariato rispetto a PR #46 — `dist/assets/app.js`, `recordTrailEntry()`):
+
+```json
+{ "type": "screen" | "action", "label": "<stringa leggibile>", "at": "<ISO-8601>" }
+```
+
+- `type: "screen"`: cambio di schermata (`TRAIL_SCREEN_LABELS[state.screen]`, es. `"Scegli indirizzo"`, `"Risultato"`).
+- `type: "action"`: una delle 7 azioni tracciate da PR #46 (foto caricata/scattata, errore mostrato — testo incluso, QR generato, "Concludi e paga" cliccato, "Richiedi ritiro" cliccato, codice partner inserito — mai il codice, recensione inviata).
+- Array **già troncato alle ultime 15 voci** (`TRAIL_MAX_ENTRIES`, invariato) — mai più lungo di così.
+- **Stesso vincolo di privacy di PR #46**, invariato: mai il contenuto di un campo digitato dal turista, solo nomi di eventi (eccezione: il testo di un errore già mostrato in app, informazione di sistema).
+
+**Nota per chi implementerà il prossimo pezzo (CRM, `touchandgo-internal`)**: leggere `request.trail` come array di oggetti `{type, label, at}` nell'ordine cronologico in cui sono stati raccolti (dal più vecchio al più recente) — nessun campo aggiuntivo, nessuna chiave rinominata rispetto a quanto sopra.
+
+### Sicurezza — escaping HTML
+
+`state.supportMessage` (testo libero digitato dal turista) passa **sempre** da `escapeHtml()` prima di finire in un `innerHTML` — sia nel rendering di conferma dopo l'invio (`SupportRequestModal()`, che rimostra il messaggio appena inviato), sia in qualunque messaggio d'errore mostrato. Il CRM applica la propria disciplina di escaping lato suo (già esistente, invariata) — qui si tratta solo del rendering di conferma lato client, stesso principio di sicurezza già stabilito ovunque nel progetto Touch&Go (vedi `xss-escape.test.js`).
+
+### Verifica
+
+**13 nuovi test**:
+- `netlify/functions/__tests__/sync.submit-support-request.test.js` (7): un invio valido scrive un record con tutti i campi attesi dal CRM con nomi esatti (`status` volutamente assente); il campo `trail` è scritto esattamente come ricevuto (nessuna trasformazione, verificato con `deepEqual` voce per voce); `contactEmail`/`context` opzionali (`null` se assenti, mai un rifiuto); un `trail` non-array viene sostituito con `[]` (garanzia di tipo); un messaggio vuoto/solo spazi è rifiutato con 400, nessuna scrittura; rate limiting (20/60min per IP); due richieste distinte ottengono id distinti.
+- `dist/assets/__tests__/support-request.test.js` (6): il bottone header apre la modale con l'email precompilata da `touristEmail`, ed è raggiungibile da qualunque schermata; un messaggio vuoto non genera alcuna chiamata di rete; un invio valido chiama `sync.js` con il payload corretto e il trail **esattamente** identico a `getRecentTrail()` al momento dell'invio (confrontato campo per campo dopo normalizzazione JSON, per lo stesso quirk noto di Node/vm sui prototipi cross-realm già documentato in `support-trail.test.js`); `context` usa la stessa mappa `TRAIL_SCREEN_LABELS` del trail; un payload `<img onerror=...>` reale nel messaggio non crea mai un elemento reale nella conferma, solo testo escapato.
+
+Suite completa del repository verde (**208/208**, `npm test`).

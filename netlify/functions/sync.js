@@ -32,6 +32,14 @@ const PARTNER_PLANS = {
   free: { label: "Gratuito (nessuna commissione)", monthlyFee: 0 },
 };
 
+// Stesso stile di generateDiscountCode()/generatePartnerCode() sopra e di
+// generateBookingCode() in dist/assets/app.js ("PREFISSO-" + caratteri
+// alfanumerici casuali maiuscoli) — "SR" = Support Request.
+function generateSupportRequestId() {
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `SR-${rand}`;
+}
+
 function generatePartnerCode(name) {
   const initials =
     (name || "")
@@ -115,6 +123,14 @@ exports.handler = async (event) => {
     // questo lato, SOLO lettura filtrata per partner + segna-come-letto:
     // la creazione/gestione resta esclusiva del CRM, non toccata qui.
     const comunicati = getStore({ name: guestScopedStoreName("partner-comunicati"), ...blobsAuth });
+    // Segnalazioni di assistenza — stesso store Blobs "support-requests"
+    // condiviso già letto dal CRM interno (touchandgo-internal, crm.js,
+    // azioni "list-support-requests"/"update-support-request-status").
+    // Struttura del record allineata DELIBERATAMENTE ai nomi di campo già
+    // attesi da quel lato (verificati leggendo il codice reale del CRM
+    // prima di scrivere questa function — vedi "submit-support-request"
+    // sotto e MANUALE.md, sezione "Contatta assistenza").
+    const supportRequests = getStore({ name: guestScopedStoreName("support-requests"), ...blobsAuth });
 
     // Usata dall'app turista per allineare localmente lo stato degli
     // acquisti già noti (status, pickupPoint, ecc.) con quanto aggiornato
@@ -362,6 +378,62 @@ exports.handler = async (event) => {
       const all = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
       const items = all.filter((it) => it.generatedByPartnerCode === normalized);
       return ok({ items });
+    }
+
+    // ------------------------------------------------------------------
+    // "Contatta assistenza" (dist/assets/app.js, SupportRequestModal) —
+    // primo pezzo separato del sistema di ticket assistenza predittivo
+    // (vedi MANUALE.md). Scrive sullo store condiviso "support-requests"
+    // GIÀ letto dal CRM interno (touchandgo-internal, tab "Assistenza",
+    // crm.js azione "list-support-requests") — struttura del record
+    // allineata DELIBERATAMENTE ai nomi di campo già attesi da quel lato,
+    // verificati leggendo il codice reale del CRM prima di scrivere questa
+    // function (nessun codice condiviso tra i due repository, solo lo
+    // stesso schema dati — stessa "duplicazione deliberata" già in uso per
+    // altre coppie di campi tra i repository Touch&Go):
+    //   id, createdAt, message, contactEmail, context, status, updatedAt
+    // — "status" resta volutamente ASSENTE alla creazione (nessun valore
+    // scritto qui): il CRM tratta qualunque record senza status==="gestita"
+    // come "Nuova", quindi un campo assente è già lo stato corretto, senza
+    // bisogno di inventare un valore esplicito "nuova" che il CRM non
+    // controlla comunque.
+    //
+    // Campo "trail" (NUOVO, non ancora letto da nessuna parte nel CRM —
+    // pezzo futuro separato): l'intero array restituito da getRecentTrail()
+    // lato client al momento dell'invio, scritto qui ESATTAMENTE come
+    // ricevuto, senza alcuna trasformazione — il prossimo pezzo (CRM) dovrà
+    // poterlo interpretare esattamente in quel formato. Unica cautela: se
+    // il campo non è un array (client difettoso/rotto, mai il caso nel
+    // percorso reale dell'app), viene sostituito con un array vuoto — una
+    // garanzia di TIPO, non una trasformazione del contenuto.
+    if (action === "submit-support-request") {
+      const withinLimit = await checkRateLimit(`submit-support-request:${getClientIp(event)}`);
+      if (!withinLimit) return bad("Troppe richieste, riprova tra qualche minuto.", 429);
+
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (!message) return bad("Messaggio mancante");
+
+      const contactEmail = typeof body.contactEmail === "string" && body.contactEmail.trim() ? body.contactEmail.trim() : null;
+      const context = typeof body.context === "string" && body.context.trim() ? body.context.trim() : null;
+      const trail = Array.isArray(body.trail) ? body.trail : [];
+
+      let id = generateSupportRequestId();
+      let attempts = 0;
+      while (await supportRequests.get(id, { type: "json" })) {
+        attempts += 1;
+        id = attempts < 10 ? generateSupportRequestId() : `${id}${Date.now()}`;
+      }
+
+      const request = {
+        id,
+        createdAt: new Date().toISOString(),
+        message,
+        contactEmail,
+        context,
+        trail,
+      };
+      await supportRequests.setJSON(id, request);
+      return ok({ request });
     }
 
     return bad("Unknown action");
