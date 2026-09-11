@@ -35,10 +35,10 @@ const STATE_KEY_PREFIX = ""; // le chiavi sono direttamente la data "YYYY-MM-DD"
 const KEEP_DAYS = 30;
 
 const TARGETS = {
-  main: "https://benevolent-longma-57c78a.netlify.app/",
+  main: "https://touchandgo-suite.netlify.app/",
   guest: "https://touchandgo-guest.netlify.app/",
   router: "https://touchandgo-router.netlify.app/",
-  crm: "https://cute-moxie-cd1e4b.netlify.app/",
+  crm: "https://touchandgo-crm.netlify.app/",
 };
 
 function blobsAuth() {

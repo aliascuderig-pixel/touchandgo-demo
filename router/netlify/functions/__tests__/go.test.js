@@ -108,7 +108,7 @@ test("scenario 1 — sito principale sano: resta su main, nessun failover scritt
   const res = await handler();
 
   assert.equal(res.statusCode, 302);
-  assert.equal(res.headers.Location, "https://benevolent-longma-57c78a.netlify.app/");
+  assert.equal(res.headers.Location, "https://touchandgo-suite.netlify.app/");
   assert.equal(fetchCallCount, 1, "un controllo di salute reale deve essere avvenuto (stato freddo)");
 
   const state = readRawState();
@@ -171,7 +171,7 @@ test("scenario 3b — entro la finestra di debounce (sito sano), un secondo giro
 
   handler = freshHandler();
   const res = await handler();
-  assert.equal(res.headers.Location, "https://benevolent-longma-57c78a.netlify.app/");
+  assert.equal(res.headers.Location, "https://touchandgo-suite.netlify.app/");
   assert.equal(fetchCallCount, 1, "entro la finestra di debounce si fida dell'ultimo esito riuscito, senza richiamare health.js");
 });
 
@@ -193,7 +193,7 @@ test("scenario 4 — reset manuale: alla richiesta successiva torna a controllar
   handler = freshHandler();
   const res = await handler();
 
-  assert.equal(res.headers.Location, "https://benevolent-longma-57c78a.netlify.app/");
+  assert.equal(res.headers.Location, "https://touchandgo-suite.netlify.app/");
   assert.equal(fetchCallCount, countBefore + 1, "dopo il reset deve rifare un controllo di salute reale");
 });
 
@@ -203,7 +203,7 @@ test("scenario 5 — store del router irraggiungibile: fallback sempre a main, m
   const handler = freshHandler();
   const res = await handler();
 
-  assert.equal(res.headers.Location, "https://benevolent-longma-57c78a.netlify.app/", "qualunque errore imprevisto nel meccanismo deve risolvere verso main");
+  assert.equal(res.headers.Location, "https://touchandgo-suite.netlify.app/", "qualunque errore imprevisto nel meccanismo deve risolvere verso main");
 });
 
 test("scenario 5b — store irraggiungibile SOLO in scrittura dopo un controllo fallito: fallback comunque a main, non a guest", async () => {
@@ -234,5 +234,5 @@ test("scenario 5b — store irraggiungibile SOLO in scrittura dopo un controllo 
   const res = await handler();
   fakeBlobsModule.getStore = storeGetter;
 
-  assert.equal(res.headers.Location, "https://benevolent-longma-57c78a.netlify.app/", "un fallimento nel PERSISTERE il failover non deve mai mandare a guest");
+  assert.equal(res.headers.Location, "https://touchandgo-suite.netlify.app/", "un fallimento nel PERSISTERE il failover non deve mai mandare a guest");
 });

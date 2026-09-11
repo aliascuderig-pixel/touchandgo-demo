@@ -11,7 +11,7 @@
 const { readState } = require("../lib/router-state");
 
 const TARGETS = {
-  main: "https://benevolent-longma-57c78a.netlify.app/",
+  main: "https://touchandgo-suite.netlify.app/",
   guest: "https://touchandgo-guest.netlify.app/",
 };
 

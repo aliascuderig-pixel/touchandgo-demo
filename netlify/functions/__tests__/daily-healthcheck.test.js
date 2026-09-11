@@ -123,13 +123,13 @@ function crmOkEntry() {
 }
 
 const ALL_OK_RESPONSES_BASE = [
-  ["benevolent-longma-57c78a.netlify.app/.netlify/functions/health", () => ({ status: 200, json: async () => ({ ok: true }) })],
+  ["touchandgo-suite.netlify.app/.netlify/functions/health", () => ({ status: 200, json: async () => ({ ok: true }) })],
   ["touchandgo-guest.netlify.app/.netlify/functions/health", () => ({ status: 200, json: async () => ({ ok: true }) })],
   [
     "touchandgo-router.netlify.app/.netlify/functions/status",
     () => ({
       status: 200,
-      json: async () => ({ ok: true, mode: "auto", redirectsTo: "https://benevolent-longma-57c78a.netlify.app/" }),
+      json: async () => ({ ok: true, mode: "auto", redirectsTo: "https://touchandgo-suite.netlify.app/" }),
     }),
   ],
 ];
