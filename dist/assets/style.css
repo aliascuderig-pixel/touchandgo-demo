@@ -436,6 +436,16 @@ button{font-family:inherit;cursor:pointer}
 .pickup-update-banner:active{background:var(--gold-soft)}
 .pickup-update-note{font-size:9.5px;font-weight:400;text-transform:none;letter-spacing:0;margin-top:3px;opacity:.85}
 
+/* ---------- Percorso offline — classificazione provvisoria (settembre 2026) ---------- */
+.offline-classify-banner,.offline-provisional-banner{line-height:1.5}
+.offline-category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
+.offline-category-btn{background:var(--surface);border:1px solid var(--line);padding:14px 12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;text-align:center}
+.offline-category-btn:active{background:var(--warn-bg);border-color:var(--gold)}
+
+/* ---------- Notifica riconciliazione prezzo (dopo classificazione provvisoria) ---------- */
+.price-reconciliation-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
+.price-reconciliation-banner:active{background:var(--gold-soft)}
+
 /* ---------- Conferma consegna (post "ritirato") ---------- */
 .delivery-confirm-box{margin-top:10px;background:var(--good-bg);border:1px solid var(--success-border);padding:10px 12px}
 .delivery-confirm-question{font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px}

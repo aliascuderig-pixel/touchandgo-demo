@@ -26,7 +26,35 @@ const STEPS = [
 // fragile che si voleva evitare. Testo libero breve, stesso stile di
 // hs_description_it — non un enum, i materiali variano troppo per
 // categoria per un elenco fisso utile.
-const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
+// 10 categorie (settembre 2026: aggiunta "Attrezzatura sportiva" alle 9
+// preesistenti — vedi anche CATEGORY_SUBCATEGORIES/CATEGORY_TRANSLATIONS
+// sotto e ../netlify/lib/category-stats.js, CATEGORIES, che duplica questo
+// stesso elenco lato server per le regole anti-frode statistiche e la
+// cache dei valori medi del percorso offline, vedi MANUALE.md).
+const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Attrezzatura sportiva|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
+
+// Sottocategorie — SOLO lato client, per il selettore del percorso offline
+// (vedi OfflineClassifyScreen()/MANUALE.md, "Percorso offline"): l'AI di
+// classificazione (CLASSIFY_SCHEMA sopra) non le usa mai, restano un
+// dettaglio libero che lo staff può leggere ma che non struttura in alcun
+// modo la classificazione automatica — aggiungerle allo schema AI
+// obbligherebbe il modello a sceglierne una anche quando incerto, un
+// vincolo che non aiuta la classificazione reale e complicherebbe il
+// prompt senza un beneficio proporzionato. "Altro" non ha sottocategorie:
+// è già la categoria residuale, un'ulteriore suddivisione non
+// aggiungerebbe informazione utile.
+const CATEGORY_SUBCATEGORIES = {
+  Ceramica: ["Ceramica da tavola", "Ceramica decorativa", "Piastrelle/mattonelle"],
+  Abbigliamento: ["Capispalla", "Maglieria", "Camicie/Bluse", "Pantaloni/Gonne", "Intimo"],
+  Alimentari: ["Pasta/Riso", "Olio/Aceto", "Formaggi", "Salumi", "Dolci/Conserve"],
+  "Vino & Spirits": ["Vino rosso", "Vino bianco", "Spumante/Prosecco", "Liquori/Distillati"],
+  "Accessori Moda": ["Borse", "Scarpe", "Cinture", "Occhiali", "Sciarpe/Foulard"],
+  "Arte & Antiquariato": ["Dipinti", "Sculture", "Mobili antichi", "Stampe/Incisioni"],
+  Gioielleria: ["Anelli", "Collane", "Orecchini", "Bracciali", "Orologi"],
+  Artigianato: ["Vetro", "Pelletteria artigianale", "Legno intagliato", "Tessuti/Ricami"],
+  "Attrezzatura sportiva": ["Abbigliamento sportivo", "Calzature sportive", "Attrezzatura sci/montagna", "Attrezzatura ciclismo", "Accessori fitness"],
+  Altro: [],
+};
 
 // L'imballo non è un margine fisso: più l'oggetto è grande, più materiale
 // serve in termini assoluti (stessa percentuale); se è fragile, il
@@ -315,12 +343,134 @@ function consolidatedGroupPrice(items) {
   };
 }
 
+// ---------------------------------------------------------------------
+// Cache locale dei valori medi per categoria (settembre 2026) — vedi
+// MANUALE.md, sezione "Percorso offline". netlify/functions/category-
+// averages.js calcola peso/dimensioni medi reali per ciascuna delle 10
+// categorie (con fallback dichiarato sotto una soglia minima di campione,
+// vedi ../netlify/lib/category-stats.js); questa è l'UNICA fonte usata per
+// il prezzo provvisorio offline — mai una chiamata di rete al momento del
+// bisogno, solo lettura da qui.
+// ---------------------------------------------------------------------
+const CATEGORY_AVERAGES_CACHE_KEY = "tg_category_averages_cache";
+
+// Stessi identici default dichiarati in ../netlify/lib/category-stats.js
+// (CATEGORY_DEFAULTS) — duplicati qui deliberatamente (stesso principio
+// già in uso ovunque nel repository, nessun modulo condiviso tra client e
+// funzioni serverless): ultimo fallback possibile, usato SOLO se questo
+// dispositivo non ha mai completato con successo un refreshCategoryAverages()
+// (mai stato online da quando l'app è stata aperta la prima volta, o
+// storage cancellato) — garantisce che il percorso offline funzioni
+// comunque, non solo dopo che l'app è già stata online almeno una volta.
+const CATEGORY_AVERAGES_FALLBACK = {
+  Ceramica: { weightKg: 1.5, dims: { length_cm: 25, width_cm: 20, height_cm: 15 } },
+  Abbigliamento: { weightKg: 0.6, dims: { length_cm: 35, width_cm: 25, height_cm: 5 } },
+  Alimentari: { weightKg: 1.0, dims: { length_cm: 20, width_cm: 15, height_cm: 10 } },
+  "Vino & Spirits": { weightKg: 1.5, dims: { length_cm: 10, width_cm: 10, height_cm: 32 } },
+  "Accessori Moda": { weightKg: 0.8, dims: { length_cm: 30, width_cm: 25, height_cm: 12 } },
+  "Arte & Antiquariato": { weightKg: 3.0, dims: { length_cm: 40, width_cm: 30, height_cm: 10 } },
+  Gioielleria: { weightKg: 0.2, dims: { length_cm: 10, width_cm: 8, height_cm: 5 } },
+  Artigianato: { weightKg: 1.2, dims: { length_cm: 25, width_cm: 20, height_cm: 15 } },
+  "Attrezzatura sportiva": { weightKg: 2.5, dims: { length_cm: 60, width_cm: 30, height_cm: 20 } },
+  Altro: { weightKg: 1.0, dims: { length_cm: 25, width_cm: 20, height_cm: 15 } },
+};
+
+// Richiamata mentre l'app è online — all'avvio e periodicamente insieme a
+// processPendingSyncQueue() (vedi i punti di chiamata in fondo al file) —
+// mai al momento in cui serve davvero (quel momento, per definizione, può
+// essere offline). Fire-and-forget verso il chiamante: un fallimento
+// lascia semplicemente la cache com'era (quella precedente, se esiste, o
+// nessuna) — mai un errore mostrato al turista per un aggiornamento in
+// background.
+async function refreshCategoryAverages() {
+  if (typeof navigator !== "undefined" && "onLine" in navigator && !navigator.onLine) return;
+  try {
+    const res = await fetch("/.netlify/functions/category-averages");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !data.categories) return;
+    localStorage.setItem(CATEGORY_AVERAGES_CACHE_KEY, JSON.stringify({ categories: data.categories, cachedAt: Date.now() }));
+  } catch (e) {
+    // Silenzioso per design: vedi commento sopra la funzione.
+  }
+}
+
+function loadCategoryAveragesCache() {
+  try {
+    const raw = localStorage.getItem(CATEGORY_AVERAGES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.categories ? parsed.categories : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Valori medi (reali dalla cache, o fallback) per UNA categoria — usata da
+// buildProvisionalResult() sotto. Tre livelli, in ordine: cache locale
+// (già scaricata mentre l'app era online) -> CATEGORY_AVERAGES_FALLBACK
+// (questo dispositivo non è mai stato online) -> il fallback di "Altro"
+// (difensivo, non dovrebbe mai servire: solo se una categoria nuova non
+// fosse ancora presente in nessuna delle due mappe sopra).
+function averagesForCategory(category) {
+  const cache = loadCategoryAveragesCache();
+  if (cache && cache[category]) return cache[category];
+  return CATEGORY_AVERAGES_FALLBACK[category] || CATEGORY_AVERAGES_FALLBACK["Altro"];
+}
+
+// Costruisce un "risultato" nello stesso formato di CLASSIFY_SCHEMA (vedi
+// sopra), così ResultScreen()/priceFor()/il costruttore dell'item in
+// ChooseAddressScreen() possono restare quasi del tutto invariati: peso e
+// dimensioni vengono dalla cache dei valori medi (mai da una chiamata di
+// rete, vedi averagesForCategory() sopra), value_eur resta 0 (nessuna
+// stima di valore possibile senza classificazione reale — mai inventato),
+// confidence "bassa" per coerenza con lo stato reale dell'informazione.
+function buildProvisionalResult(category, subcategory) {
+  const avg = averagesForCategory(category);
+  const label = subcategory || category;
+  return {
+    object_it: label,
+    object_en: label,
+    hs_code: "—",
+    hs_description_it: "Sarà determinato con la classificazione reale al ritorno della connessione.",
+    hs_description_en: "Will be determined by the real classification once back online.",
+    category,
+    material: null,
+    weight_kg: avg.weightKg,
+    length_cm: avg.dims.length_cm,
+    width_cm: avg.dims.width_cm,
+    height_cm: avg.dims.height_cm,
+    value_eur: 0,
+    fragile: false,
+    made_in_italy: true,
+    confidence: "bassa",
+    shipping_note_it: "",
+    shipping_note_en: "",
+  };
+}
+
 async function classify(messages) {
-  const res = await fetch("/.netlify/functions/classify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
-  });
+  let res;
+  try {
+    res = await fetch("/.netlify/functions/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+  } catch (networkErr) {
+    // La fetch stessa non è nemmeno arrivata a un server (offline, DNS,
+    // connessione caduta a metà) — a differenza di sotto (il server ha
+    // risposto ma con un errore, es. 401/429/500), qui non c'è nessuna
+    // risposta da interpretare. Marcato esplicitamente (.isNetworkError)
+    // invece di affidarsi al testo del messaggio (che varia per browser:
+    // "Failed to fetch", "NetworkError when attempting...", "Load
+    // failed"...) — vedi runClassification(), che usa questo marcatore per
+    // decidere se offrire il percorso offline (MANUALE.md, "Percorso
+    // offline") invece di mostrare un errore vero e proprio.
+    const err = new Error(networkErr.message || "Errore di rete");
+    err.isNetworkError = true;
+    throw err;
+  }
   const data = await res.json();
   if (data.error) throw new Error(data.error.message || "Errore AI");
   const text = data.content && data.content[0] && data.content[0].text;
@@ -378,6 +528,9 @@ const I18N = {
     sync_pending_item_plural: "sincronizzazioni",
     sync_pending_suffix: "in sospeso col CRM — verranno ritentate automaticamente",
     sync_pending_suffix_attention: "in sospeso col CRM da tempo — potrebbe richiedere attenzione",
+    // ---- Riconciliazione prezzo dopo classificazione provvisoria (HistoryScreen, settembre 2026) ----
+    history_price_reconciled: "Prezzo aggiornato dopo la classificazione reale: da €{old} a €{new}.",
+    history_price_reconciled_dismiss: "Tocca per confermare di aver visto l'aggiornamento",
     mode_tourist: "Turista",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Chiedi a Touch&Go",
@@ -462,6 +615,12 @@ const I18N = {
     dest_error_api_key: "Chiave API non valida. Riprova più tardi.",
     dest_error_ai_generic: "Errore AI. Riprova.",
 
+    // ---- OfflineClassifyScreen (percorso offline, settembre 2026) ----
+    offline_classify_intro: "Sei offline: puoi comunque proseguire scegliendo a mano la categoria dell'oggetto. Il prezzo sarà provvisorio, confermato al ritorno della connessione.",
+    offline_classify_pick_category: "Scegli la categoria più vicina",
+    offline_classify_pick_subcategory: "{category} · scegli una sottocategoria",
+    offline_classify_change_category: "← Cambia categoria",
+
     // ---- PickupField / DestinationField / GuestDestinationField ----
     pickup_lbl_gps: "Punto di ritiro (GPS)",
     pickup_lbl_ip: "Punto di ritiro (rete)",
@@ -525,6 +684,8 @@ const I18N = {
     result_discount_lbl: "Sconto codice partner ({code})",
     result_estimate_badge: "Stima per spedizione singola",
     result_estimate_note: "Il totale finale dipende da eventuali altri acquisti consolidati verso la stessa destinazione — nessun addebito ora, questa è solo un'anteprima. Il calcolo definitivo e il pagamento avvengono solo quando confermi la conclusione del soggiorno.",
+    result_provisional_badge: "Stima provvisoria",
+    result_provisional_note: "sarà confermata al ritorno della connessione, quando l'oggetto verrà classificato realmente.",
     result_qr_btn: "Genera QR code →",
     result_restart_btn: "Classifica un altro oggetto",
     result_partner_discount_link: "Hai un codice sconto partner?",
@@ -638,6 +799,8 @@ const I18N = {
     sync_pending_item_plural: "syncs",
     sync_pending_suffix: "pending with the CRM — will be retried automatically",
     sync_pending_suffix_attention: "pending with the CRM for a while — may need attention",
+    history_price_reconciled: "Price updated after real classification: from €{old} to €{new}.",
+    history_price_reconciled_dismiss: "Tap to confirm you've seen the update",
     mode_tourist: "Tourist",
     mode_partner: "Partner",
     header_assistant_btn: "💬 Ask Touch&Go",
@@ -722,6 +885,12 @@ const I18N = {
     dest_error_api_key: "Invalid API key. Please try again later.",
     dest_error_ai_generic: "AI error. Please try again.",
 
+    // ---- OfflineClassifyScreen (offline path, September 2026) ----
+    offline_classify_intro: "You're offline: you can still continue by choosing the item's category by hand. The price will be provisional, confirmed once the connection is back.",
+    offline_classify_pick_category: "Choose the closest category",
+    offline_classify_pick_subcategory: "{category} · choose a subcategory",
+    offline_classify_change_category: "← Change category",
+
     // ---- PickupField / DestinationField / GuestDestinationField ----
     pickup_lbl_gps: "Pickup point (GPS)",
     pickup_lbl_ip: "Pickup point (network)",
@@ -785,6 +954,8 @@ const I18N = {
     result_discount_lbl: "Partner code discount ({code})",
     result_estimate_badge: "Estimate for a single shipment",
     result_estimate_note: "The final total depends on any other purchases consolidated toward the same destination — no charge now, this is only a preview. The final calculation and payment only happen when you confirm the end of your stay.",
+    result_provisional_badge: "Provisional estimate",
+    result_provisional_note: "will be confirmed once the connection is back, when the item is actually classified.",
     result_qr_btn: "Generate QR code →",
     result_restart_btn: "Classify another item",
     result_partner_discount_link: "Have a partner discount code?",
@@ -923,7 +1094,7 @@ function localizeObjectName(r) {
   return r.object_it || r.object_en || t("result_obj_fallback");
 }
 
-// Traduce i 9 valori fissi di categoria restituiti dall'AI di
+// Traduce i 10 valori fissi di categoria restituiti dall'AI di
 // classificazione (dato fisso, stesso pattern di ETA_TRANSLATIONS sopra).
 const CATEGORY_TRANSLATIONS = {
   Ceramica: "Ceramics",
@@ -934,6 +1105,7 @@ const CATEGORY_TRANSLATIONS = {
   "Arte & Antiquariato": "Art & Antiques",
   Gioielleria: "Jewelry",
   Artigianato: "Handicraft",
+  "Attrezzatura sportiva": "Sports Equipment",
   Altro: "Other",
 };
 function localizeCategory(category) {
@@ -1003,6 +1175,23 @@ const state = {
   dutyEstimate: null,
   dutyEstimateLoading: false,
   dutyEstimateRequestId: 0,
+  // Percorso offline — classificazione provvisoria (settembre 2026, vedi
+  // MANUALE.md, sezione "Percorso offline"). resultIsProvisional distingue
+  // un state.result costruito da buildProvisionalResult() (categoria
+  // scelta a mano + cache dei valori medi) da un vero risultato AI — letto
+  // da ResultScreen() per mostrare l'etichetta "Stima provvisoria" e dal
+  // costruttore dell'item in ChooseAddressScreen() per impostare
+  // pendingRealClassification sull'item salvato. provisionalCategory/
+  // provisionalSubcategory sono la scelta manuale del turista in
+  // OfflineClassifyScreen(), riportate sull'item alla conferma.
+  resultIsProvisional: false,
+  provisionalCategory: null,
+  provisionalSubcategory: null,
+  // Stato transitorio SOLO per OfflineClassifyScreen() (selezione in due
+  // passi categoria -> sottocategoria, prima della conferma che valorizza
+  // provisionalCategory/provisionalSubcategory sopra) — azzerato ogni
+  // volta che si entra/esce da quella schermata.
+  offlineClassifySelectedCategory: null,
   addresses: [],
   selectedAddressId: null,
   destinationFromProfile: true,
@@ -1303,6 +1492,7 @@ function render() {
   else if (state.screen === "add-address") app.appendChild(AddAddressScreen());
   else if (state.screen === "choose-address") app.appendChild(ChooseAddressScreen());
   else if (state.screen === "analyzing") app.appendChild(AnalyzingScreen());
+  else if (state.screen === "offline-classify") app.appendChild(OfflineClassifyScreen());
   else if (state.screen === "result") app.appendChild(ResultScreen());
   else if (state.screen === "queued") app.appendChild(QueuedScreen());
   else if (state.screen === "conclude") app.appendChild(ConcludeScreen());
@@ -3343,9 +3533,15 @@ function DestinationScreen() {
   const goBtn = el("button", "btn-primary", t("dest_go_btn"));
   goBtn.addEventListener("click", () => {
     if (!state.pendingInput) return;
+    // Percorso offline (settembre 2026, vedi MANUALE.md, "Percorso
+    // offline") — prima di questa modifica un turista offline restava
+    // bloccato qui con un errore, senza poter proseguire affatto. Ora
+    // procede con una classificazione PROVVISORIA (categoria scelta a
+    // mano + cache locale dei valori medi), confermata più avanti quando
+    // torna la connessione.
     if (state.isOffline) {
-      state.error = t("dest_error_offline");
-      recordTrailEntry("action", "Errore: " + state.error);
+      recordTrailEntry("action", "Offline: percorso di classificazione provvisoria");
+      state.screen = "offline-classify";
       render();
       return;
     }
@@ -3484,6 +3680,90 @@ function DutyEstimateSection() {
   return box;
 }
 
+// Percorso offline — classificazione provvisoria (settembre 2026, vedi
+// MANUALE.md). Raggiunta da DestinationScreen() (offline fin dall'inizio)
+// o da runClassification() (offline scoperta a metà, dopo aver già tappato
+// "Analizza" — vedi il marcatore .isNetworkError lì). Due passi nella
+// stessa schermata: scegli categoria, poi (se ne ha) una sottocategoria —
+// gestiti con state.offlineClassifySelectedCategory (transitorio, non
+// ancora la scelta confermata). "Altro" non ha sottocategorie
+// (CATEGORY_SUBCATEGORIES["Altro"] === []): selezionarla conferma subito.
+function OfflineClassifyScreen() {
+  const wrap = el("div", "section");
+  wrap.appendChild(AssistantAvatar("destination"));
+  const back = el("div", "back", t("dest_back"));
+  back.addEventListener("click", () => {
+    state.screen = "destination";
+    state.offlineClassifySelectedCategory = null;
+    render();
+  });
+  wrap.appendChild(back);
+
+  wrap.appendChild(el("div", "alert offline-classify-banner", `📡 ${t("offline_classify_intro")}`));
+
+  const confirmCategory = (category, subcategory) => {
+    const result = buildProvisionalResult(category, subcategory);
+    state.result = result;
+    state.resultIsProvisional = true;
+    state.provisionalCategory = category;
+    state.provisionalSubcategory = subcategory || null;
+    state.price = priceFor(result.weight_kg, currentDestinationName(), result);
+    state.priceConfirmedForThisResult = false;
+    state.priceConfirmedAsBreakeven = false;
+    state.showPartnerDiscountInput = false;
+    state.partnerDiscountCodeInput = "";
+    state.partnerDiscountChecking = false;
+    state.partnerDiscountApplied = false;
+    state.partnerDiscountCode = null;
+    state.partnerDiscountAmount = 0;
+    state.partnerDiscountError = null;
+    state.offlineClassifySelectedCategory = null;
+    recordTrailEntry("action", `Classificazione provvisoria: ${category}${subcategory ? " / " + subcategory : ""}`);
+    state.screen = "result";
+    render();
+  };
+
+  if (!state.offlineClassifySelectedCategory) {
+    wrap.appendChild(el("div", "step-lbl", t("offline_classify_pick_category")));
+    const grid = el("div", "offline-category-grid");
+    CATEGORY_SUBCATEGORIES && Object.keys(CATEGORY_SUBCATEGORIES).forEach((category) => {
+      const btn = el("button", "offline-category-btn", escapeHtml(localizeCategory(category)));
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        const subs = CATEGORY_SUBCATEGORIES[category];
+        if (!subs || !subs.length) {
+          confirmCategory(category, null);
+        } else {
+          state.offlineClassifySelectedCategory = category;
+          render();
+        }
+      });
+      grid.appendChild(btn);
+    });
+    wrap.appendChild(grid);
+  } else {
+    const category = state.offlineClassifySelectedCategory;
+    wrap.appendChild(el("div", "step-lbl", t("offline_classify_pick_subcategory", { category: localizeCategory(category) })));
+    const grid = el("div", "offline-category-grid");
+    (CATEGORY_SUBCATEGORIES[category] || []).forEach((subcategory) => {
+      const btn = el("button", "offline-category-btn", escapeHtml(subcategory));
+      btn.type = "button";
+      btn.addEventListener("click", () => confirmCategory(category, subcategory));
+      grid.appendChild(btn);
+    });
+    wrap.appendChild(grid);
+    const changeCategory = el("button", "btn-secondary", t("offline_classify_change_category"));
+    changeCategory.type = "button";
+    changeCategory.addEventListener("click", () => {
+      state.offlineClassifySelectedCategory = null;
+      render();
+    });
+    wrap.appendChild(changeCategory);
+  }
+
+  return wrap;
+}
+
 function ResultScreen() {
   const r = state.result;
   const p = state.price;
@@ -3502,6 +3782,14 @@ function ResultScreen() {
   topbar.appendChild(back);
   topbar.appendChild(el("h2", null, t("result_step3_lbl")));
   wrap.appendChild(topbar);
+
+  // Vincolo non negoziabile (vedi MANUALE.md, "Percorso offline"): un
+  // prezzo/risultato provvisorio non deve MAI essere scambiato per uno
+  // reale in nessun punto dell'interfaccia — etichetta sempre visibile,
+  // in cima, prima di qualunque altro dettaglio del risultato.
+  if (state.resultIsProvisional) {
+    wrap.appendChild(el("div", "alert offline-provisional-banner", `📡 <b>${t("result_provisional_badge")}</b> — ${t("result_provisional_note")}`));
+  }
 
   const card = el("div", "result-card");
   const top = el("div", "result-top");
@@ -3995,6 +4283,134 @@ function saveShipmentGroupToCRM(group) {
     });
 }
 
+// ---------------------------------------------------------------------
+// Riconciliazione al ritorno della connessione (settembre 2026) — vedi
+// MANUALE.md, sezione "Percorso offline". Meccanismo PARALLELO alla coda
+// di ritentativo sync CRM sopra (enqueueFailedSync/processPendingSyncQueue),
+// non un'estensione di quella: quella coda ritenta un semplice POST verso
+// un endpoint di salvataggio con lo stesso payload ogni volta; qui serve
+// invece rieseguire una VERA classificazione (foto/descrizione già salvate
+// sull'item) e poi ricalcolare il prezzo — un'azione diversa, non un
+// retry dello stesso salvataggio. Stessi punti di innesco (avvio, evento
+// "online", lo stesso intervallo periodico) per coerenza, vedi in fondo al
+// file.
+// ---------------------------------------------------------------------
+
+// Un prezzo reale che si discosta di oltre questa percentuale (relativa)
+// dal prezzo provvisorio genera una notifica visibile allo staff — vedi
+// priceReconciliationBanner() sotto. La stima provvisoria si basa
+// deliberatamente su una MEDIA di categoria (non l'oggetto specifico),
+// quindi uno scostamento moderato è normale e atteso, non degno di
+// interrompere il turista con una notifica; una soglia del 20% intercetta
+// solo un cambiamento davvero sorprendente (es. la foto era in realtà di
+// un oggetto molto più grande/pesante della media della categoria scelta).
+const PRICE_RECONCILIATION_THRESHOLD = 0.2;
+
+// item.photo (se presente) è un data URL completo prodotto da
+// compressImage() — "data:image/jpeg;base64,...." — mentre classifyImage()
+// si aspetta base64 e mediaType separati (stesso formato già usato da
+// handleImageDataUrl() per il percorso normale). Restituisce null se il
+// formato non è quello atteso, invece di lanciare un'eccezione: un item
+// con un photo corrotto/vecchio non deve mai far fallire l'intera
+// riconciliazione degli altri item in coda.
+function parseDataUrl(dataUrl) {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || "");
+  if (!match) return null;
+  return { mediaType: match[1], base64: match[2] };
+}
+
+// Ricalcola il prezzo con lo STESSO tier/sconto già applicato all'acquisto
+// (item.pricingTier/item.partnerDiscountAmount, decisi al momento della
+// conferma — mai lo stato globale CORRENTE del turista, che nel frattempo
+// può essere cambiato, es. abbonamento attivato dopo, promo scaduta): la
+// riconciliazione confronta "stesso accordo economico, dati reali" contro
+// "stesso accordo economico, stima provvisoria", non un prezzo ricalcolato
+// da zero con condizioni magari diverse da quelle mostrate al turista.
+function recomputeReconciledPrice(item, result) {
+  const q = priceQuotes(result.weight_kg, item.destinationZone, result);
+  const base = item.pricingTier === "breakeven" ? q.breakeven : item.pricingTier === "abbonato" ? q.subscribed : q.full;
+  return Math.max(0, Math.round((base - (item.partnerDiscountAmount || 0)) * 100) / 100);
+}
+
+let reclassifyProcessing = false;
+
+// Per ogni item con pendingRealClassification:true, riesegue la
+// classificazione reale (stessa foto/descrizione già salvate al momento
+// della conferma offline) e ricalcola il prezzo. Stesse guardie di
+// processPendingSyncQueue() sopra (non sovrapporre esecuzioni concorrenti,
+// esci subito se offline) per lo stesso motivo.
+async function processPendingReclassifications() {
+  if (reclassifyProcessing) return;
+  if (typeof navigator !== "undefined" && "onLine" in navigator && !navigator.onLine) return;
+  const targets = state.pendingItems.filter((it) => it.pendingRealClassification);
+  if (!targets.length) return;
+  reclassifyProcessing = true;
+  let changed = false;
+  try {
+    for (const item of targets) {
+      try {
+        let result;
+        if (item.photo) {
+          const parsed = parseDataUrl(item.photo);
+          if (!parsed) throw new Error("Formato foto non valido");
+          result = await classifyImage(parsed.base64, parsed.mediaType);
+        } else if (item.textDescription) {
+          result = await classifyText(item.textDescription);
+        } else {
+          throw new Error("Nessuna foto/descrizione salvata per la riconciliazione");
+        }
+
+        const oldPrice = item.price;
+        const newPrice = recomputeReconciledPrice(item, result);
+        const relativeDiff = oldPrice > 0 ? Math.abs(newPrice - oldPrice) / oldPrice : newPrice > 0 ? 1 : 0;
+
+        item.objectName = localizeObjectName(result);
+        item.hsCode = result.hs_code || "—";
+        item.category = result.category || item.category;
+        item.material = result.material || null;
+        item.weightKg = result.weight_kg;
+        item.dims = { length_cm: result.length_cm, width_cm: result.width_cm, height_cm: result.height_cm };
+        item.packageDims = packagedDimensions(result);
+        item.itemValue = typeof result.value_eur === "number" ? result.value_eur : 0;
+        item.price = newPrice;
+        item.pendingRealClassification = false;
+        item.reclassifiedAt = new Date().toISOString();
+        // Notifica visibile (MAI un cambio di prezzo silenzioso, vincolo
+        // esplicito) SOLO se lo scostamento supera la soglia sopra —
+        // vedi priceReconciliationBanner() in PurchaseHistoryList().
+        // Conserva provisionalCategory/provisionalSubcategory (la scelta
+        // manuale originale) per riferimento, anche dopo la riconciliazione.
+        if (relativeDiff > PRICE_RECONCILIATION_THRESHOLD) {
+          item.priceReconciliationNotice = { oldPrice, newPrice, reconciledAt: item.reclassifiedAt };
+        }
+
+        // Stesso pattern già in uso per deliveryConfirmedAt/finalizeShippedGroups():
+        // pendingItems e purchaseHistory sono due array indipendenti (due
+        // chiavi localStorage separate) dopo un giro per setJSON — occorre
+        // aggiornare esplicitamente anche la voce corrispondente in
+        // purchaseHistory, per id, se è un oggetto diverso.
+        const historyEntry = state.purchaseHistory.find((it) => it.id === item.id);
+        if (historyEntry && historyEntry !== item) Object.assign(historyEntry, item);
+
+        syncPurchaseToCRM(item);
+        changed = true;
+      } catch (e) {
+        // Fallito questo giro (offline a metà, errore AI transitorio,
+        // ecc.): l'item resta pendingRealClassification:true, ritentato al
+        // prossimo innesco (avvio/online/intervallo) — nessuna scrittura
+        // parziale, nessun prezzo a metà aggiornato.
+      }
+    }
+    if (changed) {
+      savePending();
+      saveHistory();
+    }
+  } finally {
+    reclassifyProcessing = false;
+  }
+  if (changed) render();
+}
+
 function historyStatusClass(status) {
   if (status === "ritirato") return "done";
   if (status === "ritiro richiesto") return "requested";
@@ -4104,6 +4520,33 @@ function markPickupPointSeen(item) {
     // Se la conferma non arriva al server, il banner potrebbe ripresentarsi
     // al prossimo sync — non blocca comunque il turista.
   });
+  render();
+}
+
+// Notifica di riconciliazione del prezzo dopo la classificazione reale
+// (settembre 2026, vedi processPendingReclassifications() sopra e
+// MANUALE.md, "Percorso offline") — stesso pattern di
+// pickupPointUpdateBanner()/markPickupPointSeen() sopra: un banner
+// dismissibile con un tap, nessuna azione server (a differenza del banner
+// del punto di ritiro, qui non c'è nulla da confermare lato CRM — il
+// record già sincronizzato da processPendingReclassifications() riflette
+// già il prezzo reale, questo banner informa solo il turista).
+function priceReconciliationBanner(item) {
+  const notice = item.priceReconciliationNotice;
+  if (!notice) return null;
+  const banner = el("div", "price-reconciliation-banner");
+  banner.innerHTML = `💶 ${t("history_price_reconciled", { old: notice.oldPrice.toFixed(2), new: notice.newPrice.toFixed(2) })}<div class="pickup-update-note">${t("history_price_reconciled_dismiss")}</div>`;
+  banner.addEventListener("click", (e) => {
+    e.stopPropagation();
+    markPriceReconciliationSeen(item);
+  });
+  return banner;
+}
+
+function markPriceReconciliationSeen(item) {
+  item.priceReconciliationNotice = null;
+  saveHistory();
+  savePending();
   render();
 }
 
@@ -5536,6 +5979,21 @@ function ChooseAddressScreen() {
         // priceQuotes()/bracketPrice()/shippingCost() (vedi il test di
         // isolamento dedicato).
         dutyEstimateShown: state.dutyEstimate || null,
+        // Percorso offline — classificazione provvisoria (settembre 2026,
+        // vedi MANUALE.md, "Percorso offline"). destinationZone (il nome
+        // DESTINATIONS/priceFor() usato per QUESTO prezzo, es. "Italia")
+        // è scritto sempre, non solo per gli item provvisori: è l'unico
+        // modo per la riconciliazione (processPendingReclassifications())
+        // di ricalcolare più tardi lo STESSO prezzo con gli stessi criteri
+        // di zona, senza dipendere dallo stato di navigazione corrente
+        // (che a quel punto il turista ha già lasciato). pendingRealClassification/
+        // provisionalCategory/provisionalSubcategory restano invece null
+        // per un acquisto classificato online come sempre — nessuna
+        // modifica al percorso online esistente.
+        destinationZone: currentDestinationName(),
+        pendingRealClassification: state.resultIsProvisional || false,
+        provisionalCategory: state.resultIsProvisional ? state.provisionalCategory : null,
+        provisionalSubcategory: state.resultIsProvisional ? state.provisionalSubcategory : null,
       };
       state.pendingItems.push(item);
       state.purchaseHistory.push(item);
@@ -5543,7 +6001,10 @@ function ChooseAddressScreen() {
       saveHistory();
       syncPurchaseToCRM(item);
       state.lastQueuedItem = item;
-      recordTrailEntry("action", "QR generato per un oggetto");
+      recordTrailEntry("action", state.resultIsProvisional ? "QR generato con classificazione provvisoria" : "QR generato per un oggetto");
+      state.resultIsProvisional = false;
+      state.provisionalCategory = null;
+      state.provisionalSubcategory = null;
       state.screen = "queued";
       render();
     }, 700);
@@ -5918,6 +6379,8 @@ function PurchaseHistoryList(items, emptyText, editable) {
     .forEach((it) => {
       const banner = pickupPointUpdateBanner(it);
       if (banner) wrap.appendChild(banner);
+      const priceBanner = priceReconciliationBanner(it);
+      if (priceBanner) wrap.appendChild(priceBanner);
       const row = el("div", "history-item");
       const dt = new Date(it.date);
       const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -6054,6 +6517,7 @@ async function runClassification(promise) {
   try {
     const result = await promise;
     state.result = result;
+    state.resultIsProvisional = false;
     state.price = priceFor(result.weight_kg, currentDestinationName(), result);
     state.priceConfirmedForThisResult = false;
     state.priceConfirmedAsBreakeven = false;
@@ -6073,9 +6537,21 @@ async function runClassification(promise) {
     // farà il proprio render() incrementale quando (e se) arriva.
     refreshDutyEstimate(result, currentDestinationName());
   } catch (err) {
-    state.error = /401/.test(err.message) ? t("dest_error_api_key") : t("dest_error_ai_generic");
-    recordTrailEntry("action", "Errore: " + state.error);
-    state.screen = "destination";
+    // Percorso offline (settembre 2026, vedi MANUALE.md, "Percorso
+    // offline") — SOLO per un fallimento di rete vero e proprio (err
+    // marcato .isNetworkError da classify(), o state.isOffline già true
+    // quando la chiamata è partita): un errore diverso — es. 401 (chiave
+    // API), 429 (rate limit), 500 — resta un vero errore, non deve mai
+    // offrire silenziosamente il percorso provvisorio al posto di un
+    // problema reale da segnalare.
+    if (err.isNetworkError || state.isOffline) {
+      recordTrailEntry("action", "Offline durante la classificazione: passo al percorso provvisorio");
+      state.screen = "offline-classify";
+    } else {
+      state.error = /401/.test(err.message) ? t("dest_error_api_key") : t("dest_error_ai_generic");
+      recordTrailEntry("action", "Errore: " + state.error);
+      state.screen = "destination";
+    }
   }
   render();
 }
@@ -6527,11 +7003,20 @@ syncPurchaseUpdatesFromCRM();
 discoverPurchasesByEmail();
 checkGuestMode();
 processPendingSyncQueue();
+// Percorso offline (settembre 2026, vedi MANUALE.md) — stessi punti di
+// innesco di processPendingSyncQueue() sopra, per coerenza: refreshCategoryAverages()
+// tiene aggiornata la cache dei valori medi per il prezzo provvisorio
+// (mai richiesta al momento del bisogno), processPendingReclassifications()
+// riconcilia gli item ancora in attesa della classificazione reale.
+refreshCategoryAverages();
+processPendingReclassifications();
 
 window.addEventListener("online", () => {
   state.isOffline = false;
   render();
   processPendingSyncQueue();
+  refreshCategoryAverages();
+  processPendingReclassifications();
 });
 window.addEventListener("offline", () => {
   state.isOffline = true;
@@ -6545,6 +7030,10 @@ window.addEventListener("offline", () => {
 // la coda è vuota o offline, quindi il costo quando non c'è nulla in
 // sospeso è trascurabile.
 setInterval(processPendingSyncQueue, 3 * 60 * 1000);
+setInterval(() => {
+  refreshCategoryAverages();
+  processPendingReclassifications();
+}, 3 * 60 * 1000);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
