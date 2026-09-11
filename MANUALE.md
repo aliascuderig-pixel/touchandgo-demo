@@ -683,7 +683,7 @@ Un **terzo sito Netlify indipendente**, dentro la sottocartella `/router` alla r
 
 Una variabile d'ambiente sul sito router (mai sugli altri due):
 
-- `ACTIVE_TARGET=main` (o assente, o qualunque valore non riconosciuto — **fallback sicuro**) → redirect `302` verso il sito principale (`https://benevolent-longma-57c78a.netlify.app/`), **bypassando anche la logica automatica del livello 2**.
+- `ACTIVE_TARGET=main` (o assente, o qualunque valore non riconosciuto — **fallback sicuro**) → redirect `302` verso il sito principale (`https://touchandgo-suite.netlify.app/`), **bypassando anche la logica automatica del livello 2**.
 - `ACTIVE_TARGET=guest` → redirect `302` verso lo spazio ospite (`https://touchandgo-guest.netlify.app/`), stesso bypass.
 
 **Come Giuseppe lo attiva**: dal pannello Netlify del sito router (Site settings → Environment variables), cambia `ACTIVE_TARGET` e basta — **nessun redeploy del codice necessario**, la function legge la variabile a ogni richiesta.
@@ -754,7 +754,7 @@ Verificata leggendo il codice/README pubblicati sul registro npm della versione 
 
 ### Il problema della password del CRM (Visitor Access) — e perché non si tenta più di superarla
 
-Il sito `touchandgo-internal` (dominio `cute-moxie-cd1e4b.netlify.app`) è protetto da una password **a livello di dominio** (Netlify Visitor Access — "Password Protection" nel piano a pagamento), non solo dalla password applicativa del kit riservato.
+Il sito `touchandgo-internal` (dominio `touchandgo-crm.netlify.app`) è protetto da una password **a livello di dominio** (Netlify Visitor Access — "Password Protection" nel piano a pagamento), non solo dalla password applicativa del kit riservato.
 
 **Due tentativi precedenti, entrambi scartati**, di superarla come farebbe un browser:
 1. Un header `Authorization: Basic` — **sbagliato**: la Visitor Access di Netlify non è Basic Auth, il controllo falliva sempre con `crm_visitor_auth_fallita`.
@@ -905,11 +905,11 @@ Un fallimento in un passo iniziale (es. una classificazione fallita) interrompe 
 
 ## Pagina statica "Presentazione della suite e guida all'utilizzo"
 
-Pagina HTML statica fornita già pronta (nessuna logica applicativa aggiunta), servita da `dist/site/guida.html` — pubblica, senza password, raggiungibile a `https://benevolent-longma-57c78a.netlify.app/site/guida.html`. Copiata dal file originale con **una sola modifica** rispetto al contenuto fornito: il widget di chat interno ("Chiedi a Touch&Go") chiamava `assistant.js` con l'URL assoluto del sito pubblico stesso (`https://benevolent-longma-57c78a.netlify.app/.netlify/functions/assistant`) — semplificato nel percorso relativo `/.netlify/functions/assistant`, coerente con la stessa convenzione già usata altrove in `dist/site/index.html` (`fetch("/.netlify/functions/sync", ...)`). Funziona perché questa pagina vive esattamente sullo stesso dominio/deploy che ospita `assistant.js` — verificato in un browser reale (Playwright): la richiesta della chat parte davvero verso lo stesso dominio della pagina, risposta mostrata correttamente nel widget.
+Pagina HTML statica fornita già pronta (nessuna logica applicativa aggiunta), servita da `dist/site/guida.html` — pubblica, senza password, raggiungibile a `https://touchandgo-suite.netlify.app/site/guida.html`. Copiata dal file originale con **una sola modifica** rispetto al contenuto fornito: il widget di chat interno ("Chiedi a Touch&Go") chiamava `assistant.js` con l'URL assoluto del sito pubblico stesso (`https://touchandgo-suite.netlify.app/.netlify/functions/assistant`) — semplificato nel percorso relativo `/.netlify/functions/assistant`, coerente con la stessa convenzione già usata altrove in `dist/site/index.html` (`fetch("/.netlify/functions/sync", ...)`). Funziona perché questa pagina vive esattamente sullo stesso dominio/deploy che ospita `assistant.js` — verificato in un browser reale (Playwright): la richiesta della chat parte davvero verso lo stesso dominio della pagina, risposta mostrata correttamente nel widget.
 
 ## Pagina statica "Tutorial animato della suite"
 
-Pagina HTML statica fornita già pronta, servita da `dist/site/tutorial.html` — pubblica, senza password, raggiungibile a `https://benevolent-longma-57c78a.netlify.app/site/tutorial.html`. Copiata **esattamente com'è**, byte per byte, nessuna modifica al contenuto (verificato con `diff`, nessuna differenza) — a differenza della pagina "guida.html" sopra, questa non contiene alcuna chiamata di rete/function: è un mockup animato puramente client-side (quattro dispositivi — App turista, Area partner, Sito, CRM — con testo digitato via `setTimeout()`, nessuna dipendenza da `assistant.js` o da altro backend), quindi nessun URL da adattare al dominio di destinazione. Verificato in un browser reale (Playwright): cambio tab tra i quattro dispositivi, animazione di digitazione del codice partner, bottone "Rivedi la scheda corrente dall'inizio" — tutti funzionanti.
+Pagina HTML statica fornita già pronta, servita da `dist/site/tutorial.html` — pubblica, senza password, raggiungibile a `https://touchandgo-suite.netlify.app/site/tutorial.html`. Copiata **esattamente com'è**, byte per byte, nessuna modifica al contenuto (verificato con `diff`, nessuna differenza) — a differenza della pagina "guida.html" sopra, questa non contiene alcuna chiamata di rete/function: è un mockup animato puramente client-side (quattro dispositivi — App turista, Area partner, Sito, CRM — con testo digitato via `setTimeout()`, nessuna dipendenza da `assistant.js` o da altro backend), quindi nessun URL da adattare al dominio di destinazione. Verificato in un browser reale (Playwright): cambio tab tra i quattro dispositivi, animazione di digitazione del codice partner, bottone "Rivedi la scheda corrente dall'inizio" — tutti funzionanti.
 
 ## Trail di supporto (assistenza predittiva) — primo pezzo (settembre 2026)
 

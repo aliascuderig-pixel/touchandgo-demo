@@ -8,4 +8,4 @@ Allow: /
 Disallow: /site/admin.html
 Disallow: /site/investitori.html
 
-Sitemap: https://benevolent-longma-57c78a.netlify.app/sitemap.xml
+Sitemap: https://touchandgo-suite.netlify.app/sitemap.xml

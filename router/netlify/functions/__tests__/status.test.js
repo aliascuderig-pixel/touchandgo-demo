@@ -70,7 +70,7 @@ test("nessuno stato ancora scritto: default (nessun failover), redirectsTo main"
   const body = JSON.parse(res.body);
   assert.equal(body.ok, true);
   assert.equal(body.mode, "auto");
-  assert.equal(body.redirectsTo, "https://benevolent-longma-57c78a.netlify.app/");
+  assert.equal(body.redirectsTo, "https://touchandgo-suite.netlify.app/");
   assert.equal(body.state.failoverActive, false);
   assert.equal(stores["router-state"].size, 0, "non deve aver scritto nulla nello store");
 });

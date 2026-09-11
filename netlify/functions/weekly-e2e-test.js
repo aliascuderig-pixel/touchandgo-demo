@@ -31,7 +31,7 @@ const { isGuestMode, guestScopedStoreName } = require("../lib/guest-mode");
 // da nessuna parte: esiste solo come sentinella per l'autoverifica.
 // ===========================================================================
 const GUEST_BASE_URL = "https://touchandgo-guest.netlify.app/";
-const KNOWN_PRODUCTION_URL = "https://benevolent-longma-57c78a.netlify.app/";
+const KNOWN_PRODUCTION_URL = "https://touchandgo-suite.netlify.app/";
 
 // Richiamata sia una volta in testa a runWeeklyE2ETest() sia dentro guestUrl()
 // ad ogni singola chiamata (difesa in profondità, costo trascurabile): se
