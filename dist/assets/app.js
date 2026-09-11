@@ -2214,6 +2214,11 @@ async function submitPartnerGeneratedShipment() {
     status: "in sospeso",
     date: new Date().toISOString(),
     photo,
+    // Questo percorso (area partner) non chiama mai refreshDutyEstimate():
+    // nessuna stima dazi è mai richiesta qui, quindi sempre null — stesso
+    // significato "non richiesta" già usato nel percorso turista
+    // self-service (ChooseAddressScreen più sopra), mai un errore.
+    dutyEstimateShown: null,
   };
 
   try {
@@ -5521,6 +5526,16 @@ function ChooseAddressScreen() {
         textDescription,
         hasSignedInvoice: !!state.signatureDetected,
         hasIdOnFile: !!state.idDocument,
+        // Testo ESATTO della stima dazi mostrata al turista in questo
+        // momento (state.dutyEstimate, popolato da refreshDutyEstimate() —
+        // vedi MANUALE.md, "Stima dazi doganali"), se disponibile — null se
+        // non è mai arrivata, è fallita, o non è stata richiesta (stesso
+        // significato di "assente" già usato ovunque in questo file, mai
+        // un errore). Solo persistenza: non tocca in alcun modo la
+        // generazione/visualizzazione della stima, né priceFor()/
+        // priceQuotes()/bracketPrice()/shippingCost() (vedi il test di
+        // isolamento dedicato).
+        dutyEstimateShown: state.dutyEstimate || null,
       };
       state.pendingItems.push(item);
       state.purchaseHistory.push(item);
