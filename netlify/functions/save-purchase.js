@@ -124,6 +124,24 @@ function normalizeEmail(email) {
 }
 
 // ---------------------------------------------------------------------
+// Persistenza della stima dazi mostrata al turista (dutyEstimateShown,
+// settembre 2026) — vedi MANUALE.md, "Stima dazi doganali". Fino a questa
+// modifica state.dutyEstimate (dist/assets/app.js) era solo stato
+// client, mai salvato sul record dell'acquisto — primo passo per poter
+// eventualmente confrontarlo in futuro con un dazio reale riportato.
+//
+// Nessuna modifica obbligatoria qui per accettarlo: come già per
+// country/city (vedi sotto, "Paese e città reali della spedizione") e per
+// objectName/category/material/hsCode, isValidPurchase() sopra non valida
+// questo campo — non lo ha mai validato, accetta già qualunque campo
+// extra nel payload, e questo handler scrive l'intero oggetto item così
+// com'è arrivato (setJSON(item.id, item) più sotto). Il client
+// (ChooseAddressScreen/submitPartnerGeneratedShipment in app.js) manda
+// sempre o il testo esatto della stima o null — mai un valore inventato
+// qui, mai bloccante se assente.
+// ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
 // Attribuzione partner persistente per touristEmail (settembre 2026) —
 // vedi MANUALE.md, sezione "Attribuzione partner persistente per
 // touristEmail". Un'agenzia/tour operator che genera la prima spedizione
