@@ -124,6 +124,53 @@ function normalizeEmail(email) {
 }
 
 // ---------------------------------------------------------------------
+// Regole anti-frode (settembre 2026) — vedi il blocco più esteso più sotto,
+// dentro l'handler, per il principio "solo segnalazione, mai blocco" e per
+// la spiegazione del formato flaggedReasons (array). Qui solo le soglie e
+// le due funzioni riutilizzabili condivise da più regole.
+// ---------------------------------------------------------------------
+
+// Finestra usata dalla regola "Acquisti ravvicinati" (regola 2).
+const CLOSE_PURCHASE_WINDOW_MS = 60 * 60 * 1000; // 1 ora
+
+// Soglie condivise dalle due regole statistiche "valore anomalo" (3) e
+// "peso anomalo" (6) — stessa funzione per entrambe: nessun motivo tecnico
+// per differenziare soglia/campione minimo tra un valore in euro e un peso
+// in kg, la variabilità tra oggetti affini della stessa categoria turistica
+// è paragonabile per i due campi. 3x la media evita falsi positivi sulla
+// normale variazione tra oggetti simili (es. "Elettronica" include sia
+// auricolari che fotocamere) restando comunque sensibile a un valore/peso
+// dichiarato palesemente fuori scala. Campione minimo di 5 evita di
+// giudicare "anomalo" qualunque cosa quando la categoria ha ancora troppo
+// pochi acquisti perché una media sia un riferimento significativo.
+const CATEGORY_ANOMALY_MULTIPLIER = 3;
+const CATEGORY_ANOMALY_MIN_SAMPLE = 5;
+
+// Regole 3./6.: `currentValue` è anomalo se supera CATEGORY_ANOMALY_MULTIPLIER
+// volte la media di `field` calcolata sugli ALTRI acquisti della stessa
+// categoria (mai includendo l'acquisto corrente, che altrimenti
+// sposterebbe la propria stessa media di riferimento) — nessun flag se il
+// campione è sotto CATEGORY_ANOMALY_MIN_SAMPLE.
+function isCategoryOutlier(categoryItems, field, currentValue) {
+  if (typeof currentValue !== "number" || !isFinite(currentValue)) return false;
+  const values = categoryItems.map((it) => it[field]).filter((v) => typeof v === "number" && isFinite(v));
+  if (values.length < CATEGORY_ANOMALY_MIN_SAMPLE) return false;
+  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+  return currentValue > avg * CATEGORY_ANOMALY_MULTIPLIER;
+}
+
+// Regole 4./7.: `value` del campo `field` (match esatto) è già usato da
+// almeno un altro acquisto con un'email normalizzata diversa da `ownEmail`
+// — un altro acquisto senza email propria non conta mai come "account
+// diverso" (non c'è un'identità reale da confrontare).
+function usedByDifferentEmail(otherItems, field, value, ownEmail) {
+  return otherItems.some((it) => {
+    const otherEmail = normalizeEmail(it.touristEmail);
+    return it[field] === value && otherEmail && otherEmail !== ownEmail;
+  });
+}
+
+// ---------------------------------------------------------------------
 // Persistenza della stima dazi mostrata al turista (dutyEstimateShown,
 // settembre 2026) — vedi MANUALE.md, "Stima dazi doganali". Fino a questa
 // modifica state.dutyEstimate (dist/assets/app.js) era solo stato
@@ -234,39 +281,14 @@ exports.handler = async (event) => {
     const email = normalizeEmail(item.touristEmail);
 
     if (email) {
+      // Blocco manuale (invariato) — la segnalazione anti-frode (incluso
+      // il "secondo acquisto senza abbonamento" che viveva qui prima di
+      // questa modifica) è più sotto, insieme alle altre regole: serve
+      // l'intero elenco degli acquisti, che viene recuperato una sola
+      // volta per tutte le regole insieme.
       const existingBlock = await blocklist.get(email, { type: "json" });
       if (existingBlock) {
         return { statusCode: 403, body: JSON.stringify({ error: BLOCKED_MESSAGE }) };
-      }
-
-      // Segnalazione (non più blocco automatico — verificato dal vivo il
-      // 1° settembre 2026: bloccava permanentemente anche clienti con due
-      // acquisti del tutto legittimi). Un cliente che ha già almeno un
-      // acquisto registrato e non è mai stato abbonato, se effettua un
-      // acquisto aggiuntivo non-abbonato, NON viene più bloccato — procede
-      // come un acquisto qualunque. Viene solo flaggato sul record stesso
-      // (flaggedReason/flaggedAt), per revisione manuale dello staff dal
-      // CRM — mai una scrittura automatica in blocklist: quello store resta
-      // riservato al solo blocco manuale ("Blocca cliente" dal CRM).
-      const { blobs } = await purchases.list();
-      const priorItems = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
-      // Esclude il record dell'item stesso: un acquisto già salvato che
-      // viene semplicemente ri-sincronizzato (es. cambio status "in
-      // sospeso" -> "in confezionamento" -> "ritiro richiesto" ->
-      // "ritirato") non è un "secondo acquisto" e non deve flaggare il
-      // primo acquisto legittimo del cliente.
-      const emailItems = priorItems.filter((it) => normalizeEmail(it.touristEmail) === email && it.id !== item.id);
-
-      // Ricalcolato ad ogni salvataggio (non letto/preservato dal record
-      // precedente né dal payload in arrivo, che non lo contiene mai): resta
-      // sempre coerente con lo stato reale degli acquisti del cliente in
-      // questo istante, senza bisogno di logica di merge aggiuntiva.
-      if (emailItems.length > 0 && item.pricingTier !== "abbonato") {
-        const everSubscribed = emailItems.some((it) => it.pricingTier === "abbonato");
-        if (!everSubscribed) {
-          item.flaggedReason = "Secondo acquisto senza abbonamento";
-          item.flaggedAt = new Date().toISOString();
-        }
       }
     }
 
@@ -341,6 +363,92 @@ exports.handler = async (event) => {
     // sparirebbe al prossimo salvataggio da quel dispositivo.
     if (!item.deliveryConfirmedAt && alreadySaved && alreadySaved.deliveryConfirmedAt) {
       item.deliveryConfirmedAt = alreadySaved.deliveryConfirmedAt;
+    }
+
+    // ------------------------------------------------------------------
+    // Regole anti-frode (settembre 2026) — SOLO segnalazione per revisione
+    // manuale dello staff dal CRM, MAI un blocco automatico: stesso
+    // principio già consolidato dopo l'incidente verificato dal vivo il 1°
+    // settembre 2026 (vedi il commento storico rimasto sopra, sul blocco
+    // manuale). Nessuna delle regole seguenti deve mai impedire un
+    // acquisto di procedere, indipendentemente da quante se ne attivino.
+    //
+    // Prima di questa modifica esisteva una sola regola ("Secondo acquisto
+    // senza abbonamento"), scritta su un campo a valore singolo
+    // (flaggedReason). Un acquisto può ora attivarne più di una insieme,
+    // quindi il campo diventa un elenco (flaggedReasons) — ogni regola che
+    // si attiva aggiunge la propria stringa, indipendentemente dalle
+    // altre; flaggedAt resta un singolo timestamp dell'ultimo ricalcolo.
+    //
+    // Come già per la regola originale, ricalcolate INTERAMENTE ad ogni
+    // salvataggio (mai lette/preservate dal record precedente né dal
+    // payload del client): un acquisto che smette di corrispondere a un
+    // pattern semplicemente non viene più segnalato ai salvataggi
+    // successivi, senza bisogno di logica di merge.
+    //
+    // Formato e retrocompatibilità: un record VECCHIO già in store con il
+    // campo singolo flaggedReason non viene mai toccato da questa modifica
+    // finché non viene risincronizzato — resta leggibile esattamente
+    // com'era. Se invece viene risincronizzato, viene ricalcolato nel
+    // nuovo formato array (stesso comportamento "nessun merge" già in uso
+    // per questo campo). Il CRM (repository separato touchandgo-internal,
+    // non modificato da qui) legge oggi flaggedReason come valore singolo:
+    // va aggiornato per mostrare l'elenco flaggedReasons — vedi
+    // MANUALE.md, sezione "Segnalazioni anti-frode".
+    item.purchasedAt = (alreadySaved && alreadySaved.purchasedAt) || new Date().toISOString();
+
+    const { blobs: allPurchaseBlobs } = await purchases.list();
+    const allItems = (await Promise.all(allPurchaseBlobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
+    // Esclude il record dell'item stesso: una risincronizzazione (es.
+    // cambio di stato) non deve mai confrontare l'acquisto con se stesso.
+    const otherItems = allItems.filter((it) => it.id !== item.id);
+    const emailItems = email ? otherItems.filter((it) => normalizeEmail(it.touristEmail) === email) : [];
+
+    const reasons = [];
+
+    // 1. [ESISTENTE, logica invariata] Secondo acquisto senza abbonamento.
+    if (email && emailItems.length > 0 && item.pricingTier !== "abbonato") {
+      const everSubscribed = emailItems.some((it) => it.pricingTier === "abbonato");
+      if (!everSubscribed) reasons.push("Secondo acquisto senza abbonamento");
+    }
+
+    // 2. Acquisti ravvicinati: un altro acquisto della stessa email con
+    // purchasedAt entro un'ora (finestra simmetrica: prima o dopo).
+    if (email) {
+      const currentTime = new Date(item.purchasedAt).getTime();
+      const hasCloseOne = emailItems.some(
+        (it) => it.purchasedAt && Math.abs(new Date(it.purchasedAt).getTime() - currentTime) <= CLOSE_PURCHASE_WINDOW_MS
+      );
+      if (hasCloseOne) reasons.push("Più acquisti in meno di un'ora");
+    }
+
+    // 3./6. Valore/peso dichiarato anomalo per la categoria.
+    const categoryItems = item.category ? otherItems.filter((it) => it.category === item.category) : [];
+    if (isCategoryOutlier(categoryItems, "itemValue", item.itemValue)) {
+      reasons.push("Valore dichiarato anomalo per la categoria");
+    }
+    if (isCategoryOutlier(categoryItems, "weightKg", item.weightKg)) {
+      reasons.push("Peso dichiarato anomalo per la categoria");
+    }
+
+    // 4./7. Stesso indirizzo/nome (match esatto) usato da un'email diversa.
+    if (email && item.addressLabel && usedByDifferentEmail(otherItems, "addressLabel", item.addressLabel, email)) {
+      reasons.push("Stesso indirizzo usato da più account");
+    }
+    if (email && item.touristName && usedByDifferentEmail(otherItems, "touristName", item.touristName, email)) {
+      reasons.push("Stesso nome usato da più account");
+    }
+
+    // 5. Uso ripetuto di "breakeven" — pensato come eccezione una tantum
+    // (invito monouso o prima spedizione gratuita, vedi MANUALE.md, "Offerte
+    // e sconti"), non un livello di prezzo permanente per lo stesso cliente.
+    if (email && item.pricingTier === "breakeven" && emailItems.some((it) => it.pricingTier === "breakeven")) {
+      reasons.push("Uso ripetuto di prezzo breakeven");
+    }
+
+    if (reasons.length > 0) {
+      item.flaggedReasons = reasons;
+      item.flaggedAt = new Date().toISOString();
     }
 
     await purchases.setJSON(item.id, item);

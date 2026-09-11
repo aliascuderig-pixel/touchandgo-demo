@@ -47,6 +47,22 @@ async function checkRateLimit(key) {
 // i due limiti sono lo stesso numero, non uno "più ampio" dell'altro.
 // Il limite di peso resta invece più ampio (500kg contro 50kg del singolo
 // oggetto) perché il gruppo può contenere più oggetti.
+// Regola anti-frode 8 (settembre 2026, vedi save-purchase.js per le regole
+// 1-7 sul singolo acquisto): un numero insolitamente alto di oggetti in
+// un'unica spedizione consolidata può indicare attività commerciale
+// mascherata da acquisto turistico — un turista normale consolida in
+// genere pochi souvenir verso la stessa destinazione. Soglia: più di 6
+// oggetti (7+) — abbastanza alta da non scattare su una famiglia numerosa
+// con qualche acquisto extra a testa, abbastanza bassa da intercettare un
+// lotto all'ingrosso. SOLO segnalazione, MAI un blocco: stesso principio
+// delle regole 1-7 (vedi save-purchase.js) — nessuna spedizione viene mai
+// impedita da questa regola, indipendentemente dal numero di oggetti.
+// Contata da group.itemIds.length (già validato sopra, mai da un eventuale
+// itemCount mandato dal client — stesso principio "mai fidarsi di un
+// valore lato client se calcolabile lato server" già in uso altrove nel
+// repository, es. estimateShown in touchandgo-internal).
+const UNUSUAL_ITEM_COUNT_THRESHOLD = 6;
+
 function isValidShipmentGroup(group) {
   if (!group || typeof group !== "object") return false;
   if (typeof group.code !== "string" || !group.code.trim()) return false;
@@ -77,6 +93,14 @@ exports.handler = async (event) => {
       siteID: process.env.NETLIFY_BLOBS_SITE_ID,
       token: process.env.NETLIFY_BLOBS_TOKEN,
     });
+    // Regola 8 — vedi commento sopra UNUSUAL_ITEM_COUNT_THRESHOLD. Stesso
+    // formato flaggedReasons (array) usato in save-purchase.js, per
+    // coerenza anche se qui esiste per ora una sola regola.
+    if (group.itemIds.length > UNUSUAL_ITEM_COUNT_THRESHOLD) {
+      group.flaggedReasons = ["Numero insolito di oggetti in una spedizione"];
+      group.flaggedAt = new Date().toISOString();
+    }
+
     // Il bookingCode (generateBookingCode() lato client) è la chiave: è già
     // quello mostrato al turista e stampato nel QR/riepilogo, quindi è
     // anche l'id più naturale per il CRM da usare per risalire al gruppo.
