@@ -446,7 +446,7 @@ const I18N = {
     trust_customs: "Dogana automatica",
 
     // ---- Footer (mostrato con HomeScreen) ----
-    footer_tagline: "Prototipo Touch&amp;Go · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Classificazione AI reale · Quote e pagamenti simulati per il test",
+    footer_tagline: "Prototipo Touch&amp;Go · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Classificazione AI reale · Pagamento reale via Stripe (modalità test) · Ritiro corriere ancora simulato",
     footer_dashboard: "La tua spesa",
     footer_history: "I tuoi acquisti ({count})",
     footer_reset: "Resetta tutto",
@@ -706,7 +706,7 @@ const I18N = {
     trust_customs: "Automatic customs",
 
     // ---- Footer (shown with HomeScreen) ----
-    footer_tagline: "Touch&amp;Go prototype · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Real AI classification · Quotes and payments simulated for testing",
+    footer_tagline: "Touch&amp;Go prototype · Catania 2026 · Pre-seed · Smart&amp;Start Italia<br/>Real AI classification · Real payment via Stripe (test mode) · Courier pickup still simulated",
     footer_dashboard: "Your spending",
     footer_history: "Your purchases ({count})",
     footer_reset: "Reset everything",
@@ -1023,6 +1023,15 @@ const state = {
   pendingItems: [],
   lastQueuedItem: null,
   shippedGroups: [],
+  // Pagamento reale con Stripe Checkout (ConcludeScreen) — vedi
+  // verifyCheckoutSession()/finalizeShippedGroups()/CheckoutVerifyingScreen()
+  // più sotto e MANUALE.md, sezione "Pagamento reale con Stripe Checkout".
+  // checkoutSessionId/checkoutVerifying sono popolati SOLO se l'app parte
+  // con ?session_id= nell'URL (ritorno dalla success_url di Stripe) — mai
+  // altrimenti, incluso un ritorno da cancel_url (nessun session_id).
+  checkoutSessionId: null,
+  checkoutVerifying: false,
+  checkoutError: null,
   purchaseHistory: [],
   activePartnerCode: null,
   partnerLoggedCode: null,
@@ -1276,6 +1285,10 @@ function render() {
   // Header()) — così il banner è visibile fin dalla primissima schermata
   // vista da un turista nuovo, non solo dopo l'onboarding.
   if (state.guestMode) app.appendChild(GuestModeBanner());
+  if (state.checkoutVerifying) {
+    app.appendChild(CheckoutVerifyingScreen());
+    return;
+  }
   if (state.screen === "onboarding") {
     app.appendChild(OnboardingScreen());
     return;
@@ -3631,14 +3644,14 @@ function ResultScreen() {
   }
 
   // Il prezzo qui è sempre e solo una STIMA per la spedizione di questo
-  // singolo oggetto — nessun addebito reale (o simulato) avviene in questo
-  // punto del flusso, qualunque sia il ramo di prezzo mostrato sopra (dual
-  // pricing, breakeven, prima spedizione gratuita). Il calcolo definitivo
+  // singolo oggetto — nessun addebito reale avviene in questo punto del
+  // flusso, qualunque sia il ramo di prezzo mostrato sopra (dual pricing,
+  // breakeven, prima spedizione gratuita). Il calcolo definitivo
   // (consolidato se il turista aggiunge altri oggetti verso la stessa
-  // destinazione — vedi consolidatedGroupPrice()) e il momento del
-  // pagamento (anche solo simulato oggi) sono SOLO in ConcludeScreen — vedi
-  // il commento lì sopra confirmBtn e MANUALE.md, sezione "Punto di
-  // integrazione pagamento futuro".
+  // destinazione — vedi consolidatedGroupPrice()) e il pagamento reale
+  // (Stripe Checkout) sono SOLO in ConcludeScreen — vedi il commento lì
+  // sopra confirmBtn e MANUALE.md, sezione "Pagamento reale con Stripe
+  // Checkout".
   const estimateNote = el("div", "info-line");
   estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
   wrap.appendChild(estimateNote);
@@ -4715,16 +4728,12 @@ function ConcludeScreen() {
   // funzione e MANUALE.md, sezione "Prezzo consolidato per gruppo di
   // spedizione". Questo, non la somma di it.price (le stime individuali
   // mostrate durante lo shopping), è il prezzo che conta davvero.
-  const itemsByDest = {};
-  state.pendingItems.forEach((it) => {
-    (itemsByDest[it.addressLabel] = itemsByDest[it.addressLabel] || []).push(it);
-  });
-  const groupPricing = {};
-  Object.entries(itemsByDest).forEach(([dest, items]) => {
-    groupPricing[dest] = consolidatedGroupPrice(items);
-  });
-  const groups = Object.keys(itemsByDest).length;
-  const grandTotal = Math.round(Object.values(groupPricing).reduce((s, g) => s + g.total, 0) * 100) / 100;
+  //
+  // computeConcludeGroups() (più sotto) fattorizza esattamente questo
+  // calcolo: serve identico anche dopo il ritorno da Stripe Checkout (vedi
+  // finalizeShippedGroups()), per sapere quali oggetti marcare come
+  // ritirato — qui viene solo richiamato, non duplicato.
+  const { itemsByDest, groupPricing, groups, grandTotal } = computeConcludeGroups();
 
   const summary = el(
     "div",
@@ -4745,24 +4754,21 @@ function ConcludeScreen() {
     <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
   wrap.appendChild(paymentSummary);
 
+  if (state.checkoutError) {
+    wrap.appendChild(el("div", "alert", `⚠️ ${state.checkoutError}`));
+  }
+
   // ============================================================
-  // QUI è il punto di integrazione per un pagamento reale futuro
-  // (Stripe o altro PSP) — vedi MANUALE.md, sezione "Punto di
-  // integrazione pagamento futuro".
-  //
-  // Oggi il pagamento è solo simulato (il setTimeout qui sotto conferma
-  // sempre, incondizionatamente), ma questo è già, a livello concettuale,
-  // l'istante in cui il turista conferma E PAGA il totale finale mostrato
-  // sopra (singolo o consolidato a seconda di quanti oggetti sono nel
-  // gruppo, calcolato da consolidatedGroupPrice()) — non solo "notifica un
-  // ritiro". Nessun punto del flusso PRIMA di questo (ResultScreen incluso)
-  // deve mai comunicare un addebito: quello è sempre e solo una stima.
-  //
-  // Quando arriverà un pagamento reale, la chiamata al provider va
-  // agganciata ESATTAMENTE qui, prima del blocco che marca gli oggetti come
-  // "ritirato" e li sincronizza col CRM più sotto — non dopo: un pagamento
-  // vero può fallire (carta rifiutata, timeout), e in quel caso gli oggetti
-  // non andrebbero comunque marcati come ritirati né il gruppo salvato.
+  // Pagamento reale con Stripe Checkout (pagina di pagamento ospitata da
+  // Stripe, mai un modulo carta custom qui) — vedi MANUALE.md, sezione
+  // "Pagamento reale con Stripe Checkout". Questo pulsante NON conferma
+  // più nulla da solo: crea una Checkout Session (create-checkout-
+  // session.js, che ricalcola il totale server-side, mai fidandosi di
+  // quello mostrato sopra) e reindirizza il turista alla pagina Stripe
+  // reale. Il ritorno da lì — pagamento riuscito o annullato — è gestito
+  // da verifyCheckoutSession()/finalizeShippedGroups() più sotto: NESSUN
+  // oggetto viene mai marcato "ritirato" da questo click, solo dopo che
+  // Stripe conferma davvero il pagamento lato server.
   // ============================================================
   const confirmBtn = el(
     "button",
@@ -4780,45 +4786,188 @@ function ConcludeScreen() {
       render();
       return;
     }
+    state.checkoutError = null;
     confirmBtn.disabled = true;
-    confirmBtn.textContent = "Confermo e pago…";
-    setTimeout(() => {
-      state.shippedGroups = Object.entries(itemsByDest).map(([dest, items]) => {
-        const pricing = groupPricing[dest];
-        const code = generateBookingCode();
-        const group = {
-          code,
-          dest,
-          destinationCountry: pricing.destinationCountry,
-          itemIds: items.map((it) => it.id),
-          itemCount: items.length,
-          weightKg: pricing.weightKg,
-          shipping: pricing.shipping,
-          fee: pricing.fee,
-          total: pricing.total,
-          eta: pricing.eta,
-          touristEmail: state.touristEmail,
-          createdAt: new Date().toISOString(),
-        };
-        saveShipmentGroupToCRM(group);
-        return { dest, total: pricing.total.toFixed(2), code, count: items.length };
+    confirmBtn.textContent = "Reindirizzo al pagamento…";
+    createCheckoutSession(itemsByDest)
+      .then((url) => {
+        redirectToCheckout(url);
+      })
+      .catch(() => {
+        state.checkoutError = "Impossibile avviare il pagamento. Riprova.";
+        render();
       });
-      state.pendingItems.forEach((it) => {
-        const group = state.shippedGroups.find((g) => g.dest === it.addressLabel);
-        it.status = "ritirato";
-        it.shipmentGroupCode = group ? group.code : null;
-        syncPurchaseToCRM(it);
-      });
-      state.pendingItems = [];
-      savePending();
-      saveHistory();
-      state.screen = "shipped";
-      render();
-    }, 800);
   });
   wrap.appendChild(confirmBtn);
 
   return wrap;
+}
+
+// Funzione pura — raggruppa state.pendingItems per destinazione
+// (addressLabel) e ricalcola il prezzo di ciascun gruppo con
+// consolidatedGroupPrice(). Usata sia da ConcludeScreen() (per mostrare il
+// riepilogo e costruire la richiesta a create-checkout-session.js) sia da
+// finalizeShippedGroups() (per sapere quali oggetti marcare "ritirato" dopo
+// un pagamento Stripe verificato) — stesso identico calcolo nei due punti,
+// mai duplicato.
+function computeConcludeGroups() {
+  const itemsByDest = {};
+  state.pendingItems.forEach((it) => {
+    (itemsByDest[it.addressLabel] = itemsByDest[it.addressLabel] || []).push(it);
+  });
+  const groupPricing = {};
+  Object.entries(itemsByDest).forEach(([dest, items]) => {
+    groupPricing[dest] = consolidatedGroupPrice(items);
+  });
+  const groups = Object.keys(itemsByDest).length;
+  const grandTotal = Math.round(Object.values(groupPricing).reduce((s, g) => s + g.total, 0) * 100) / 100;
+  return { itemsByDest, groupPricing, groups, grandTotal };
+}
+
+// Chiama create-checkout-session.js con gli item GREZZI (peso, dimensioni,
+// tier di prezzo, sconto partner, destinazione) di ciascun oggetto in
+// sospeso — MAI un totale già calcolato: il server ricalcola tutto da zero
+// (vedi netlify/lib/pricing.js) e ignora qualunque campo "total" che
+// arrivasse comunque nel corpo della richiesta. Restituisce l'URL della
+// Checkout Session Stripe da cui reindirizzare il turista.
+async function createCheckoutSession(itemsByDest) {
+  const items = [];
+  Object.entries(itemsByDest).forEach(([dest, groupItems]) => {
+    groupItems.forEach((it) => {
+      items.push({
+        id: it.id,
+        addressLabel: dest,
+        destinationCountry: destinationCountryForItem(it),
+        weightKg: it.weightKg,
+        dims: it.dims,
+        pricingTier: it.pricingTier,
+        partnerDiscountAmount: it.partnerDiscountAmount || 0,
+      });
+    });
+  });
+  const res = await fetch("/.netlify/functions/create-checkout-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.url) throw new Error(data.error || "Errore nella creazione della sessione di pagamento");
+  return data.url;
+}
+
+// Isolato in una function dedicata (non un window.location = url inline in
+// ConcludeScreen) solo per restare testabile: nei test jsdom non esegue
+// mai una navigazione reale (non c'è nulla da verificare oltre "è stato
+// chiamato con l'URL giusto"), in produzione è l'unico punto che lascia
+// davvero la pagina verso Stripe.
+function redirectToCheckout(url) {
+  window.location.href = url;
+}
+
+// Marca definitivamente come "ritirato" tutti gli oggetti in sospeso e
+// registra i gruppi di spedizione — ESATTAMENTE la stessa logica che prima
+// di questa modifica girava incondizionatamente dentro un setTimeout
+// (pagamento sempre simulato con successo). Ora chiamata SOLO da
+// verifyCheckoutSession(), e SOLO dopo che verify-checkout-session.js ha
+// confermato lato server payment_status === "paid" per la sessione Stripe
+// reale — mai prima, mai su un pagamento fallito/annullato/non verificato.
+function finalizeShippedGroups() {
+  const { itemsByDest, groupPricing } = computeConcludeGroups();
+  state.shippedGroups = Object.entries(itemsByDest).map(([dest, items]) => {
+    const pricing = groupPricing[dest];
+    const code = generateBookingCode();
+    const group = {
+      code,
+      dest,
+      destinationCountry: pricing.destinationCountry,
+      itemIds: items.map((it) => it.id),
+      itemCount: items.length,
+      weightKg: pricing.weightKg,
+      shipping: pricing.shipping,
+      fee: pricing.fee,
+      total: pricing.total,
+      eta: pricing.eta,
+      touristEmail: state.touristEmail,
+      createdAt: new Date().toISOString(),
+    };
+    saveShipmentGroupToCRM(group);
+    return { dest, total: pricing.total.toFixed(2), code, count: items.length };
+  });
+  state.pendingItems.forEach((it) => {
+    const group = state.shippedGroups.find((g) => g.dest === it.addressLabel);
+    it.status = "ritirato";
+    it.shipmentGroupCode = group ? group.code : null;
+    // Dopo un pagamento Stripe reale l'app ha lasciato la pagina ed è
+    // tornata (success_url): loadPending()/loadHistory() hanno ricaricato
+    // state.pendingItems/state.purchaseHistory come DUE array indipendenti
+    // da due chiavi localStorage separate, quindi qui "it" può non essere
+    // più lo stesso oggetto già presente in purchaseHistory — a differenza
+    // del percorso "aggiungi acquisto" (ChooseAddressScreen, pulsante
+    // "Conferma e genera QR"), dove è sempre lo stesso identico
+    // riferimento (doppio push sullo stesso oggetto su pendingItems e
+    // purchaseHistory lì). Senza questo aggiornamento esplicito, l'oggetto
+    // risulterebbe per sempre "in sospeso" nello storico del turista anche
+    // se davvero ritirato.
+    const historyEntry = state.purchaseHistory.find((h) => h.id === it.id);
+    if (historyEntry && historyEntry !== it) {
+      historyEntry.status = it.status;
+      historyEntry.shipmentGroupCode = it.shipmentGroupCode;
+    }
+    syncPurchaseToCRM(it);
+  });
+  state.pendingItems = [];
+  savePending();
+  saveHistory();
+  state.screen = "shipped";
+}
+
+// Schermata minimale mostrata SOLO mentre verifyCheckoutSession() sta
+// interrogando Stripe (vedi render(), corto circuito prima del routing
+// normale) — evita di mostrare per un istante ConcludeScreen/HomeScreen
+// col vecchio stato "in sospeso" subito dopo il ritorno da Stripe, prima
+// che la verifica (asincrona) abbia stabilito se procedere o no.
+function CheckoutVerifyingScreen() {
+  const wrap = el("div", "section");
+  wrap.appendChild(el("div", "step-lbl", "Verifica del pagamento"));
+  wrap.appendChild(el("div", "identify-intro", "Un attimo, stiamo confermando il pagamento con Stripe…"));
+  return wrap;
+}
+
+// Legge ?session_id= dall'URL di ritorno (success_url di create-checkout-
+// session.js) e verifica DAVVERO lato server, via verify-checkout-
+// session.js, che il pagamento sia stato completato — il solo fatto di
+// essere tornati su questa URL non basta MAI (vedi header di
+// verify-checkout-session.js). Un cancel_url (nessun session_id nell'URL)
+// non passa mai da qui: state.checkoutVerifying resta false, nessuna
+// chiamata, nessun oggetto marcato — esattamente come un pagamento mai
+// avvenuto.
+async function verifyCheckoutSession() {
+  let paid = false;
+  try {
+    const res = await fetch("/.netlify/functions/verify-checkout-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: state.checkoutSessionId }),
+    });
+    const data = await res.json();
+    paid = !!(data && data.paid);
+  } catch (e) {
+    paid = false;
+  }
+  // L'URL non deve mai restare con ?session_id= dopo la verifica —
+  // riusabile/condivisibile per errore, indipendentemente dall'esito.
+  try {
+    window.history.replaceState({}, "", window.location.pathname);
+  } catch (e) {}
+
+  state.checkoutVerifying = false;
+  state.checkoutSessionId = null;
+  if (paid && state.pendingItems.length) {
+    finalizeShippedGroups();
+  } else if (!paid) {
+    state.checkoutError = "Il pagamento non risulta completato. Riprova quando vuoi concludere il ritiro.";
+  }
+  render();
 }
 
 function ShippedScreen() {
@@ -4841,10 +4990,10 @@ function ShippedScreen() {
     wrap.appendChild(card);
   });
   wrap.appendChild(
-    el("div", "booked-text", `Pagamento di €${paidTotal.toFixed(2)} registrato (simulato in questo prototipo).`)
+    el("div", "booked-text", `Pagamento di €${paidTotal.toFixed(2)} confermato via Stripe (modalità test).`)
   );
   wrap.appendChild(
-    el("div", "booked-note", "Prototipo — nessuna richiesta reale è stata inviata a un corriere né a un istituto di pagamento.")
+    el("div", "booked-note", "Prototipo — il pagamento è reale (in modalità test Stripe), ma nessuna richiesta è stata ancora inviata a un vero corriere.")
   );
   const backBtn = el("button", "btn-primary", "Torna alla home");
   backBtn.addEventListener("click", () => {
@@ -6300,6 +6449,28 @@ function captureReviewFromUrl() {
 
 captureReviewFromUrl();
 if (state.reviewingPurchaseId) ensureReviewItem();
+
+// Ritorno da Stripe Checkout (ConcludeScreen) — stesso pattern di
+// capturePartnerCode()/captureModeFromUrl()/capturePromoCode()/
+// captureReviewFromUrl() sopra: un parametro letto una volta all'avvio.
+// A differenza di quelli, ?session_id= richiede una vera verifica lato
+// server prima di agire (vedi verifyCheckoutSession() più sopra) — qui si
+// legge SOLO il parametro e si marca "in verifica" per evitare che il
+// primo render mostri per un istante la schermata sbagliata; la chiamata
+// asincrona vera e propria parte subito dopo, fuori da questa function.
+function captureCheckoutSessionFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    if (sessionId) {
+      state.checkoutSessionId = sessionId;
+      state.checkoutVerifying = true;
+    }
+  } catch (e) {}
+}
+
+captureCheckoutSessionFromUrl();
+if (state.checkoutSessionId) verifyCheckoutSession();
 
 // Spazio ospite (continuità operativa, vedi MANUALE.md): GUEST_MODE è una
 // variabile d'ambiente Netlify letta solo dalle Netlify Functions — questo
