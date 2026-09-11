@@ -108,12 +108,21 @@ test("il flag viene scritto correttamente sul record del secondo acquisto (flagg
   const first = basePurchase({ touristEmail: email, pricingTier: "pieno" });
   await handler(makeEvent(first));
   const savedFirst = await purchases.get(first.id, { type: "json" });
-  assert.equal(savedFirst.flaggedReason, undefined, "il primo acquisto non deve mai essere flaggato");
+  assert.equal(savedFirst.flaggedReasons, undefined, "il primo acquisto non deve mai essere flaggato");
 
   const second = basePurchase({ touristEmail: email, pricingTier: "pieno" });
   await handler(makeEvent(second));
   const savedSecond = await purchases.get(second.id, { type: "json" });
-  assert.equal(savedSecond.flaggedReason, "Secondo acquisto senza abbonamento");
+  // flaggedReasons è ora un elenco (nuovo formato): verifica che contenga
+  // questa regola — non un confronto esatto dell'intero array, perché nel
+  // test i due acquisti avvengono a pochi millisecondi di distanza e quindi
+  // fanno scattare LEGITTIMAMENTE anche la regola 2 ("Più acquisti in meno
+  // di un'ora", vedi test dedicato più sotto), indipendentemente da questa.
+  assert.ok(Array.isArray(savedSecond.flaggedReasons), "flaggedReasons deve essere un array");
+  assert.ok(
+    savedSecond.flaggedReasons.includes("Secondo acquisto senza abbonamento"),
+    "flaggedReasons deve contenere la regola 'secondo acquisto senza abbonamento'"
+  );
   assert.ok(savedSecond.flaggedAt, "flaggedAt deve essere valorizzato");
   assert.ok(!isNaN(new Date(savedSecond.flaggedAt).getTime()), "flaggedAt deve essere un timestamp valido");
 });
@@ -129,7 +138,15 @@ test("cliente già stato abbonato in passato: nessun flag su un acquisto success
   const second = basePurchase({ touristEmail: email, pricingTier: "pieno" });
   await handler(makeEvent(second));
   const savedSecond = await purchases.get(second.id, { type: "json" });
-  assert.equal(savedSecond.flaggedReason, undefined, "un cliente già stato abbonato non va mai flaggato");
+  // Come sopra: non un confronto sull'intero array, la regola 2 ("Più
+  // acquisti in meno di un'ora") può scattare legittimamente qui perché i
+  // due acquisti del test avvengono a pochi millisecondi di distanza — ciò
+  // che questo test verifica è che la regola 1 specificamente non scatti
+  // mai per un cliente già stato abbonato.
+  assert.ok(
+    !savedSecond.flaggedReasons || !savedSecond.flaggedReasons.includes("Secondo acquisto senza abbonamento"),
+    "un cliente già stato abbonato non va mai flaggato dalla regola 'secondo acquisto senza abbonamento'"
+  );
 });
 
 test("risincronizzazione dello stesso acquisto (stesso id): non conta come 'secondo acquisto'", async () => {
@@ -142,7 +159,7 @@ test("risincronizzazione dello stesso acquisto (stesso id): non conta come 'seco
   await handler(makeEvent(Object.assign({}, item, { status: "in confezionamento" })));
 
   const saved = await purchases.get(item.id, { type: "json" });
-  assert.equal(saved.flaggedReason, undefined, "un resync dello stesso id non deve auto-flaggarsi come 'secondo acquisto'");
+  assert.equal(saved.flaggedReasons, undefined, "un resync dello stesso id non deve auto-flaggarsi come 'secondo acquisto'");
   assert.equal(saved.status, "in confezionamento");
 });
 
