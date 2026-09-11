@@ -295,8 +295,8 @@ test("ConcludeScreen: documento presente ma firma non rilevata, blocca con messa
   assert.equal(identifyIntroText(document), SPECIFIC_MSG_CONCLUDE);
 });
 
-test("ConcludeScreen: documento e firma rilevata, l'azione procede normalmente", (t) => {
-  const { document } = bootApp(t, {
+test("ConcludeScreen: documento e firma rilevata, l'azione supera il gate identità e avvia il pagamento reale (Stripe Checkout)", async (t) => {
+  const { window, document } = bootApp(t, {
     seedLocalStorage: (ls) => {
       ls.setItem("tg_onboarded", "1");
       ls.setItem("tg_profile", JSON.stringify(profilePayload({ idDocument: "data:image/jpeg;base64,AAAA", signatureDetected: true })));
@@ -309,8 +309,18 @@ test("ConcludeScreen: documento e firma rilevata, l'azione procede normalmente",
   confirmBtn.click();
 
   assert.equal(isOnIdentifyScreen(document), false, "non deve reindirizzare a IdentifyScreen");
-  assert.equal(confirmBtn.disabled, true, "il pagamento (simulato) deve procedere, non restare bloccato");
-  assert.equal(confirmBtn.textContent, "Confermo e pago…");
+  assert.equal(confirmBtn.disabled, true, "il pulsante si disabilita mentre crea la sessione di pagamento Stripe");
+  assert.equal(confirmBtn.textContent, "Reindirizzo al pagamento…");
+
+  // Questo test disabilita la rete di proposito (nessun mock per
+  // create-checkout-session, vedi bootApp): la creazione della sessione
+  // fallisce, quindi NESSUN oggetto deve mai risultare marcato come
+  // ritirato solo per aver superato il gate identità — un pagamento
+  // reale non verificato da Stripe non deve mai marcare nulla.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(document.querySelectorAll(".alert").length, 1, "un errore di pagamento deve comparire");
+  const pending = JSON.parse(window.localStorage.getItem("tg_pending") || "[]");
+  assert.equal(pending.length, 1, "l'oggetto resta in sospeso: nessun pagamento reale è stato completato");
 });
 
 // ---------------------------------------------------------------------
@@ -369,5 +379,12 @@ test("Round-trip Concludi: dopo l'identificazione completata torna a ConcludeScr
   confirmBtn.click();
   assert.equal(isOnIdentifyScreen(document), false, "ora con identità valida l'azione deve procedere");
   assert.equal(confirmBtn.disabled, true);
-  assert.equal(confirmBtn.textContent, "Confermo e pago…");
+  assert.equal(confirmBtn.textContent, "Reindirizzo al pagamento…");
+
+  // Stessa ragione del test precedente: rete disabilitata per
+  // create-checkout-session, quindi la sessione di pagamento non viene
+  // mai creata e nessun oggetto deve risultare marcato come ritirato.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const pending = JSON.parse(window.localStorage.getItem("tg_pending") || "[]");
+  assert.equal(pending.length, 1, "l'oggetto resta in sospeso: nessun pagamento reale è stato completato");
 });
