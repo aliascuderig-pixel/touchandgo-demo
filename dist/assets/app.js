@@ -1212,6 +1212,7 @@ const state = {
   pendingItems: [],
   lastQueuedItem: null,
   shippedGroups: [],
+  shippedPartnerInvites: [],
   // Pagamento reale con Stripe Checkout (ConcludeScreen) — vedi
   // verifyCheckoutSession()/finalizeShippedGroups()/CheckoutVerifyingScreen()
   // più sotto e MANUALE.md, sezione "Pagamento reale con Stripe Checkout".
@@ -5312,6 +5313,80 @@ function redirectToCheckout(url) {
   window.location.href = url;
 }
 
+// ---------------------------------------------------------------------
+// Invito vetrina online del partner + "Per te" (settembre 2026) — dopo un
+// acquisto completato generato/riferito a un partner
+// (generatedByPartnerCode o partnerCode valorizzato), un invito a scoprire
+// la sua vetrina online, più un secondo invito SEMPRE presente verso una
+// pagina personalizzata cross-partner ("Per te", nel repository separato
+// touchandgo-eshop) — mai un redirect automatico, solo un link mostrato
+// dopo la conferma (ShippedScreen più sotto). Vedi MANUALE.md per la
+// descrizione completa.
+//
+// Vetrine e-shop pubblicate — oggi solo il partner demo (NDP924, "Negozio
+// Demo"), stesso principio isolato/hardcoded di DEMO_PARTNER_CODE già in
+// uso nell'altro repository: nessun lookup dinamico finché esiste un solo
+// negozio con una vetrina pubblicata. Un vero lookup (nome/URL per
+// QUALUNQUE partner, letto dallo store "partners") richiederebbe una
+// nuova function pubblica dedicata — MAI riusare partner-stats.js, che
+// richiede il codice partner come credenziale ed espone dati finanziari
+// (vendite/commissioni): mostrarli qui, a un turista qualunque che
+// conosce solo il codice tramite un acquisto, sarebbe una fuga di dati.
+const PARTNER_ESHOP_INFO = {
+  NDP924: { name: "Negozio Demo", eshopUrl: "https://touchandgo-eshop.netlify.app/site/index.html" },
+};
+
+// URL della pagina "Per te" (touchandgo-eshop) — SEMPRE costruito,
+// indipendentemente dal partner: personalizzato via il solo parametro
+// email, nessun account/login nuovo. La pagina non esiste ancora in
+// questo momento (costruita in un pezzo separato su touchandgo-eshop): il
+// link è comunque corretto e punterà a una pagina reale a breve.
+function perTeUrl(touristEmail) {
+  return `https://touchandgo-eshop.netlify.app/site/per-te.html?email=${encodeURIComponent(touristEmail || "")}`;
+}
+
+// Elenco (deduplicato) dei negozi con vetrina pubblicata coinvolti in
+// questo acquisto — un acquisto self-service ordinario (nessun
+// partnerCode/generatedByPartnerCode su alcun item) produce un elenco
+// vuoto: mai un invito verso una vetrina che non esiste.
+// generatedByPartnerCode ha priorità su partnerCode quando un item ha
+// entrambi: identifica CHI ha generato la spedizione (il negozio più
+// rilevante da suggerire), mentre partnerCode è riservato al meccanismo
+// di commissione sconti (vedi il commento sopra
+// submitPartnerGeneratedShipment).
+function partnerEshopInvitesForItems(items) {
+  const seen = new Set();
+  const invites = [];
+  (items || []).forEach((it) => {
+    const code = it.generatedByPartnerCode || it.partnerCode;
+    if (!code || seen.has(code)) return;
+    const info = PARTNER_ESHOP_INFO[code];
+    if (!info) return;
+    seen.add(code);
+    invites.push(info);
+  });
+  return invites;
+}
+
+// Markup dell'invito — escapeHtml() sul nome del negozio (vincolo
+// esplicito): anche se oggi PARTNER_ESHOP_INFO è hardcoded e "fidato",
+// questa funzione deve restare sicura anche quando il nome arriverà da un
+// vero lookup lato server in futuro (un dato scritto dal partner stesso,
+// mai fidato ciecamente). Il link "Per te" compare sempre, anche con
+// "invites" vuoto — indipendentemente dal partner, vincolo esplicito.
+function partnerEshopInviteHtml(invites, touristEmail) {
+  const eshopLinks = (invites || [])
+    .map(
+      (inv) =>
+        `<a class="btn-secondary eshop-invite-link" href="${escapeHtml(inv.eshopUrl)}" target="_blank" rel="noopener">Scopri la vetrina online di ${escapeHtml(inv.name)} →</a>`
+    )
+    .join("");
+  return `<div class="eshop-invite">
+    ${eshopLinks}
+    <a class="btn-secondary eshop-invite-link" href="${escapeHtml(perTeUrl(touristEmail))}" target="_blank" rel="noopener">Scopri altri articoli per te →</a>
+  </div>`;
+}
+
 // Marca definitivamente come "ritirato" tutti gli oggetti in sospeso e
 // registra i gruppi di spedizione — ESATTAMENTE la stessa logica che prima
 // di questa modifica girava incondizionatamente dentro un setTimeout
@@ -5320,6 +5395,11 @@ function redirectToCheckout(url) {
 // confermato lato server payment_status === "paid" per la sessione Stripe
 // reale — mai prima, mai su un pagamento fallito/annullato/non verificato.
 function finalizeShippedGroups() {
+  // Invito vetrina/"Per te" (vedi il commento esteso sopra) — calcolato
+  // QUI, sui pendingItems ancora completi, prima che vengano svuotati più
+  // sotto: sola lettura, nessun impatto sulla logica di pagamento/stato
+  // che segue.
+  state.shippedPartnerInvites = partnerEshopInvitesForItems(state.pendingItems);
   const { itemsByDest, groupPricing } = computeConcludeGroups();
   state.shippedGroups = Object.entries(itemsByDest).map(([dest, items]) => {
     const pricing = groupPricing[dest];
@@ -5443,6 +5523,12 @@ function ShippedScreen() {
   wrap.appendChild(
     el("div", "booked-note", "Prototipo — il pagamento è reale (in modalità test Stripe), ma nessuna richiesta è stata ancora inviata a un vero corriere.")
   );
+  // Invito vetrina/"Per te" — solo visivo, mai un redirect automatico
+  // (vincolo esplicito). Vedi partnerEshopInviteHtml()/il commento esteso
+  // sopra finalizeShippedGroups().
+  const inviteWrap = el("div");
+  inviteWrap.innerHTML = partnerEshopInviteHtml(state.shippedPartnerInvites, state.touristEmail);
+  wrap.appendChild(inviteWrap);
   const backBtn = el("button", "btn-primary", "Torna alla home");
   backBtn.addEventListener("click", () => {
     state.screen = "home";

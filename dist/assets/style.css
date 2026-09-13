@@ -145,6 +145,13 @@ button{font-family:inherit;cursor:pointer}
   background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;padding:10px;
 }
 
+/* ---------- Invito vetrina/"Per te" post-acquisto (settembre 2026) ---------- */
+/* .btn-secondary è pensata per <button> (width:100% richiede un elemento a
+   blocco) — qui riusata su <a>, con solo display/decorazione aggiunti,
+   nessun colore/font nuovo. */
+.eshop-invite{margin-top:10px}
+.eshop-invite-link{display:block;text-align:center;text-decoration:none;box-sizing:border-box}
+
 /* ---------- Stat grid ---------- */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .stat-card{
