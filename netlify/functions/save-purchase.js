@@ -4,6 +4,7 @@
 
 const { getStore } = require("@netlify/blobs");
 const { guestScopedStoreName } = require("../lib/guest-mode");
+const { isCategoryOutlier } = require("../lib/category-stats");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -126,38 +127,15 @@ function normalizeEmail(email) {
 // ---------------------------------------------------------------------
 // Regole anti-frode (settembre 2026) — vedi il blocco più esteso più sotto,
 // dentro l'handler, per il principio "solo segnalazione, mai blocco" e per
-// la spiegazione del formato flaggedReasons (array). Qui solo le soglie e
-// le due funzioni riutilizzabili condivise da più regole.
+// la spiegazione del formato flaggedReasons (array). isCategoryOutlier()
+// (regole 3./6., "valore/peso anomalo per la categoria") è importata da
+// ../lib/category-stats — condivisa con category-averages.js (cache dei
+// valori medi per il percorso offline, vedi MANUALE.md), non più duplicata
+// qui come prima di questa modifica.
 // ---------------------------------------------------------------------
 
 // Finestra usata dalla regola "Acquisti ravvicinati" (regola 2).
 const CLOSE_PURCHASE_WINDOW_MS = 60 * 60 * 1000; // 1 ora
-
-// Soglie condivise dalle due regole statistiche "valore anomalo" (3) e
-// "peso anomalo" (6) — stessa funzione per entrambe: nessun motivo tecnico
-// per differenziare soglia/campione minimo tra un valore in euro e un peso
-// in kg, la variabilità tra oggetti affini della stessa categoria turistica
-// è paragonabile per i due campi. 3x la media evita falsi positivi sulla
-// normale variazione tra oggetti simili (es. "Elettronica" include sia
-// auricolari che fotocamere) restando comunque sensibile a un valore/peso
-// dichiarato palesemente fuori scala. Campione minimo di 5 evita di
-// giudicare "anomalo" qualunque cosa quando la categoria ha ancora troppo
-// pochi acquisti perché una media sia un riferimento significativo.
-const CATEGORY_ANOMALY_MULTIPLIER = 3;
-const CATEGORY_ANOMALY_MIN_SAMPLE = 5;
-
-// Regole 3./6.: `currentValue` è anomalo se supera CATEGORY_ANOMALY_MULTIPLIER
-// volte la media di `field` calcolata sugli ALTRI acquisti della stessa
-// categoria (mai includendo l'acquisto corrente, che altrimenti
-// sposterebbe la propria stessa media di riferimento) — nessun flag se il
-// campione è sotto CATEGORY_ANOMALY_MIN_SAMPLE.
-function isCategoryOutlier(categoryItems, field, currentValue) {
-  if (typeof currentValue !== "number" || !isFinite(currentValue)) return false;
-  const values = categoryItems.map((it) => it[field]).filter((v) => typeof v === "number" && isFinite(v));
-  if (values.length < CATEGORY_ANOMALY_MIN_SAMPLE) return false;
-  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
-  return currentValue > avg * CATEGORY_ANOMALY_MULTIPLIER;
-}
 
 // Regole 4./7.: `value` del campo `field` (match esatto) è già usato da
 // almeno un altro acquisto con un'email normalizzata diversa da `ownEmail`

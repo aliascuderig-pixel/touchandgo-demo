@@ -248,7 +248,13 @@ test("HistoryScreen: click su 'Richiedi ritiro' registra 'Richiedi ritiro clicca
 // 3. Il testo di un errore reale finisce nel trail
 // ---------------------------------------------------------------------
 
-test("DestinationScreen: errore offline mostrato all'utente finisce nel trail con lo stesso testo", async (t) => {
+// Prima della modifica di settembre 2026 (percorso offline — vedi
+// MANUALE.md), un click su "Analizza" mentre offline bloccava con un
+// errore permanente (state.error, mai possibile proseguire). Ora offre
+// invece il percorso di classificazione provvisoria: nessun errore, il
+// trail registra un'azione, non un "Errore: ...". Vedi anche
+// offline-classify.test.js per la verifica end-to-end di quel percorso.
+test("DestinationScreen: un click su Analizza mentre offline apre il percorso provvisorio, nessun errore nel trail", async (t) => {
   const { window, document, context } = bootApp(t);
   setState(context, {
     pendingInput: { type: "text", label: "un oggetto qualsiasi" },
@@ -261,11 +267,13 @@ test("DestinationScreen: errore offline mostrato all'utente finisce nel trail co
   assert.ok(goBtn, "deve esistere il bottone di avvio classificazione");
   goBtn.click();
 
-  const errorText = getState(context, "error");
-  assert.ok(errorText, "state.error deve essere valorizzato");
+  assert.equal(getState(context, "error"), null, "non deve più essere mostrato come un errore bloccante");
+  assert.equal(getState(context, "screen"), "offline-classify", "deve passare al selettore di categoria offline");
   const trail = window.getRecentTrail();
-  const entry = trail.find((e) => e.type === "action" && e.label === "Errore: " + errorText);
-  assert.ok(entry, "il testo esatto dell'errore mostrato deve comparire nel label della voce trail");
+  const errorEntry = trail.find((e) => e.type === "action" && /^Errore:/.test(e.label));
+  assert.ok(!errorEntry, "nessuna voce 'Errore:' nel trail per questo percorso, non è più un errore");
+  const actionEntry = trail.find((e) => e.type === "action" && /percorso di classificazione provvisoria/i.test(e.label));
+  assert.ok(actionEntry, "il trail deve comunque registrare che si è passati al percorso provvisorio");
 });
 
 test("runClassification(): un fallimento di classificazione registra il testo dell'errore mostrato", async (t) => {
