@@ -238,7 +238,7 @@ test("Richiedi ritiro: documento presente ma firma non rilevata, blocca con mess
   assert.equal(identifyIntroText(document), SPECIFIC_MSG_HISTORY);
 });
 
-test("Richiedi ritiro: documento e firma rilevata, l'azione procede normalmente", (t) => {
+test("Richiedi ritiro: documento e firma rilevata, l'azione procede normalmente (apre il selettore data, poi conferma)", (t) => {
   const { document } = bootApp(t, {
     seedLocalStorage: (ls) => {
       ls.setItem("tg_onboarded", "1");
@@ -251,6 +251,12 @@ test("Richiedi ritiro: documento e firma rilevata, l'azione procede normalmente"
   clickByText(document, ".queue-item-change", "📦 Richiedi ritiro");
 
   assert.equal(isOnIdentifyScreen(document), false, "non deve reindirizzare a IdentifyScreen");
+  // Non imposta più subito lo stato: apre il selettore data (settembre
+  // 2026, vedi pickup-scheduling.test.js) — qui si conferma solo che il
+  // gate identità resta invariato, non la logica di scelta della data.
+  assert.ok(document.getElementById("pickup-date-input"), "deve aprire il selettore data, non impostare subito lo stato");
+  clickByText(document, ".btn-primary", "Conferma ritiro");
+
   const statusEl = document.querySelector(".history-status");
   assert.equal(statusEl.textContent, "ritiro richiesto");
 });
@@ -349,6 +355,11 @@ test("Round-trip storico: dopo l'identificazione completata torna a History e pu
 
   clickByText(document, ".queue-item-change", "📦 Richiedi ritiro");
   assert.equal(isOnIdentifyScreen(document), false, "ora con identità valida l'azione deve procedere");
+  // Non imposta più subito lo stato: apre il selettore data (settembre
+  // 2026, vedi pickup-scheduling.test.js).
+  assert.ok(document.getElementById("pickup-date-input"), "deve aprire il selettore data");
+  clickByText(document, ".btn-primary", "Conferma ritiro");
+
   const statusEl = document.querySelector(".history-status");
   assert.equal(statusEl.textContent, "ritiro richiesto");
 });

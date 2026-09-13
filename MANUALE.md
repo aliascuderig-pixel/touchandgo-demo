@@ -1151,4 +1151,38 @@ Dopo un acquisto completato (pagamento Stripe confermato — `ShippedScreen()`, 
 
 **14 nuovi test** (`dist/assets/__tests__/eshop-invite.test.js`): un item con `partnerCode` valorizzato (o `generatedByPartnerCode`) produce l'invito con il link corretto; un item self-service non produce alcun invito vetrina (ma il link "Per te" resta sempre presente); un partner senza vetrina pubblicata non produce alcun invito, mai un errore; più item dello stesso partner producono un solo invito deduplicato; `perTeUrl()` urlencoda correttamente l'email (caratteri speciali inclusi) e resta un link valido anche senza email nota; `escapeHtml()` su un nome negozio malevolo reale (`<img onerror=...>`) e su un URL malevolo; `finalizeShippedGroups()` calcola correttamente `state.shippedPartnerInvites` dagli item ancora presenti in `state.pendingItems`, sia per un acquisto con partner sia per uno self-service (verificato sullo `state` reale via `vm.runInContext`, stessa tecnica di `support-trail.test.js`/`support-request.test.js` — `state` è `const`, accessibile solo come identificatore bare nel context, non come `window.state`).
 
-Suite completa del repository verde (**208/208**, `npm test`).
+## Selettore data di ritiro (settembre 2026)
+
+"📦 Richiedi ritiro" (`PurchaseHistoryList()`, `dist/assets/app.js`) non imposta più subito `status="ritiro richiesto"` al click. Dopo l'identico controllo `hasValidIdentity()` già esistente (**invariato**, resta prima di tutto il resto), si apre un piccolo selettore di data (**`PickupSchedulerModal()`**) dove il cliente sceglie una data preferita; solo alla conferma il sistema decide la data reale di ritiro.
+
+### Dove si trova
+
+Stesso pattern già in uso per `SupportRequestModal()`/`AssistantChatModal()` — un overlay condizionale (`state.pickupSchedulerOpen`) aggiunto in coda a `render()`, non una nuova schermata (`state.screen`): il turista non perde il contesto di `HistoryScreen`. Riusa le stesse classi CSS già esistenti (`.assistant-chat-overlay`/`.assistant-chat-modal`/`.assistant-chat-field`/`.addr-input` per l'`<input type="date">`, `.support-confirm-message` per la vista di conferma) — nessuno stile nuovo.
+
+### La regola di calcolo
+
+`resolveScheduledPickupDate(preferredDate, today)` (funzione pura, date come stringhe `"YYYY-MM-DD"`, `today` esplicito per restare testabile in modo deterministico):
+- se la preferenza lascia **almeno un giorno pieno** di margine da oggi (tempo per un controllo interno), viene rispettata esattamente;
+- altrimenti (oggi stesso, o una data non valida/nel passato) viene posticipata a **oggi + 1 giorno**.
+
+Il selettore (`<input type="date" min="oggi">`) non impedisce comunque la selezione di oggi stesso — la regola del margine gestisce quel caso, non un blocco lato UI. Le date sono confrontate ancorandole a mezzanotte UTC (`daysBetweenDateStrings()`/`addDaysToDateString()`), la stessa tecnica già in uso in `partner-stats.js` (`monthLabel()`), per evitare che il fuso orario/l'ora legale del dispositivo alterino il conteggio dei giorni.
+
+### Cosa viene salvato
+
+Alla conferma, sull'item: **`preferredPickupDate`** (la data originale scelta dal cliente, invariata, per trasparenza) e **`scheduledPickupDate`** (quella reale) — **entrambi sempre**, anche quando coincidono. `status="ritiro richiesto"` e `pickupRequestedAt=adesso`, esattamente come prima. `savePending()`/`saveHistory()`/`syncPurchaseToCRM()` restano **invarianti**: quest'ultima manda l'intero oggetto item, quindi i due campi nuovi la raggiungono senza alcuna modifica alla funzione.
+
+### Il messaggio di conferma — mai un "ritardo"
+
+`buildPickupConfirmationMessage(preferredDate, scheduledDate)`: se le due date coincidono, una conferma semplice ("Ritiro confermato per [data]"); se diverse, una spiegazione neutra del perché ("Per garantire un controllo accurato, il ritiro è stato preso in carico per [nuova data] — un giorno dopo la tua preferenza [data originale]") — **mai** come un ritardo, una scusa o un problema (vincolo esplicito, verificato con un test che controlla l'assenza di toni di scusa nel testo).
+
+### Sicurezza
+
+Il messaggio di conferma passa comunque da `escapeHtml()` prima di finire in `innerHTML`, per difesa in profondità — anche se le date che lo compongono sono sempre generate da codice (mai testo libero del cliente): stesso principio di cautela già applicato ovunque nel progetto per qualunque dato che finisce in `innerHTML`.
+
+### Test
+
+**11 nuovi test** (`dist/assets/__tests__/pickup-scheduling.test.js`): una data preferita con almeno un giorno di margine viene rispettata esattamente; una data preferita per oggi (o nel passato, o non valida) viene sempre posticipata a domani, mai un errore; il messaggio distingue correttamente conferma semplice vs spiegazione neutra (mai le parole "ritardo"/"purtroppo"/"spiacenti"/"scusa"); il controllo identità esistente continua a bloccare l'apertura del selettore esattamente come prima (il selettore non si apre mai senza identità valida); flusso end-to-end completo (click → selettore → conferma) verifica che `preferredPickupDate`/`scheduledPickupDate` siano entrambi salvati correttamente sull'item reale e trasmessi a `syncPurchaseToCRM()`, sia nel caso "rispettata" sia nel caso "posticipata"; l'`<input type="date">` ha sempre `min` impostato a oggi.
+
+Due test preesistenti (`identity-verification-pickup.test.js`, il click su "📦 Richiedi ritiro" con identità valida) sono stati aggiornati per il nuovo flusso a due passaggi (click → selettore → conferma) invece di aspettarsi lo stato impostato subito al click — la logica del gate identità che verificano resta **invariata**.
+
+Suite completa del repository verde (**343/343**, `npm test`).
