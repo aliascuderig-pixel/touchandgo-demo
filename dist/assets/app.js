@@ -1964,6 +1964,17 @@ function closePickupScheduler() {
 // nessun'altra modifica alla logica esistente. Stesso doppio
 // savePending()/saveHistory()/syncPurchaseToCRM() già usato dal vecchio
 // handler diretto, invariato.
+//
+// customerNotices (settembre 2026) — vedi MANUALE.md, "Avvisi permanenti
+// al cliente (customerNotices)". Prova documentale permanente sul record
+// stesso (a differenza del trail di supporto esistente, locale/temporaneo,
+// vedi getRecentTrail): registra il testo ESATTO del messaggio mostrato al
+// cliente, in ENTRAMBI i casi (data rispettata o posticipata) — la prova
+// serve anche per dimostrare che una data rispettata è stata comunicata
+// correttamente, non solo per il caso "problematico". Accodato (mai
+// sovrascritto): ogni chiamata aggiunge una nuova voce all'array già
+// presente sull'item, esattamente come per il trail di supporto. Non
+// influenza mai priceFor()/priceQuotes() (campi completamente separati).
 function confirmPickupSchedule() {
   const it = findPurchaseById(state.schedulingPickupItemId);
   if (!it) {
@@ -1972,11 +1983,17 @@ function confirmPickupSchedule() {
   }
   const today = todayDateString();
   const { preferredDate, scheduledDate } = resolveScheduledPickupDate(state.pickupDateChoice, today);
+  const confirmationMessage = buildPickupConfirmationMessage(preferredDate, scheduledDate);
 
   it.preferredPickupDate = preferredDate;
   it.scheduledPickupDate = scheduledDate;
   it.status = "ritiro richiesto";
   it.pickupRequestedAt = new Date().toISOString();
+  it.customerNotices = (it.customerNotices || []).concat({
+    type: "pickup-scheduling",
+    message: confirmationMessage,
+    shownAt: new Date().toISOString(),
+  });
   savePending();
   saveHistory();
   syncPurchaseToCRM(it);
