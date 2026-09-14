@@ -1317,6 +1317,17 @@ const state = {
   supportSubmitting: false,
   supportSubmitError: null,
   supportSubmitted: false,
+  // Selettore data di ritiro (settembre 2026) — vedi PickupSchedulerModal()
+  // più sotto. schedulingPickupItemId punta all'id dell'item in
+  // state.purchaseHistory per cui è aperto il selettore (mai un riferimento
+  // diretto all'oggetto: il modal è un componente separato, non annidato
+  // nella riga cliccata). pickupScheduleConfirmation, una volta valorizzato,
+  // fa passare il modal dal selettore alla vista di conferma — stesso
+  // pattern già usato da supportSubmitted per SupportRequestModal.
+  pickupSchedulerOpen: false,
+  schedulingPickupItemId: null,
+  pickupDateChoice: null,
+  pickupScheduleConfirmation: null,
 };
 const app = document.getElementById("app");
 
@@ -1514,6 +1525,7 @@ function render() {
   // ritrovarsi esattamente lì chiudendo la chat).
   if (state.assistantChatOpen) app.appendChild(AssistantChatModal());
   if (state.supportModalOpen) app.appendChild(SupportRequestModal());
+  if (state.pickupSchedulerOpen) app.appendChild(PickupSchedulerModal());
 }
 
 function el(tag, cls, html) {
@@ -1844,6 +1856,196 @@ async function submitSupportRequest() {
   }
   state.supportSubmitting = false;
   render();
+}
+
+// ---------------------------------------------------------------------
+// Selettore data di ritiro (settembre 2026) — il click su "📦 Richiedi
+// ritiro" (PurchaseHistoryList più sotto) non imposta più subito
+// status="ritiro richiesto": apre questo selettore, DOPO l'identico
+// controllo hasValidIdentity() già esistente (invariato). Il cliente
+// sceglie una data preferita; il sistema decide la data reale:
+// - se la preferenza lascia almeno un giorno pieno di margine da oggi
+//   (tempo per un controllo interno), si rispetta esattamente;
+// - altrimenti (oggi stesso, o comunque troppo vicina) si posticipa a
+//   oggi + 1 giorno.
+// preferredPickupDate (la scelta originale) e scheduledPickupDate (quella
+// reale) sono ENTRAMBI salvati sull'item, sempre — anche quando coincidono
+// — per trasparenza. syncPurchaseToCRM() (invariata) li porta con sé
+// automaticamente: manda l'intero oggetto item, non serve modificarla.
+//
+// Funzioni pure sotto (date come stringhe "YYYY-MM-DD", "today" esplicito
+// dove serve) per restare testabili in modo deterministico — stesso
+// principio già usato per isNewProduct()/formatTimeRemaining() nell'altro
+// repository (touchandgo-eshop).
+// ---------------------------------------------------------------------
+
+// Data odierna del cliente (calendario LOCALE, non UTC: "oggi" è il suo
+// oggi) come stringa "YYYY-MM-DD" — stesso formato di <input type="date">.
+function todayDateString(now) {
+  const d = typeof now === "number" ? new Date(now) : new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Differenza in giorni di calendario PIENI tra due date "YYYY-MM-DD".
+// Entrambe ancorate a mezzanotte UTC (non l'ora locale del browser): è il
+// modo standard per confrontare due semplici date di calendario senza che
+// l'ora legale/il fuso orario del dispositivo alterino il conteggio dei
+// giorni — internamente coerente perché applicato allo stesso modo a
+// entrambi i lati del confronto.
+function daysBetweenDateStrings(dateStr, otherDateStr) {
+  const a = Date.parse(dateStr + "T00:00:00Z");
+  const b = Date.parse(otherDateStr + "T00:00:00Z");
+  return Math.round((a - b) / (24 * 60 * 60 * 1000));
+}
+
+function addDaysToDateString(dateStr, days) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Decide la data di ritiro reale a partire dalla preferenza del cliente —
+// vedi il commento esteso sopra per la regola. "today" esplicito (non
+// Date.now()/todayDateString() letti internamente) per restare testabile
+// in modo deterministico. Una preferenza non valida/vuota non genera un
+// errore: ricade su "oggi", trattata quindi come "nessun margine" ->
+// posticipata a domani (mai un crash per un input malformato).
+function resolveScheduledPickupDate(preferredDate, today) {
+  const safePreferred = !isNaN(Date.parse(preferredDate + "T00:00:00Z")) ? preferredDate : today;
+  const marginDays = daysBetweenDateStrings(safePreferred, today);
+  const scheduledDate = marginDays >= 1 ? safePreferred : addDaysToDateString(today, 1);
+  return { preferredDate: safePreferred, scheduledDate };
+}
+
+// Formato leggibile in italiano — ancorato a mezzanotte UTC per lo stesso
+// motivo di daysBetweenDateStrings() sopra (stessa tecnica già in uso in
+// partner-stats.js, monthLabel()).
+function formatItDate(dateStr) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  return d.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+// Messaggio di conferma — MAI come un ritardo/una scusa (vincolo
+// esplicito): se la data reale coincide con la preferenza, una conferma
+// semplice; altrimenti una spiegazione neutra del perché è stata
+// posticipata di un giorno.
+function buildPickupConfirmationMessage(preferredDate, scheduledDate) {
+  if (scheduledDate === preferredDate) {
+    return `Ritiro confermato per ${formatItDate(scheduledDate)}.`;
+  }
+  return `Per garantire un controllo accurato, il ritiro è stato preso in carico per ${formatItDate(scheduledDate)} — un giorno dopo la tua preferenza (${formatItDate(preferredDate)}).`;
+}
+
+function findPurchaseById(id) {
+  return state.pendingItems.find((it) => it.id === id) || state.purchaseHistory.find((it) => it.id === id) || null;
+}
+
+function openPickupScheduler(it) {
+  state.schedulingPickupItemId = it.id;
+  state.pickupDateChoice = todayDateString();
+  state.pickupScheduleConfirmation = null;
+  state.pickupSchedulerOpen = true;
+  render();
+}
+
+function closePickupScheduler() {
+  state.pickupSchedulerOpen = false;
+  state.schedulingPickupItemId = null;
+  state.pickupDateChoice = null;
+  state.pickupScheduleConfirmation = null;
+  render();
+}
+
+// Conferma la data scelta — SOLA scrittura dei due nuovi campi più
+// status/pickupRequestedAt (comportamento invariato per questi due):
+// nessun'altra modifica alla logica esistente. Stesso doppio
+// savePending()/saveHistory()/syncPurchaseToCRM() già usato dal vecchio
+// handler diretto, invariato.
+function confirmPickupSchedule() {
+  const it = findPurchaseById(state.schedulingPickupItemId);
+  if (!it) {
+    closePickupScheduler();
+    return;
+  }
+  const today = todayDateString();
+  const { preferredDate, scheduledDate } = resolveScheduledPickupDate(state.pickupDateChoice, today);
+
+  it.preferredPickupDate = preferredDate;
+  it.scheduledPickupDate = scheduledDate;
+  it.status = "ritiro richiesto";
+  it.pickupRequestedAt = new Date().toISOString();
+  savePending();
+  saveHistory();
+  syncPurchaseToCRM(it);
+
+  state.pickupScheduleConfirmation = { preferredDate, scheduledDate };
+  render();
+}
+
+function PickupSchedulerModal() {
+  const overlay = el("div", "assistant-chat-overlay");
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closePickupScheduler();
+  });
+
+  const modal = el("div", "assistant-chat-modal");
+  modal.addEventListener("click", (e) => e.stopPropagation());
+
+  const header = el("div", "assistant-chat-header");
+  header.innerHTML = `<div class="assistant-chat-title">Scegli la data di ritiro</div>`;
+  const closeBtn = el("button", "assistant-chat-close", "✕");
+  closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", "Chiudi");
+  closeBtn.addEventListener("click", closePickupScheduler);
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  // Stato di conferma — stesso pattern di state.supportSubmitted in
+  // SupportRequestModal(). Il messaggio è costruito da date già validate
+  // (mai testo libero del cliente): escapeHtml() applicato comunque come
+  // difesa in profondità, coerente col resto del progetto (vedi
+  // xss-escape.test.js) — non un'assunzione che questo rendering non
+  // possa mai cambiare in futuro.
+  if (state.pickupScheduleConfirmation) {
+    const { preferredDate, scheduledDate } = state.pickupScheduleConfirmation;
+    modal.innerHTML += `<div class="support-confirm-message">${escapeHtml(
+      buildPickupConfirmationMessage(preferredDate, scheduledDate)
+    )}</div>`;
+    const closeConfirmBtn = el("button", "btn-primary assistant-chat-send", "Chiudi");
+    closeConfirmBtn.type = "button";
+    closeConfirmBtn.addEventListener("click", closePickupScheduler);
+    modal.appendChild(closeConfirmBtn);
+    overlay.appendChild(modal);
+    return overlay;
+  }
+
+  const intro = el(
+    "div",
+    "identify-intro",
+    "Scegli la data in cui preferiresti il ritiro. In base alla disponibilità potremmo doverla posticipare di un giorno per un controllo accurato."
+  );
+  modal.appendChild(intro);
+
+  const dateField = el("div", "assistant-chat-field");
+  const today = todayDateString();
+  dateField.innerHTML = `<input class="addr-input" type="date" id="pickup-date-input" min="${today}" />`;
+  const dateInput = dateField.querySelector("#pickup-date-input");
+  dateInput.value = state.pickupDateChoice || today;
+  dateInput.addEventListener("input", (e) => {
+    state.pickupDateChoice = e.target.value;
+  });
+  modal.appendChild(dateField);
+
+  const confirmBtn = el("button", "btn-primary assistant-chat-send", "Conferma ritiro");
+  confirmBtn.type = "button";
+  confirmBtn.addEventListener("click", confirmPickupSchedule);
+  modal.appendChild(confirmBtn);
+
+  overlay.appendChild(modal);
+  return overlay;
 }
 
 // Bottoni "Copia"/"Condividi" per il codice sconto appena generato dal
@@ -6519,12 +6721,7 @@ function PurchaseHistoryList(items, emptyText, editable) {
             render();
             return;
           }
-          it.status = "ritiro richiesto";
-          it.pickupRequestedAt = new Date().toISOString();
-          savePending();
-          saveHistory();
-          syncPurchaseToCRM(it);
-          render();
+          openPickupScheduler(it);
         });
         row.appendChild(pickupBtn);
       }
