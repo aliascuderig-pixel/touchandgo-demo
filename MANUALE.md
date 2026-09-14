@@ -1186,3 +1186,37 @@ Il messaggio di conferma passa comunque da `escapeHtml()` prima di finire in `in
 Due test preesistenti (`identity-verification-pickup.test.js`, il click su "📦 Richiedi ritiro" con identità valida) sono stati aggiornati per il nuovo flusso a due passaggi (click → selettore → conferma) invece di aspettarsi lo stato impostato subito al click — la logica del gate identità che verificano resta **invariata**.
 
 Suite completa del repository verde (**343/343**, `npm test`).
+
+## Avvisi permanenti al cliente (customerNotices) (settembre 2026)
+
+Ogni avviso importante mostrato al cliente sul ritiro va ora documentato **permanentemente sul record dell'acquisto stesso** — prova a tutela di Touch&Go in caso di lamentele ("il cliente sapeva che il ritiro sarebbe stato posticipato, ecco il messaggio esatto e quando gli è stato mostrato").
+
+### Diverso dal trail di supporto esistente
+
+Non va confuso con `getRecentTrail()` (PR #46, "Trail di supporto (assistenza predittiva)"): quello è **locale e temporaneo** — un buffer delle ultime 15 azioni del cliente sul dispositivo, pensato per dare contesto allo staff quando arriva un ticket di assistenza, e non sopravvive oltre quel limite né viene salvato riga per riga sul record dell'acquisto. `customerNotices` è l'opposto per ogni caratteristica che conta qui: **permanente** (nessun limite, nessun troncamento), scritto **sul record dell'acquisto stesso** (non in uno store locale separato), e pensato non per dare contesto ma come **prova documentale letterale** — il testo esatto mostrato, con data/ora esatta.
+
+### Cosa viene registrato
+
+Campo nuovo sull'item: **`customerNotices`** — array di `{ type, message, shownAt }`. `confirmPickupSchedule()` (`dist/assets/app.js`) ne aggiunge una voce ad ogni conferma:
+```js
+it.customerNotices = (it.customerNotices || []).concat({
+  type: "pickup-scheduling",
+  message: confirmationMessage,   // testo ESATTO di buildPickupConfirmationMessage()
+  shownAt: new Date().toISOString(),
+});
+```
+Scritta in **entrambi** i casi — data rispettata e data posticipata — non solo nel caso "problematico": la prova serve anche per dimostrare che una data rispettata è stata comunicata correttamente. **Sempre accodata, mai sovrascritta**: ogni chiamata parte dall'array già presente sull'item (voci di tipi futuri diversi da `"pickup-scheduling"` restano intatte) e vi aggiunge la nuova voce in coda, mai un `=` che sostituisce l'array intero.
+
+### Sincronizzazione
+
+Nessuna modifica a `syncPurchaseToCRM()`/`save-purchase.js`: la prima manda sempre l'intero oggetto item (quindi `customerNotices` la raggiunge automaticamente, come già `preferredPickupDate`/`scheduledPickupDate`), la seconda salva l'intero record così com'è arrivato (`setJSON(item.id, item)`, nessuna validazione/whitelist di campi per questo tipo di dato) — nessuna modifica necessaria in nessuna delle due.
+
+### Vincoli rispettati
+
+Nessuna modifica alla logica esistente di calcolo data/messaggio (`resolveScheduledPickupDate()`/`buildPickupConfirmationMessage()`, invariate) — solo la registrazione in più. Il campo non influenza mai `priceFor()`/`priceQuotes()`: sono funzioni pure che non leggono nulla dall'item salvato, stesso principio già verificato altrove nel codice per altri campi puramente documentali (es. `dutyEstimateShown`).
+
+### Test
+
+**4 nuovi test** (`dist/assets/__tests__/customer-notices.test.js`): un ritiro posticipato genera una voce con il testo esatto mostrato (verificato carattere per carattere contro `buildPickupConfirmationMessage()`); un ritiro rispettato genera ANCHE una voce, non solo il caso posticipato; più avvisi nel tempo si accumulano senza mai sovrascriversi — verificato sia con una voce preesistente di un tipo diverso (mai persa) sia con due conferme successive sullo stesso item (tre voci totali, ordine cronologico preservato, ognuna sincronizzata correttamente a `syncPurchaseToCRM()`); `priceFor()`/`priceQuotes()` restituiscono lo stesso identico risultato prima e dopo che l'item ha accumulato avvisi.
+
+Suite completa del repository verde (**347/347**, `npm test`).
