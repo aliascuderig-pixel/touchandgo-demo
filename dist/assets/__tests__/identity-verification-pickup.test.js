@@ -257,8 +257,14 @@ test("Richiedi ritiro: documento e firma rilevata, l'azione procede normalmente 
   assert.ok(document.getElementById("pickup-date-input"), "deve aprire il selettore data, non impostare subito lo stato");
   clickByText(document, ".btn-primary", "Conferma ritiro");
 
-  const statusEl = document.querySelector(".history-status");
-  assert.equal(statusEl.textContent, "ritiro richiesto");
+  // Il vecchio badge di solo testo (.history-status) è stato sostituito
+  // dalla timeline visiva a step (StatusTimeline() in app.js, settembre
+  // 2026) — qui si verifica che il nuovo componente rifletta lo stesso
+  // stato reale, non un badge separato.
+  const timeline = document.querySelector(".status-timeline");
+  assert.equal(timeline.dataset.status, "ritiro richiesto");
+  const currentStep = document.querySelector(".status-step-current .status-step-label");
+  assert.match(currentStep.textContent, /Touch&Go ha richiesto il ritiro/);
 });
 
 // ---------------------------------------------------------------------
@@ -360,8 +366,8 @@ test("Round-trip storico: dopo l'identificazione completata torna a History e pu
   assert.ok(document.getElementById("pickup-date-input"), "deve aprire il selettore data");
   clickByText(document, ".btn-primary", "Conferma ritiro");
 
-  const statusEl = document.querySelector(".history-status");
-  assert.equal(statusEl.textContent, "ritiro richiesto");
+  const timeline = document.querySelector(".status-timeline");
+  assert.equal(timeline.dataset.status, "ritiro richiesto");
 });
 
 test("Round-trip Concludi: dopo l'identificazione completata torna a ConcludeScreen e può confermare il ritiro", async (t) => {
