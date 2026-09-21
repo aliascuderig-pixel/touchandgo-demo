@@ -561,6 +561,7 @@ const I18N = {
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Punto di ritiro rilevato",
+    cover_photo_credit_prefix: "Foto:",
     cover_tap: "Tocca per iniziare →",
 
     // ---- HomeScreen ----
@@ -831,6 +832,7 @@ const I18N = {
 
     // ---- CoverScreen ----
     cover_pickup_detected: "📍 Pickup point detected",
+    cover_photo_credit_prefix: "Photo:",
     cover_tap: "Tap to start →",
 
     // ---- HomeScreen ----
@@ -1199,6 +1201,11 @@ const state = {
   pendingInput: null,
   location: null,
   locationPhoto: null,
+  // Credito discreto per la foto (Wikimedia Commons), SOLO quando la
+  // licenza reale del file lo richiede — vedi city-photo.js. null = nessun
+  // credito da mostrare (foto assente, o licenza di pubblico dominio/CC0
+  // che non lo richiede). { text, url } quando presente.
+  locationPhotoCredit: null,
   pickupPoint: "Catania",
   pickupSource: null,
   isOffline: typeof navigator !== "undefined" && "onLine" in navigator ? !navigator.onLine : false,
@@ -1429,44 +1436,6 @@ function recordScreenChange(screen) {
 function getRecentTrail() {
   return supportTrail.slice();
 }
-
-// Filtro SVG "schizzo architettonico" per lo sfondo della Cover quando è
-// disponibile una foto reale del punto di ritiro (state.locationPhoto),
-// al posto della foto fotorealistica — desatura, rileva i bordi, inverte
-// (bordi scuri su sfondo chiaro) e tinge con i colori del brand.
-// Iniettato una sola volta in <body>, non dentro #app: render() svuota
-// #app a ogni chiamata (app.innerHTML = ""), quindi il filtro deve vivere
-// fuori da lì per restare referenziabile da CSS (filter:url(#sketchFilter))
-// per tutta la vita della pagina.
-function injectSketchFilter() {
-  if (document.getElementById("sketchFilter")) return;
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("style", "position:absolute;width:0;height:0");
-  svg.setAttribute("aria-hidden", "true");
-  svg.innerHTML = `
-    <filter id="sketchFilter" color-interpolation-filters="sRGB">
-      <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0" result="gray"/>
-      <feConvolveMatrix order="3" kernelMatrix="-1 -1 -1 -1 8 -1 -1 -1 -1" divisor="2.4" bias="0" preserveAlpha="true" result="edges" in="gray"/>
-      <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0" in="edges" result="inverted"/>
-      <feComponentTransfer in="inverted" result="contrast">
-        <feFuncR type="gamma" amplitude="1" exponent="1.8" offset="0"/>
-        <feFuncG type="gamma" amplitude="1" exponent="1.8" offset="0"/>
-        <feFuncB type="gamma" amplitude="1" exponent="1.8" offset="0"/>
-      </feComponentTransfer>
-      <!-- Tinge: interpola linearmente per canale tra il colore delle
-           linee (oro brand, ai bordi rilevati) e il colore di sfondo
-           (bruno scuro caldo, nelle zone piatte) in base alla luminanza
-           del passaggio precedente — non una tinta piatta: qui il colore
-           dipende davvero da dov'è un bordo. -->
-      <feColorMatrix type="matrix" values="
-        -0.2227 -0.2227 -0.2227 0 0.788
-        -0.1877 -0.1877 -0.1877 0 0.663
-        -0.1203 -0.1203 -0.1203 0 0.431
-        0 0 0 1 0" in="contrast" result="tinted"/>
-    </filter>`;
-  document.body.appendChild(svg);
-}
-injectSketchFilter();
 
 // Banner "spazio ospite" (continuità operativa) — vedi checkGuestMode()
 // più sotto e MANUALE.md. Nascosto di default: compare SOLO se
@@ -3202,20 +3171,31 @@ async function locateTourist() {
   }
 }
 
+// Foto reale del punto di ritiro — chiamata SERVER-SIDE (netlify/
+// functions/city-photo.js), mai direttamente a Wikipedia/Wikimedia dal
+// client: la function si occupa di caching persistente su Netlify Blobs,
+// così l'API pubblica non viene interrogata più di una volta per città
+// (vedi MANUALE.md). Fallback onesto in ogni caso (città sconosciuta,
+// timeout, errore di rete, risposta non-200): { photoUrl: null, credit:
+// null }, mai un'eccezione propagata a loadLocation() né un'immagine
+// rotta — CoverScreen() ricade sul gradiente placeholder esistente.
 async function cityPhoto(city) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 4000);
   try {
-    const res = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(city)}`,
-      { signal: controller.signal }
-    );
+    const res = await fetch("/.netlify/functions/city-photo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ city }),
+      signal: controller.signal,
+    });
     clearTimeout(timeout);
+    if (!res.ok) return { photoUrl: null, credit: null };
     const data = await res.json();
-    return (data.originalimage && data.originalimage.source) || (data.thumbnail && data.thumbnail.source) || null;
+    return { photoUrl: data.photoUrl || null, credit: data.credit || null };
   } catch (e) {
     clearTimeout(timeout);
-    return null;
+    return { photoUrl: null, credit: null };
   }
 }
 
@@ -3229,7 +3209,8 @@ async function loadLocation() {
   if (!place) return;
   const photo = await cityPhoto(place.city);
   state.location = place;
-  state.locationPhoto = photo;
+  state.locationPhoto = photo.photoUrl;
+  state.locationPhotoCredit = photo.credit;
   state.pickupPoint = place.city;
   state.pickupSource = source;
   if ((state.screen === "cover" || state.screen === "home") && state.mode === "turista") render();
@@ -3534,10 +3515,13 @@ function CoverScreen() {
   const wrap = el("div", "cover-screen");
   if (state.locationPhoto) {
     wrap.classList.add("has-photo");
-    // Layer di sfondo separato dal testo apposta: il filtro SVG
-    // "schizzo architettonico" (filter:url(#sketchFilter), vedi CSS) si
-    // applica solo a questo div, mai alla didascalia sopra — altrimenti
-    // il testo verrebbe distorto dal rilevamento bordi insieme alla foto.
+    // Layer di sfondo separato dal testo: la foto reale della città
+    // (Wikimedia Commons, via city-photo.js) è mostrata fotorealistica,
+    // senza alcuna stilizzazione — Giuseppe la vuole riconoscibile, non
+    // un disegno stilizzato (vedi MANUALE.md). Resta comunque un div
+    // separato dalla didascalia sopra, per lo stesso motivo di sempre:
+    // un domani un effetto visivo diverso potrebbe tornare ad applicarsi
+    // solo qui, senza toccare il testo.
     const bgPhoto = el("div", "cover-bg-photo");
     bgPhoto.style.backgroundImage = `url('${state.locationPhoto}')`;
     wrap.appendChild(bgPhoto);
@@ -3545,6 +3529,19 @@ function CoverScreen() {
     wrap.classList.add("no-photo");
   }
   wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${escapeHtml(state.pickupPoint)}</span>`));
+  // Credito discreto — SOLO quando city-photo.js ha determinato che la
+  // licenza reale del file lo richiede (mai per foto di pubblico
+  // dominio/CC0, mai quando non c'è alcuna foto). stopPropagation: il
+  // link apre l'attribuzione in una nuova scheda, senza far scattare
+  // anche il tap "vai a Home" dell'intera Cover.
+  if (state.locationPhoto && state.locationPhotoCredit) {
+    const credit = el("a", "cover-photo-credit", `${escapeHtml(t("cover_photo_credit_prefix"))} ${escapeHtml(state.locationPhotoCredit.text)}`);
+    credit.href = state.locationPhotoCredit.url;
+    credit.target = "_blank";
+    credit.rel = "noopener noreferrer";
+    credit.addEventListener("click", (e) => e.stopPropagation());
+    wrap.appendChild(credit);
+  }
   wrap.appendChild(el("div", "cover-tap", t("cover_tap")));
   wrap.addEventListener("click", () => {
     state.screen = "home";
