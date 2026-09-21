@@ -4635,6 +4635,46 @@ function historyStatusClass(status) {
   return "pending";
 }
 
+// I 4 stati reali (identici in tutto l'ecosistema Touch&Go, vedi
+// historyStatusClass sopra) con una breve label per la timeline visiva
+// della schermata Acquisti/Storico del turista. Ogni label ha SEMPRE
+// Touch&Go come soggetto attivo — vincolo di brand non negoziabile
+// (settembre 2026): il corriere partner (DHL/FedEx/GLS) è un fornitore
+// invisibile al turista, non deve mai comparire come protagonista di un
+// messaggio di stato. Vedi StatusTimeline() sotto e MANUALE.md.
+const STATUS_STEPS = [
+  { key: "in sospeso", label: "Touch&Go ha registrato il tuo acquisto" },
+  { key: "in confezionamento", label: "Touch&Go sta preparando il tuo pacco" },
+  { key: "ritiro richiesto", label: "Touch&Go ha richiesto il ritiro" },
+  { key: "ritirato", label: "Touch&Go ha ritirato il tuo pacco" },
+];
+
+// Timeline visiva a step (settembre 2026, ispirata a Uber/DHL) — sostituisce
+// il badge di solo testo che c'era prima in DashboardScreen()/
+// PurchaseHistoryList(). Gerarchia cromatica di Google Maps: SOLO lo step
+// ATTUALE prende il colore brand pieno (var(--gold)), passato e futuro
+// restano entrambi in un tono tenue/neutro — il passato si distingue dal
+// futuro solo per il pallino pieno (già avvenuto) invece che vuoto (deve
+// ancora avvenire), mai per il colore. Nessuna dipendenza nuova: solo
+// l'helper el()/escapeHtml() già in uso in tutto il file.
+//
+// Uno stato sconosciuto/mancante (dato legacy) si comporta come
+// historyStatusClass() sopra: viene trattato come "in sospeso", il primo
+// step resta quello corrente — non "nessuno step corrente".
+function StatusTimeline(status) {
+  const foundIdx = STATUS_STEPS.findIndex((s) => s.key === status);
+  const currentIdx = foundIdx === -1 ? 0 : foundIdx;
+  const wrap = el("div", "status-timeline");
+  wrap.dataset.status = status || "";
+  STATUS_STEPS.forEach((step, idx) => {
+    const phase = idx < currentIdx ? "past" : idx === currentIdx ? "current" : "future";
+    const stepEl = el("div", `status-step status-step-${phase}`);
+    stepEl.innerHTML = `<div class="status-step-dot"></div><div class="status-step-label">${escapeHtml(step.label)}</div>`;
+    wrap.appendChild(stepEl);
+  });
+  return wrap;
+}
+
 // Applica sull'oggetto locale i campi eventualmente aggiornati lato CRM
 // (es. lo staff ha inviato l'oggetto a confezionamento o ha cambiato il
 // punto di ritiro da un altro dispositivo). Ritorna true se qualcosa è
@@ -6477,8 +6517,9 @@ function DashboardScreen() {
         if (banner) list.appendChild(banner);
         const row = el("div", "history-item");
         row.innerHTML = `
-          <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
+          <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span></div>
           <div class="history-meta">Valore oggetto: €${(it.itemValue || 0).toFixed(2)} · Servizio Touch&amp;Go: €${it.price}</div>`;
+        row.appendChild(StatusTimeline(it.status));
         list.appendChild(row);
       });
   }
@@ -6688,10 +6729,11 @@ function PurchaseHistoryList(items, emptyText, editable) {
       const dateStr = isNaN(dt) ? "" : dt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
       const sourceLbl = it.pickupSource === "gps" ? "GPS" : it.pickupSource === "ip" ? "rete" : "manuale";
       row.innerHTML = `
-        <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span><span class="history-status ${historyStatusClass(it.status)}">${it.status}</span></div>
+        <div class="history-top"><span class="history-name">${escapeHtml(it.objectName)}</span></div>
         <div class="history-meta">Ritiro rilevato (${sourceLbl}): <b>${escapeHtml(it.pickupPoint)}</b> · HS ${escapeHtml(it.hsCode)}</div>
         <div class="history-meta">→ ${escapeHtml(it.addressLabel)} · €${it.price}</div>
         <div class="history-meta">${it.touristName ? escapeHtml(it.touristName) + " · " : ""}${dateStr}</div>`;
+      row.appendChild(StatusTimeline(it.status));
       if (editable) {
         row.classList.add("clickable");
         row.addEventListener("click", () => {

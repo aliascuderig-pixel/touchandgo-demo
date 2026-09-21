@@ -438,6 +438,25 @@ button{font-family:inherit;cursor:pointer}
 .history-meta{font-size:10.5px;color:var(--muted);margin-top:2px}
 .footer-links{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;row-gap:4px;margin-top:8px}
 
+/* ---------- Timeline visiva stato spedizione (settembre 2026) ----------
+   Stile tracking Uber/DHL: 4 pallini connessi da una linea invece del
+   vecchio badge di solo testo (.history-status resta invariato, usato
+   ancora nella schermata partner — vedi PartnerGeneratedShipmentsScreen()
+   in app.js). Gerarchia cromatica di Google Maps: SOLO lo step
+   .status-step-current prende var(--gold) pieno; passato (pallino pieno
+   tenue) e futuro (pallino vuoto tenue) restano nello stesso registro
+   neutro var(--muted)/var(--line) — MAI colore brand, anche sulla linea
+   di collegamento, che resta neutra per l'intera timeline. */
+.status-timeline{display:flex;justify-content:space-between;margin:10px 0 2px}
+.status-step{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;padding:0 3px}
+.status-step::after{content:"";position:absolute;top:6px;left:50%;width:100%;height:2px;background:var(--line);z-index:0}
+.status-step:last-child::after{display:none}
+.status-step-dot{width:14px;height:14px;border-radius:999px;background:var(--surface);border:2px solid var(--line);position:relative;z-index:1}
+.status-step-label{font-size:8.5px;line-height:1.3;color:var(--muted);margin-top:6px;max-width:76px}
+.status-step-past .status-step-dot{background:var(--muted);border-color:var(--muted)}
+.status-step-current .status-step-dot{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+.status-step-current .status-step-label{color:var(--text,var(--ink));font-weight:700}
+
 /* ---------- Pickup point updated banner ---------- */
 .pickup-update-banner{background:var(--gold);color:var(--ink);font-size:12px;font-weight:600;padding:10px 14px;margin-bottom:6px;cursor:pointer;border:1px solid var(--gold-deep)}
 .pickup-update-banner:active{background:var(--gold-soft)}

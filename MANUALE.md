@@ -1274,3 +1274,33 @@ Nessuna modifica alla logica esistente di calcolo data/messaggio (`resolveSchedu
 **4 nuovi test** (`dist/assets/__tests__/customer-notices.test.js`): un ritiro posticipato genera una voce con il testo esatto mostrato (verificato carattere per carattere contro `buildPickupConfirmationMessage()`); un ritiro rispettato genera ANCHE una voce, non solo il caso posticipato; più avvisi nel tempo si accumulano senza mai sovrascriversi — verificato sia con una voce preesistente di un tipo diverso (mai persa) sia con due conferme successive sullo stesso item (tre voci totali, ordine cronologico preservato, ognuna sincronizzata correttamente a `syncPurchaseToCRM()`); `priceFor()`/`priceQuotes()` restituiscono lo stesso identico risultato prima e dopo che l'item ha accumulato avvisi.
 
 Suite completa del repository verde (**347/347**, `npm test`).
+
+## Timeline visiva dello stato spedizione (settembre 2026)
+
+**Contesto**: richiesta esplicita, ispirazione dichiarata Uber/DHL — rendere lo stato della spedizione una timeline visiva viva sulla schermata "I tuoi acquisti" (`HistoryScreen()`) e su "La tua spesa" (`DashboardScreen()`), invece del solo badge di testo che c'era prima. **Investigato prima di scrivere codice**: gli unici 4 stati reali (`historyStatusClass()`, invariata — identici in tutto l'ecosistema Touch&Go, vedi CRM/gestionale) erano rappresentati **solo** da uno `<span class="history-status">` con lo stato in testo — nessuna timeline preesisteva, nessun componente `StatusScreen`. Tre punti nel codice usavano quel badge: `PurchaseHistoryList()` (schermata "I tuoi acquisti") e `DashboardScreen()` (turista, entrambi in scope) e `PartnerGeneratedShipmentsScreen()` (schermata partner, **fuori scope** — quella vista mostra le spedizioni generate DAL partner per sé stesso, non è la schermata di tracking del turista: lasciata invariata, badge di testo ancora presente lì).
+
+Cercato anche un campo per il tracking number del corriere (`grep -n "tracking" dist/assets/app.js`, e i campi che `applyRemotePurchaseUpdate()` accetta dal CRM): **non esiste alcun campo del genere** sul record di un acquisto, in nessuno dei repository dell'ecosistema. Il vincolo "se esiste già un tracking number, resta in caratteri piccoli" è quindi rispettato perché non c'è nulla da mostrare — nessun placeholder o campo speculativo aggiunto per un dato che oggi non esiste.
+
+Verificata anche l'eventuale presenza di una dark mode: **non esiste** in produzione (nessun `@media (prefers-color-scheme: dark)`, nessun toggle chiaro/scuro) — esiste solo un sistema di temi colore alternativi (`assets/theme-lime.css`/`theme-corallo.css`, TOU-21) caricato esclusivamente sulle route `/design-preview/`, che sovrascrive un sottoinsieme di custom property. La nuova timeline usa solo quelle stesse custom property (`--gold`, `--muted`, `--line`, `--surface`, `--text`), quindi resta leggibile automaticamente in quei temi di anteprima senza alcun codice dedicato.
+
+### `StatusTimeline(status)` — nuovo componente (`dist/assets/app.js`)
+
+4 pallini connessi da una linea, uno per stato reale, con una breve label — sostituisce il badge nei due punti in scope. Gerarchia cromatica **di Google Maps**, esplicitamente richiesta: colore vivo solo dove serve attenzione, tenue ovunque altro.
+
+- **Solo lo step ATTUALE** prende il colore brand pieno (`var(--gold)`, con un piccolo alone `box-shadow` per farlo risaltare ulteriormente) — testo della label in `var(--text)` (contrasto pieno) e grassetto.
+- **Passato e futuro restano entrambi tenui** — mai un colore "fatto" (verde, ecc.) per il passato: si distinguono solo per lo stato del pallino, pieno (`var(--muted)`, già avvenuto) contro vuoto (bordo `var(--line)`, deve ancora avvenire), stessa tonalità neutra per entrambi, mai il brand. La linea di collegamento resta neutra (`var(--line)`) per l'intera timeline, anche nel tratto verso/dallo step corrente — niente "barra di progresso" colorata, che avrebbe contraddetto la regola "colore vivo solo sullo stato attuale".
+- **Le 4 label, sempre con Touch&Go come soggetto attivo, mai il corriere**: "Touch&Go ha registrato il tuo acquisto" → "Touch&Go sta preparando il tuo pacco" → "Touch&Go ha richiesto il ritiro" → "Touch&Go ha ritirato il tuo pacco". Nessuna nomina DHL/FedEx/GLS/"corriere" in alcuna label — vincolo di brand non negoziabile (Touch&Go vende sé stessa come servizio, i corrieri partner restano fornitori invisibili al turista).
+- Uno stato sconosciuto/legacy (dato mai matchato dai 4 valori reali) ricade sul primo step come corrente — stesso fallback già presente in `historyStatusClass()`, non un comportamento nuovo.
+- `wrap.dataset.status` riporta lo stato reale non trasformato, utile sia per i test sia come gancio per un'eventuale telemetria futura.
+
+**Nessuna dipendenza nuova** (solo `el()`/`escapeHtml()` già in uso in tutto il file) e **nessuna modifica alla logica di calcolo/aggiornamento dello stato** — `historyStatusClass()`, `applyRemotePurchaseUpdate()`, `syncPurchaseUpdatesFromCRM()` restano invariate: `StatusTimeline()` legge lo stesso `it.status` già presente sull'item, non lo interpreta diversamente.
+
+### Verifica
+
+Screenshot generati in autonomia (Playwright, stessa tecnica già usata altre volte in questo repository) per ciascuno dei 4 stati su "I tuoi acquisti": confermano che solo lo step corrente è in oro pieno con label in grassetto, gli step passati sono pallini pieni tenui, i futuri pallini vuoti tenui, e nessuna label nomina mai il corriere. Verificato anche su "La tua spesa" con due acquisti in stati diversi contemporaneamente in pagina, senza interferenze tra le due timeline.
+
+### Test
+
+**8 nuovi test** (`dist/assets/__tests__/status-timeline.test.js`): i 4 stati reali producono sempre lo step corrente all'indice giusto con il numero corretto di step passati/futuri; ogni label inizia per "Touch&Go " e nessuna nomina mai il corriere partner; uno stato sconosciuto ricade sul primo step come corrente; il vecchio badge `.history-status` non compare più né in `HistoryScreen()` né in `DashboardScreen()` (resta nella sola schermata partner, invariata). Due test preesistenti (`identity-verification-pickup.test.js`) che leggevano `.history-status` sono stati aggiornati per leggere la nuova timeline (`dataset.status`) — la logica del gate identità che verificano resta invariata, solo l'asserzione sulla rappresentazione visiva del risultato è cambiata di conseguenza.
+
+Suite completa del repository verde (**355/355**, `npm test`).
