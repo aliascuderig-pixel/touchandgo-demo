@@ -395,6 +395,48 @@ Quando il turista conferma la conclusione del soggiorno (`ConcludeScreen`), gli 
 
 Il gruppo consolidato costa €71,50 contro i €121,75 che si otterrebbero sommando le due stime individuali: mai di più, spesso meno, grazie soprattutto alla singola fee di servizio invece di una per oggetto. La destinazione del gruppo (necessaria per scegliere la zona/tariffa) viene risolta dall'indirizzo già salvato su ogni oggetto (`addressId` → `state.addresses`), non da un nuovo campo — funziona quindi anche per gli item già in `localStorage` da prima di questa modifica.
 
+#### Multicollo: verifica investigativa e test con numeri ricalcolabili a mano (settembre 2026)
+
+**Richiesta**: gestire correttamente il multicollo in due casi — (1) più colli dallo stesso punto di ritiro nella stessa spedizione, (2) consolidamento da punti di ritiro diversi — con una regola di prezzo precisa (peso tassabile = il maggiore tra reale combinato e volumetrico combinato, mai la somma, mai il minore) da implementare **se non già presente**.
+
+**Investigato prima di scrivere codice**: la regola richiesta esiste già, punto per punto, in `consolidatedGroupPrice()` (`dist/assets/app.js`, sezione sopra) — nessuna nuova formula necessaria. È inoltre duplicata **altre due volte**, non solo lì:
+
+- **`netlify/lib/pricing.js`, `consolidatedGroupPriceForItems()`** — la vera autorità di prezzo: `create-checkout-session.js` la usa per ricalcolare da zero, lato server, l'importo addebitato via Stripe, **ignorando sempre** un eventuale `total` mandato dal client (vedi "Pagamento reale con Stripe Checkout"). Stesso identico algoritmo, stesso divisore volumetrico 5000.
+- **`netlify/functions/weekly-e2e-test.js`** — una terza replica indipendente (`computeConsolidatedPrice()`), usata dal test end-to-end settimanale per verificare dal vivo, sul sito in produzione, che il prezzo consolidato di un gruppo reale non superi mai la somma dei prezzi individuali stimati.
+
+**Sui due casi richiesti — nessuna distinzione esiste nel codice, ed è corretto così**: il consolidamento (`computeConcludeGroups()`, `dist/assets/app.js`) raggruppa `state.pendingItems` per **destinazione** (`addressLabel`, l'indirizzo di consegna scelto dal turista), non per punto di ritiro (`pickupPoint`, il negozio dove l'oggetto è stato lasciato). Di conseguenza:
+
+- **Caso 1** (stesso punto di ritiro) è già una conseguenza automatica di questa regola: più oggetti lasciati nello stesso negozio, verso la stessa destinazione, cadono sempre nello stesso gruppo.
+- **Caso 2** (punti di ritiro diversi) **era già solido**, non uno scenario mancante: il raggruppamento è per destinazione, indifferente al punto di ritiro — due oggetti lasciati in negozi diversi ma diretti alla stessa destinazione vengono consolidati insieme esattamente come se venissero dallo stesso negozio. È così che funzionerebbe davvero un corriere: consolida per destinazione di consegna, non per punto di raccolta.
+
+**Il vero problema trovato non era la logica, ma la sua verifica**: prima di questa modifica, **nessun test** (né client né server) esercitava mai davvero il ramo "vince il volumetrico" della regola — tutti i test multi-oggetto esistenti (`create-checkout-session.test.js`) usavano `dims: null`, che azzera sempre il peso volumetrico e lascia vincere il reale per costruzione. E **non esisteva alcun file di test dedicato a `consolidatedGroupPrice()` lato client** — l'unica copertura era indiretta, tramite `create-checkout-session.test.js` sulla replica server. Aggiunto quindi:
+
+- **`dist/assets/__tests__/consolidated-group-price.test.js`** (nuovo, 8 test) — `consolidatedGroupPrice()`/`computeConcludeGroups()` testati direttamente per la prima volta: i tre casi richiesti con numeri ricalcolabili a mano (vince il reale, vince il volumetrico, pareggio esatto **al limite esatto di uno scaglione tariffario** — 5kg vs 5kg, per intercettare sia un'eventuale somma al posto del massimo sia un confine di fascia sbagliato), nessuna regressione sul collo singolo (`consolidatedGroupPrice([item])` uguale byte per byte a `priceFor(item)`), ed entrambi i casi di raggruppamento (stesso punto di ritiro, punti di ritiro diversi) più un test che conferma che destinazioni diverse restano **sempre** gruppi separati, indipendentemente dal punto di ritiro.
+- **`netlify/functions/__tests__/create-checkout-session.test.js`** (esteso, +3 test) — stessi tre scenari ricalcolabili a mano, verificati sull'importo realmente inviato a Stripe (`unit_amount`), non solo sulla funzione pura: è questo il calcolo che decide davvero quanto viene addebitato.
+
+Tabella di riepilogo dei tre casi aggiunti (zona "domestico", tariffa piena):
+
+| Caso | Reale combinato | Volumetrico combinato | Fatturabile | Spedizione | Totale |
+|---|---|---|---|---|---|
+| Vince il reale (3kg + 4kg, nessun volume) | 7 kg | 0 kg | **7 kg** | 18×1,25=€22,50 | €61,50 |
+| Vince il volumetrico (0,5kg+0,5kg, scatole grandi) | 1 kg | 18,2 kg | **18,2 kg** | 25×1,25=€31,25 | €70,25 |
+| Pareggio esatto (2kg+3kg reali = 2kg+3kg volumetrici) | 5 kg | 5 kg | **5 kg** (mai 10) | 14×1,25=€17,50 | €56,50 |
+
+**Il QR resta unico per il gruppo, non per collo** — verificato, nessuna modifica necessaria: `finalizeShippedGroups()` genera **un solo** `generateBookingCode()` per ciascun gruppo per destinazione (`ShippedScreen`), condiviso da tutti gli `itemIds` al suo interno; il codice per-oggetto (`item.id`, mostrato in `QueuedScreen` al momento del deposito in negozio) resta un riferimento diverso e precedente, necessario perché gli oggetti di uno stesso gruppo vengono spesso lasciati in negozi/momenti diversi prima ancora che il gruppo esista.
+
+#### "Collo N di M" sulla lettera di vettura (settembre 2026, seguito immediato)
+
+L'investigazione sopra aveva segnalato, come osservazione fuori scope, che la lettera di vettura per singolo oggetto (`DocumentsScreen`) non mostrava mai la posizione dell'oggetto in un gruppo multicollo già consolidato e pagato — pur avendo già tutto il dato necessario (`item.shipmentGroupCode`). Implementato subito dopo, nella stessa working tree:
+
+- **`colloLabelForItem(item)`** (nuova funzione pura, `dist/assets/app.js`) — **nessun campo nuovo**: N (posizione) e M (totale colli) si ricavano contando, in `state.purchaseHistory` già caricato in locale, quanti acquisti condividono lo stesso `shipmentGroupCode` dell'oggetto — lo stesso identico dato già scritto su ogni oggetto del gruppo da `finalizeShippedGroups()` al momento del pagamento (vedi sopra), mai duplicato o ricalcolato altrove. Ordine **stabile e deterministico**: per data di deposito (`item.date`), a parità di data per `id` — così l'etichetta non cambia da una visualizzazione all'altra, indipendentemente dall'ordine con cui gli oggetti si trovano nell'array locale.
+- **Nessuna etichetta superflua** — `null` sia per un oggetto senza `shipmentGroupCode` (mai stato in un gruppo) sia per un oggetto il cui gruppo, contando i membri effettivamente presenti in locale, risulta di un solo elemento: mostrare "Collo 1 di 1" non aggiungerebbe alcuna informazione utile.
+- **`DocumentsScreen()`** — quando `colloLabelForItem()` non è `null`, aggiunge una riga "Collo" (nuove chiavi `docs_row_collo`/`docs_collo_value`, localizzate IT/EN come tutto il resto della schermata) subito dopo il riferimento (`item.id`), col valore `"{n} di {m}"` (`"{n} of {m}"` in inglese).
+- **Nessuna modifica** alla logica di calcolo prezzo/raggruppamento appena verificata sopra (`consolidatedGroupPrice()`, `computeConcludeGroups()`, `finalizeShippedGroups()`) — solo una nuova lettura, a scopo di visualizzazione, di un campo già scritto.
+
+**Test**: `dist/assets/__tests__/documents-collo-label.test.js` (nuovo, 6 test) — un gruppo di 3 mostra "1 di 3"/"2 di 3"/"3 di 3" per ciascun oggetto nell'ordine corretto (verificato anche con gli oggetti inseriti volutamente fuori ordine cronologico nell'array, per confermare che l'ordinamento è per data e non per posizione nell'array); un oggetto senza `shipmentGroupCode` non mostra alcuna riga "Collo"; un `shipmentGroupCode` presente ma senza altri membri in locale (gruppo di fatto singolo) non mostra comunque nulla; due gruppi diversi non si mescolano mai nel conteggio.
+
+Suite completa del repository verde (**403/403**, `npm test`).
+
 ### Persistenza del gruppo di spedizione (`save-shipment-group.js`)
 
 Prima di questa modifica, il "codice di ordine di ritiro consolidato" (`generateBookingCode()`, mostrato in `ShippedScreen`) esisteva solo lato client: nessun record persistente rappresentava la spedizione consolidata come entità, solo i singoli acquisti marcati "ritirato" separatamente — dal CRM non si poteva risalire a "quali oggetti sono stati ritirati insieme, con quale codice, a quale prezzo".

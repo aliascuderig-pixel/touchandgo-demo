@@ -157,6 +157,86 @@ test("il totale corrisponde esattamente al prezzo consolidato per un GRUPPO di p
   assert.equal(call.body.get("line_items[1]"), null, "un solo line item per il gruppo consolidato, non uno per oggetto");
 });
 
+// ---------------------------------------------------------------------
+// Multicollo — peso tassabile: il maggiore tra reale combinato e
+// volumetrico combinato, MAI la somma, MAI il minore (vedi netlify/lib/
+// pricing.js, consolidatedGroupPriceForItems()). I test sopra usano tutti
+// dims:null (peso volumetrico sempre 0): non esercitano mai davvero il
+// ramo Math.max(reale, volumetrico). Le tre casistiche esplicitamente
+// richieste, con numeri ricalcolabili a mano — stesso identico scenario
+// verificato anche lato client in dist/assets/__tests__/
+// consolidated-group-price.test.js (consolidatedGroupPrice(), la stessa
+// formula duplicata lì).
+// ---------------------------------------------------------------------
+
+test("multicollo: vince il peso REALE (nessun volume dichiarato) — 3kg + 4kg = 7kg fatturabili -> 61.50€", async () => {
+  const mod = freshModule();
+  const getLastCall = mockStripeCreateFetch();
+
+  // combinedReal = 3+4 = 7, combinedVolumetric = 0 -> billable = 7.
+  // bracket domestico 7<=10 -> 18€ grezzo; shipping 18*1.25 = 22.5€; fee
+  // piena 39€ -> 61.5€ -> 6150 centesimi.
+  const dest = "Casa — Via Test 1, Roma 00100, Italia";
+  const res = await mod.handler(
+    makeEvent({
+      items: [
+        item({ id: "a", addressLabel: dest, weightKg: 3, dims: null }),
+        item({ id: "b", addressLabel: dest, weightKg: 4, dims: null }),
+      ],
+    })
+  );
+  assert.equal(res.statusCode, 200);
+  const call = getLastCall();
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "6150");
+});
+
+test("multicollo: vince il peso VOLUMETRICO (poco peso reale, molto volume) — 12.8kg + 5.4kg = 18.2kg fatturabili -> 70.25€", async () => {
+  const mod = freshModule();
+  const getLastCall = mockStripeCreateFetch();
+
+  // combinedReal = 0.5+0.5 = 1, combinedVolumetric = 64000/5000 + 27000/5000
+  // = 12.8+5.4 = 18.2 -> billable = 18.2 (il volumetrico vince nettamente).
+  // bracket domestico 18.2<=20 -> 25€ grezzo; shipping 25*1.25 = 31.25€;
+  // fee piena 39€ -> 70.25€ -> 7025 centesimi.
+  const dest = "Casa — Via Test 1, Roma 00100, Italia";
+  const res = await mod.handler(
+    makeEvent({
+      items: [
+        item({ id: "a", addressLabel: dest, weightKg: 0.5, dims: { length_cm: 40, width_cm: 40, height_cm: 40 } }),
+        item({ id: "b", addressLabel: dest, weightKg: 0.5, dims: { length_cm: 30, width_cm: 30, height_cm: 30 } }),
+      ],
+    })
+  );
+  assert.equal(res.statusCode, 200);
+  const call = getLastCall();
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "7025");
+});
+
+test("multicollo: peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al limite esatto di una fascia) — mai la somma (10kg), mai un valore diverso da 5 -> 56.50€", async () => {
+  const mod = freshModule();
+  const getLastCall = mockStripeCreateFetch();
+
+  // combinedReal = 2+3 = 5, combinedVolumetric = 10000/5000 + 15000/5000 =
+  // 2+3 = 5 -> pareggio esatto. billable DEVE restare 5 (il maggiore dei
+  // due, che qui coincidono) — se il codice sommasse per errore i due
+  // totali invece di prendere il maggiore, verrebbe 10 (fascia successiva,
+  // prezzo diverso): questo test lo intercetterebbe. bracket domestico
+  // 5<=5 -> 14€ grezzo (non la fascia successiva); shipping 14*1.25 =
+  // 17.5€; fee 39€ -> 56.5€ -> 5650 centesimi.
+  const dest = "Casa — Via Test 1, Roma 00100, Italia";
+  const res = await mod.handler(
+    makeEvent({
+      items: [
+        item({ id: "a", addressLabel: dest, weightKg: 2, dims: { length_cm: 25, width_cm: 20, height_cm: 20 } }),
+        item({ id: "b", addressLabel: dest, weightKg: 3, dims: { length_cm: 25, width_cm: 30, height_cm: 20 } }),
+      ],
+    })
+  );
+  assert.equal(res.statusCode, 200);
+  const call = getLastCall();
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "5650");
+});
+
 test("due destinazioni diverse generano DUE line item Stripe distinti, la cui somma è il totale complessivo", async () => {
   const mod = freshModule();
   const getLastCall = mockStripeCreateFetch();
