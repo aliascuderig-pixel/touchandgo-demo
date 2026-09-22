@@ -749,6 +749,8 @@ const I18N = {
     docs_not_found: "Documenti non trovati.",
     docs_waybill_lbl: "Lettera di vettura",
     docs_row_reference: "Riferimento",
+    docs_row_collo: "Collo",
+    docs_collo_value: "{n} di {m}",
     docs_row_sender: "Mittente",
     docs_row_pickup: "Punto di ritiro",
     docs_row_recipient: "Destinatario",
@@ -1020,6 +1022,8 @@ const I18N = {
     docs_not_found: "Documents not found.",
     docs_waybill_lbl: "Waybill",
     docs_row_reference: "Reference",
+    docs_row_collo: "Parcel",
+    docs_collo_value: "{n} of {m}",
     docs_row_sender: "Sender",
     docs_row_pickup: "Pickup point",
     docs_row_recipient: "Recipient",
@@ -5319,6 +5323,28 @@ function QueuedScreen() {
   return wrap;
 }
 
+// "Collo N di M" per un oggetto che fa parte di un gruppo di spedizione
+// consolidato (item.shipmentGroupCode, impostato da finalizeShippedGroups()
+// al momento del pagamento — vedi MANUALE.md, "Prezzo consolidato per
+// gruppo di spedizione"). Nessun nuovo campo: M e la posizione N si
+// ricavano contando, in state.purchaseHistory già caricato in locale,
+// quanti acquisti condividono lo stesso shipmentGroupCode — lo stesso dato
+// già scritto ad ogni oggetto del gruppo, mai duplicato altrove. Ordine
+// stabile e deterministico (data di deposito, poi id a parità di data),
+// così l'etichetta non cambia da una visualizzazione all'altra. null per
+// un oggetto senza gruppo, o per un gruppo di un solo oggetto (nulla di
+// utile da mostrare in quel caso) — mai una "Collo 1 di 1" superflua.
+function colloLabelForItem(item) {
+  if (!item || !item.shipmentGroupCode) return null;
+  const siblings = state.purchaseHistory
+    .filter((h) => h.shipmentGroupCode === item.shipmentGroupCode)
+    .slice()
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || String(a.id).localeCompare(String(b.id)));
+  if (siblings.length <= 1) return null;
+  const n = siblings.findIndex((h) => h.id === item.id) + 1;
+  return t("docs_collo_value", { n, m: siblings.length });
+}
+
 function DocumentsScreen() {
   const wrap = el("div", "section");
   const item =
@@ -5338,11 +5364,13 @@ function DocumentsScreen() {
 
   const addr = state.addresses.find((a) => a.id === item.addressId);
   const dateStr = new Date(item.date).toLocaleDateString(state.lang === "en" ? "en-GB" : "it-IT", { day: "2-digit", month: "long", year: "numeric" });
+  const colloValue = colloLabelForItem(item);
 
   wrap.appendChild(el("div", "step-lbl", t("docs_waybill_lbl")));
   const waybill = el("div", "doc-card");
   waybill.innerHTML = `
     <div class="doc-row"><span>${t("docs_row_reference")}</span><b>${item.id}</b></div>
+    ${colloValue ? `<div class="doc-row"><span>${t("docs_row_collo")}</span><b>${colloValue}</b></div>` : ""}
     <div class="doc-row"><span>${t("docs_row_sender")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
     <div class="doc-row"><span>${t("docs_row_pickup")}</span><b>${escapeHtml(item.pickupPoint)}</b></div>
     <div class="doc-row"><span>${t("docs_row_recipient")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
