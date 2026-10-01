@@ -303,6 +303,23 @@ button{font-family:inherit;cursor:pointer}
 .duty-estimate-text{color:var(--text);font-size:12px;line-height:1.6;white-space:pre-wrap}
 .duty-estimate-skeleton{color:var(--muted);font-size:12px;font-style:italic}
 
+/* ---------- Confronto costo bagaglio extra compagnia aerea (ConcludeScreen) ----------
+   Riusa .duty-estimate-card/-heading/-badge (stesso trattamento visivo
+   "informativo, non ufficiale" già in uso per la stima dazi) — qui solo le
+   regole aggiuntive per selettori e righe di confronto. */
+.baggage-compare-card{margin:16px 20px 0}
+.baggage-compare-controls{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+.baggage-compare-controls select{flex:1;min-width:140px}
+.baggage-compare-results{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.baggage-compare-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-size:12px;color:var(--text);padding:6px 0;border-top:1px solid var(--line);
+}
+.baggage-compare-row:first-child{border-top:none}
+.baggage-compare-unavailable{color:var(--muted);font-style:italic}
+.baggage-compare-note{color:var(--muted);font-style:italic;text-align:right;max-width:70%}
+.baggage-compare-disclaimer{margin-top:10px;font-size:10.5px;color:var(--muted)}
+
 .result-actions{padding:20px}
 
 /* ---------- Motion ---------- */

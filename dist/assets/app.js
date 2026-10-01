@@ -661,6 +661,16 @@ const I18N = {
     duty_estimate_heading: "Stima dazi doganali",
     duty_estimate_badge: "Non ufficiale",
     duty_estimate_loading: "Calcolo stima in corso…",
+    baggage_compare_heading: "Confronto costo bagaglio extra compagnia aerea",
+    baggage_compare_badge: "Stima — non ufficiale",
+    baggage_compare_intro: "Quanto pagheresti la compagnia aerea per portare lo stesso peso come sovrappeso/bagaglio extra, a confronto col prezzo Touch&amp;Go.",
+    baggage_compare_pick_airline: "Scegli una compagnia aerea…",
+    baggage_compare_class_economy: "Economy",
+    baggage_compare_class_business: "Business",
+    baggage_compare_loading: "Carico i dati delle compagnie aeree…",
+    baggage_compare_unavailable: "Nessun dato disponibile per questa compagnia",
+    baggage_compare_approx_conversion: "~conversione stimata",
+    baggage_compare_disclaimer: "Dati di riferimento da fonti ufficiali delle compagnie aeree, verificati il {date}. Le tariffe reali variano per tariffa, rotta e canale di acquisto — verifica sempre con la compagnia.",
     result_promo_badge_breakeven: "Una tantum · invito {code}",
     result_promo_headline_breakeven: "La tua prima spedizione,<br><em>al prezzo che costa a noi.</em>",
     result_fee_service: "Fee di servizio Touch&amp;Go",
@@ -934,6 +944,16 @@ const I18N = {
     duty_estimate_heading: "Customs duty estimate",
     duty_estimate_badge: "Unofficial",
     duty_estimate_loading: "Estimating…",
+    baggage_compare_heading: "Airline excess baggage cost comparison",
+    baggage_compare_badge: "Estimate — unofficial",
+    baggage_compare_intro: "How much the airline would charge to bring the same weight as excess/overweight baggage, compared with the Touch&amp;Go price.",
+    baggage_compare_pick_airline: "Choose an airline…",
+    baggage_compare_class_economy: "Economy",
+    baggage_compare_class_business: "Business",
+    baggage_compare_loading: "Loading airline data…",
+    baggage_compare_unavailable: "No data available for this airline",
+    baggage_compare_approx_conversion: "~estimated conversion",
+    baggage_compare_disclaimer: "Reference data from official airline sources, verified on {date}. Actual fares vary by fare type, route and purchase channel — always check with the airline.",
     result_promo_badge_breakeven: "One-time · invite {code}",
     result_promo_headline_breakeven: "Your first shipment,<br><em>at the price it costs us.</em>",
     result_fee_service: "Touch&amp;Go service fee",
@@ -1181,6 +1201,21 @@ const state = {
   dutyEstimate: null,
   dutyEstimateLoading: false,
   dutyEstimateRequestId: 0,
+  // Confronto costo bagaglio extra compagnia aerea (ConcludeScreen, vedi
+  // MANUALE.md, sezione "Confronto costo bagaglio extra compagnia aerea")
+  // — SOLO informativo, mai parte del prezzo Touch&Go, stesso principio di
+  // dutyEstimate sopra. airlineBaggageFees è il dataset grezzo (array),
+  // fetchato una sola volta da refreshAirlineBaggageFees() al primo
+  // render di ConcludeScreen — mai duplicato hardcoded qui (vedi
+  // ../lib/airline-baggage-fees.js: un processo esterno lo aggiorna
+  // settimanalmente, un solo file da toccare). baggageCompareAirline/
+  // baggageCompareClass sono la selezione del turista, nulla finché non
+  // sceglie (nessun confronto mostrato prima di una scelta esplicita).
+  airlineBaggageFees: [],
+  airlineBaggageFeesLoading: false,
+  airlineBaggageFeesFetched: false,
+  baggageCompareAirline: null,
+  baggageCompareClass: "economy",
   // Percorso offline — classificazione provvisoria (settembre 2026, vedi
   // MANUALE.md, sezione "Percorso offline"). resultIsProvisional distingue
   // un state.result costruito da buildProvisionalResult() (categoria
@@ -5412,7 +5447,262 @@ function DocumentsScreen() {
   return wrap;
 }
 
+// ---------------------------------------------------------------------
+// Confronto costo bagaglio extra compagnia aerea (ConcludeScreen, settembre
+// 2026) — vedi MANUALE.md, sezione "Confronto costo bagaglio extra
+// compagnia aerea". SOLO informativo: non entra mai in priceFor()/
+// consolidatedGroupPrice()/create-checkout-session.js, nessun euro di
+// questa sezione viene mai addebitato.
+//
+// Dati letti a runtime da netlify/functions/airline-baggage-fees.js (che a
+// sua volta legge netlify/lib/airline-baggage-fees.js) — mai duplicati
+// hardcoded qui: un processo esterno aggiorna quel file settimanalmente,
+// un solo punto da toccare, stesso principio già in uso per
+// refreshCategoryAverages()/CATEGORY_AVERAGES_CACHE_KEY sopra. A
+// differenza di quella cache, qui NON c'è un fallback offline hardcoded:
+// se il fetch non è (ancora) riuscito, la sezione mostra solo lo stato di
+// caricamento/selezione, mai un numero inventato.
+// ---------------------------------------------------------------------
+
+// Conversione approssimativa SOLO per la UI (mai salvata lato dati, vedi
+// commento in ../lib/airline-baggage-fees.js) — tasso indicativo, non
+// aggiornato in tempo reale: ogni importo convertito è sempre mostrato
+// accanto all'originale in USD con l'etichetta "~conversione stimata",
+// mai come se fosse il dato ufficiale.
+const USD_TO_EUR_APPROX = 0.92;
+
+function convertToEurApprox(amount) {
+  return Math.round(amount * USD_TO_EUR_APPROX * 100) / 100;
+}
+
+// Deriva la "classe di rotta" ai fini del confronto bagaglio (eu |
+// intercontinental) dalla stessa zona tariffaria Touch&Go già esistente in
+// DESTINATIONS — non un nuovo concetto di zona creato apposta: "domestico"
+// e "transfrontaliero" (Italia/UE/UK/Svizzera) sono voli corto/medio
+// raggio ai fini di questo confronto, "worldwide" è sempre intercontinentale.
+function routeClassForZone(zone) {
+  return zone === "worldwide" ? "intercontinental" : "eu";
+}
+
+function routeClassForDestinationName(destinationName) {
+  const dest = DESTINATIONS.find((d) => d.name === destinationName) || DESTINATIONS[DESTINATIONS.length - 1];
+  return routeClassForZone(dest.zone);
+}
+
+// Elenco (deduplicato, ordine alfabetico) dei nomi compagnia presenti nel
+// dataset fetchato — usato per popolare il selettore, mai hardcoded qui
+// (l'elenco deve riflettere esattamente cosa risponde la function in un
+// dato momento, incluse eventuali compagnie aggiunte da un aggiornamento
+// settimanale futuro).
+function airlineNamesFromFees(fees) {
+  return Array.from(new Set((fees || []).map((f) => f.airline))).sort((a, b) => a.localeCompare(b));
+}
+
+// Trova la voce più specifica per compagnia+rotta+classe: prima tenta un
+// match ESATTO su routeClass (quando la fonte la distingue, es. KLM),
+// altrimenti accetta una voce con routeClass null (tariffa unica
+// indipendente dalla rotta, es. Ryanair/ITA/Qatar/Turkish). travelClass
+// oggi non è mai valorizzata nel dataset (nessuna fonte verificata il
+// 2026-09-30 distingue per classe di viaggio con un numero — vedi
+// ../lib/airline-baggage-fees.js) ma la funzione la rispetta già, pronta
+// per quando un aggiornamento futuro la popolerà.
+function findAirlineFeeEntry(fees, airline, routeClass, travelClass) {
+  const candidates = (fees || []).filter((f) => f.airline === airline);
+  if (!candidates.length) return null;
+  const matchesClass = (f) => f.travelClass == null || f.travelClass === travelClass;
+  const exact = candidates.find((f) => f.routeClass === routeClass && matchesClass(f));
+  if (exact) return exact;
+  return candidates.find((f) => f.routeClass == null && matchesClass(f)) || null;
+}
+
+// Calcola il confronto da mostrare per UNA voce trovata + un peso
+// fatturabile (il billableWeight già calcolato da consolidatedGroupPrice()
+// per quella destinazione — vedi ConcludeScreen). Scenario assunto per
+// "per_kg_overweight" (vedi report di investigazione): il turista ha già
+// la valigia piena, questo pacco è peso AGGIUNTIVO — quindi l'intero
+// billableWeight è il peso da moltiplicare per la tariffa/kg, nessuna
+// franchigia gratuita sottratta (nessuna fonte qui fornisce una soglia
+// franchigia certificata da cui sottrarre) — sempre etichettato come stima
+// in UI, mai spacciato per il calcolo ufficiale della compagnia.
+function estimateAirlineBaggageCost(entry, billableWeightKg) {
+  if (!entry) return null;
+  if (entry.feeType === "variable_by_fare") {
+    return { feeType: entry.feeType, min: null, max: null, currency: entry.currency, note: entry.note, entry };
+  }
+  const multiplier = entry.feeType === "per_kg_overweight" ? Math.max(0, parseFloat(billableWeightKg) || 0) : 1;
+  return {
+    feeType: entry.feeType,
+    min: parseFloat((entry.amountMin * multiplier).toFixed(2)),
+    max: parseFloat((entry.amountMax * multiplier).toFixed(2)),
+    currency: entry.currency,
+    note: entry.note,
+    entry,
+  };
+}
+
+// Funzione "tutto in uno" usata dalla UI: dato il dataset grezzo, la
+// compagnia/classe scelte dal turista, il nome destinazione (per derivare
+// la routeClass) e il peso fatturabile del gruppo, restituisce l'oggetto
+// pronto per il rendering — o null se il dataset non è (ancora) disponibile
+// o la compagnia scelta non ha alcuna voce nel dataset (mai un errore,
+// solo "nessun confronto disponibile" gestito esplicitamente in UI).
+function baggageComparisonForGroup(fees, airline, travelClass, destinationName, billableWeightKg) {
+  if (!airline || !fees || !fees.length) return null;
+  const routeClass = routeClassForDestinationName(destinationName);
+  const entry = findAirlineFeeEntry(fees, airline, routeClass, travelClass);
+  if (!entry) return null;
+  return estimateAirlineBaggageCost(entry, billableWeightKg);
+}
+
+// Fetch one-shot (mai ripetuto nella stessa sessione, vedi
+// airlineBaggageFeesFetched) richiamato al primo render di ConcludeScreen
+// — non all'avvio dell'app come refreshCategoryAverages(): a differenza
+// dei valori medi per categoria (serve anche offline, da subito), questo
+// confronto è puramente opzionale e serve solo se/quando il turista arriva
+// davvero alla schermata di conferma finale.
+async function refreshAirlineBaggageFees() {
+  if (state.airlineBaggageFeesFetched || state.airlineBaggageFeesLoading) return;
+  state.airlineBaggageFeesLoading = true;
+  try {
+    const res = await fetch("/.netlify/functions/airline-baggage-fees");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.fees)) return;
+    state.airlineBaggageFees = data.fees;
+    state.airlineBaggageFeesVerifiedAt = data.verifiedAt;
+  } catch (e) {
+    // Silenzioso per design, stesso principio di refreshCategoryAverages()
+    // sopra: un fallimento qui non deve mai mostrare un errore al turista
+    // per una sezione puramente informativa — la sezione resta
+    // semplicemente nello stato "nessun dato disponibile".
+  } finally {
+    state.airlineBaggageFeesFetched = true;
+    state.airlineBaggageFeesLoading = false;
+    // Ri-renderizza SOLO se il turista è ancora su ConcludeScreen quando
+    // il fetch si risolve — non è solo un'ottimizzazione: un render()
+    // incondizionato qui ricostruirebbe da zero QUALUNQUE schermata si
+    // trovi attiva in quel momento (es. IdentifyScreen, se l'azione
+    // "Conferma e paga" ha reindirizzato lì per il gate identità mentre
+    // questo fetch era ancora in corso), distruggendo nodi DOM che un
+    // altro flusso asincrono indipendente (il caricamento documento/
+    // rilevamento firma in IdentifyScreen) aggiorna per riferimento
+    // diretto — mai un side-effect di una sezione puramente informativa
+    // che interferisce con un altro flusso. Se il turista è già tornato
+    // su ConcludeScreen in seguito, il prossimo render naturale di quella
+    // schermata leggerà comunque state.airlineBaggageFees già valorizzato
+    // (airlineBaggageFeesFetched è già true): nessun dato perso, solo un
+    // aggiornamento "pigro" invece che immediato in questo caso limite.
+    if (state.screen === "conclude") {
+      try {
+        render();
+      } catch (e) {
+        // Stesso principio del catch sopra: mai un errore non gestito per
+        // un aggiornamento di stato opzionale (es. ambiente di test già
+        // smontato quando questa promise si risolve).
+      }
+    }
+  }
+}
+
+// Markup della sezione — badge "Stima — non ufficiale" nello stesso stile
+// visivo di .duty-estimate-card (bordo tratteggiato, palette neutra): un
+// dato di affidabilità diversa dal prezzo Touch&Go sopra, mai confuso con
+// quello. Tre stati principali: selettore senza ancora una compagnia
+// scelta, caricamento, confronto calcolato (con gestione esplicita di
+// "compagnia senza dati per questa rotta" e di variable_by_fare/Lufthansa
+// — mai un buco silenzioso).
+function AirlineBaggageCompareSection(groupPricing) {
+  const box = el("div", "duty-estimate-card baggage-compare-card");
+  const heading = el("div", "duty-estimate-heading");
+  heading.innerHTML = `${escapeHtml(t("baggage_compare_heading"))}<span class="duty-estimate-badge">${escapeHtml(t("baggage_compare_badge"))}</span>`;
+  box.appendChild(heading);
+
+  box.appendChild(el("div", "info-line", t("baggage_compare_intro")));
+
+  const airlineNames = airlineNamesFromFees(state.airlineBaggageFees);
+  const controls = el("div", "baggage-compare-controls");
+  controls.innerHTML = `
+    <select class="dest-select baggage-compare-airline">
+      <option value="">${escapeHtml(t("baggage_compare_pick_airline"))}</option>
+      ${airlineNames.map((name) => `<option value="${escapeHtml(name)}" ${state.baggageCompareAirline === name ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+    </select>
+    <select class="dest-select baggage-compare-class">
+      <option value="economy" ${state.baggageCompareClass === "economy" ? "selected" : ""}>${escapeHtml(t("baggage_compare_class_economy"))}</option>
+      <option value="business" ${state.baggageCompareClass === "business" ? "selected" : ""}>${escapeHtml(t("baggage_compare_class_business"))}</option>
+    </select>`;
+  box.appendChild(controls);
+
+  const airlineSelect = controls.querySelector(".baggage-compare-airline");
+  airlineSelect.addEventListener("change", (e) => {
+    state.baggageCompareAirline = e.target.value || null;
+    render();
+  });
+  const classSelect = controls.querySelector(".baggage-compare-class");
+  classSelect.addEventListener("change", (e) => {
+    state.baggageCompareClass = e.target.value;
+    render();
+  });
+
+  if (state.airlineBaggageFeesLoading) {
+    box.appendChild(el("div", "duty-estimate-skeleton", t("baggage_compare_loading")));
+    return box;
+  }
+
+  if (!state.baggageCompareAirline) {
+    return box;
+  }
+
+  const results = el("div", "baggage-compare-results");
+  let anyRendered = false;
+  Object.entries(groupPricing).forEach(([dest, g]) => {
+    const comparison = baggageComparisonForGroup(
+      state.airlineBaggageFees,
+      state.baggageCompareAirline,
+      state.baggageCompareClass,
+      g.destinationCountry,
+      g.weightKg
+    );
+    const row = el("div", "baggage-compare-row");
+    if (!comparison) {
+      row.innerHTML = `<span>${escapeHtml(dest)}</span><span class="baggage-compare-unavailable">${escapeHtml(t("baggage_compare_unavailable"))}</span>`;
+      results.appendChild(row);
+      anyRendered = true;
+      return;
+    }
+    if (comparison.feeType === "variable_by_fare") {
+      row.innerHTML = `<span>${escapeHtml(dest)}</span><span class="baggage-compare-note">${escapeHtml(comparison.note)}</span>`;
+      results.appendChild(row);
+      anyRendered = true;
+      return;
+    }
+    const isUsd = comparison.currency === "USD";
+    const rangeLabel =
+      comparison.min === comparison.max
+        ? `${isUsd ? "$" : "€"}${comparison.min.toFixed(2)}`
+        : `${isUsd ? "$" : "€"}${comparison.min.toFixed(2)}–${comparison.max.toFixed(2)}`;
+    const eurApproxLabel = isUsd
+      ? ` (~€${convertToEurApprox(comparison.min).toFixed(2)}${comparison.min === comparison.max ? "" : `–${convertToEurApprox(comparison.max).toFixed(2)}`} ${t("baggage_compare_approx_conversion")})`
+      : "";
+    row.innerHTML = `<span>${escapeHtml(dest)} (${g.weightKg} kg)</span><span><b>${rangeLabel}</b>${eurApproxLabel}</span>`;
+    results.appendChild(row);
+    anyRendered = true;
+  });
+  if (anyRendered) box.appendChild(results);
+
+  if (state.airlineBaggageFeesVerifiedAt) {
+    box.appendChild(el("div", "duty-estimate-text baggage-compare-disclaimer", t("baggage_compare_disclaimer", { date: state.airlineBaggageFeesVerifiedAt })));
+  }
+
+  return box;
+}
+
 function ConcludeScreen() {
+  // Fetch one-shot del dataset bagaglio compagnie aeree — vedi
+  // refreshAirlineBaggageFees() sopra: non bloccante, la prima chiamata
+  // innesca il fetch e torna subito (la sezione mostra lo stato di
+  // caricamento finché non arriva, poi un render() la aggiorna da sola).
+  refreshAirlineBaggageFees();
+
   const wrap = el("div", "section");
   const back = el("div", "back", "← Torna alla home");
   back.addEventListener("click", () => {
@@ -5486,6 +5776,8 @@ function ConcludeScreen() {
       .join("")}
     <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
   wrap.appendChild(paymentSummary);
+
+  wrap.appendChild(AirlineBaggageCompareSection(groupPricing));
 
   if (state.checkoutError) {
     wrap.appendChild(el("div", "alert", `⚠️ ${state.checkoutError}`));
