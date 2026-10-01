@@ -670,6 +670,8 @@ const I18N = {
     baggage_compare_loading: "Carico i dati delle compagnie aeree…",
     baggage_compare_unavailable: "Nessun dato disponibile per questa compagnia",
     baggage_compare_approx_conversion: "~conversione stimata",
+    baggage_compare_feetype_extra_piece: "Se comprassi un bagaglio extra",
+    baggage_compare_feetype_overweight: "Se sei in sovrappeso (su questo peso)",
     baggage_compare_disclaimer: "Dati di riferimento da fonti ufficiali delle compagnie aeree, verificati il {date}. Le tariffe reali variano per tariffa, rotta e canale di acquisto — verifica sempre con la compagnia.",
     result_promo_badge_breakeven: "Una tantum · invito {code}",
     result_promo_headline_breakeven: "La tua prima spedizione,<br><em>al prezzo che costa a noi.</em>",
@@ -953,6 +955,8 @@ const I18N = {
     baggage_compare_loading: "Loading airline data…",
     baggage_compare_unavailable: "No data available for this airline",
     baggage_compare_approx_conversion: "~estimated conversion",
+    baggage_compare_feetype_extra_piece: "If you bought an extra bag",
+    baggage_compare_feetype_overweight: "If you're overweight (on this weight)",
     baggage_compare_disclaimer: "Reference data from official airline sources, verified on {date}. Actual fares vary by fare type, route and purchase channel — always check with the airline.",
     result_promo_badge_breakeven: "One-time · invite {code}",
     result_promo_headline_breakeven: "Your first shipment,<br><em>at the price it costs us.</em>",
@@ -5498,21 +5502,41 @@ function airlineNamesFromFees(fees) {
   return Array.from(new Set((fees || []).map((f) => f.airline))).sort((a, b) => a.localeCompare(b));
 }
 
-// Trova la voce più specifica per compagnia+rotta+classe: prima tenta un
-// match ESATTO su routeClass (quando la fonte la distingue, es. KLM),
-// altrimenti accetta una voce con routeClass null (tariffa unica
+// Trova TUTTE le voci più specifiche per compagnia+rotta+classe: prima
+// tenta un match ESATTO su routeClass (quando la fonte la distingue, es.
+// KLM), altrimenti accetta le voci con routeClass null (tariffa unica
 // indipendente dalla rotta, es. Ryanair/ITA/Qatar/Turkish). travelClass
 // oggi non è mai valorizzata nel dataset (nessuna fonte verificata il
 // 2026-09-30 distingue per classe di viaggio con un numero — vedi
 // ../lib/airline-baggage-fees.js) ma la funzione la rispetta già, pronta
 // per quando un aggiornamento futuro la popolerà.
-function findAirlineFeeEntry(fees, airline, routeClass, travelClass) {
+//
+// Un array, non una singola voce (bug trovato in revisione, ottobre 2026):
+// una compagnia può avere PIÙ voci per la stessa combinazione
+// routeClass/travelClass quando la fonte distingue per feeType — es. KLM
+// ha SIA "per_extra_piece" SIA "per_kg_overweight" per la rotta "eu".
+// Restituire solo la prima (come faceva la versione precedente di questa
+// funzione) nascondeva silenziosamente la tariffa al kg, mostrando sempre
+// e solo il costo fisso del pezzo extra indipendentemente dal peso reale
+// del pacco — proprio l'opposto dello scopo di questo confronto per un
+// pacco pesante. Vedi baggageComparisonsForGroup() sotto, che itera su
+// tutte le voci restituite qui invece di sceglierne una sola.
+function findAirlineFeeEntries(fees, airline, routeClass, travelClass) {
   const candidates = (fees || []).filter((f) => f.airline === airline);
-  if (!candidates.length) return null;
+  if (!candidates.length) return [];
   const matchesClass = (f) => f.travelClass == null || f.travelClass === travelClass;
-  const exact = candidates.find((f) => f.routeClass === routeClass && matchesClass(f));
-  if (exact) return exact;
-  return candidates.find((f) => f.routeClass == null && matchesClass(f)) || null;
+  const exact = candidates.filter((f) => f.routeClass === routeClass && matchesClass(f));
+  if (exact.length) return exact;
+  return candidates.filter((f) => f.routeClass == null && matchesClass(f));
+}
+
+// Wrapper retrocompatibile a UNA sola voce (la prima trovata, stesso
+// ordine del dataset) — usata solo dove serve storicamente un singolo
+// risultato (es. i test esistenti non legati a compagnie con più voci per
+// la stessa rotta). La UI reale (baggageComparisonsForGroup sotto) non usa
+// mai questa funzione: userebbe esattamente lo stesso bug appena corretto.
+function findAirlineFeeEntry(fees, airline, routeClass, travelClass) {
+  return findAirlineFeeEntries(fees, airline, routeClass, travelClass)[0] || null;
 }
 
 // Calcola il confronto da mostrare per UNA voce trovata + un peso
@@ -5542,16 +5566,19 @@ function estimateAirlineBaggageCost(entry, billableWeightKg) {
 
 // Funzione "tutto in uno" usata dalla UI: dato il dataset grezzo, la
 // compagnia/classe scelte dal turista, il nome destinazione (per derivare
-// la routeClass) e il peso fatturabile del gruppo, restituisce l'oggetto
-// pronto per il rendering — o null se il dataset non è (ancora) disponibile
-// o la compagnia scelta non ha alcuna voce nel dataset (mai un errore,
-// solo "nessun confronto disponibile" gestito esplicitamente in UI).
-function baggageComparisonForGroup(fees, airline, travelClass, destinationName, billableWeightKg) {
-  if (!airline || !fees || !fees.length) return null;
+// la routeClass) e il peso fatturabile del gruppo, restituisce un ARRAY di
+// confronti pronti per il rendering — mai un singolo oggetto (vedi
+// findAirlineFeeEntries() sopra: una compagnia può avere più voci per la
+// stessa rotta, es. KLM con per_extra_piece E per_kg_overweight, ed
+// entrambe vanno mostrate, non solo la prima). Array vuoto se il dataset
+// non è (ancora) disponibile o la compagnia scelta non ha alcuna voce per
+// quella rotta (mai un errore, solo "nessun confronto disponibile" gestito
+// esplicitamente in UI quando l'array è vuoto).
+function baggageComparisonsForGroup(fees, airline, travelClass, destinationName, billableWeightKg) {
+  if (!airline || !fees || !fees.length) return [];
   const routeClass = routeClassForDestinationName(destinationName);
-  const entry = findAirlineFeeEntry(fees, airline, routeClass, travelClass);
-  if (!entry) return null;
-  return estimateAirlineBaggageCost(entry, billableWeightKg);
+  const entries = findAirlineFeeEntries(fees, airline, routeClass, travelClass);
+  return entries.map((entry) => estimateAirlineBaggageCost(entry, billableWeightKg));
 }
 
 // Fetch one-shot (mai ripetuto nella stessa sessione, vedi
@@ -5602,6 +5629,19 @@ async function refreshAirlineBaggageFees() {
       }
     }
   }
+}
+
+// Etichetta leggibile per il feeType di UNA voce — usata SOLO quando una
+// compagnia ha più di una voce per la stessa rotta (vedi
+// AirlineBaggageCompareSection sotto): "per_extra_piece" e
+// "per_kg_overweight" sono due costi concettualmente diversi (un pezzo
+// extra fisso vs una tariffa al kg), mai da sommare né da mostrare come se
+// fossero la stessa cosa. "variable_by_fare" non arriva mai qui (gestito a
+// parte, solo testo della nota).
+function baggageFeeTypeLabel(feeType) {
+  if (feeType === "per_kg_overweight") return t("baggage_compare_feetype_overweight");
+  if (feeType === "per_extra_piece") return t("baggage_compare_feetype_extra_piece");
+  return "";
 }
 
 // Markup della sezione — badge "Stima — non ufficiale" nello stesso stile
@@ -5655,37 +5695,49 @@ function AirlineBaggageCompareSection(groupPricing) {
   const results = el("div", "baggage-compare-results");
   let anyRendered = false;
   Object.entries(groupPricing).forEach(([dest, g]) => {
-    const comparison = baggageComparisonForGroup(
+    const comparisons = baggageComparisonsForGroup(
       state.airlineBaggageFees,
       state.baggageCompareAirline,
       state.baggageCompareClass,
       g.destinationCountry,
       g.weightKg
     );
-    const row = el("div", "baggage-compare-row");
-    if (!comparison) {
+    if (!comparisons.length) {
+      const row = el("div", "baggage-compare-row");
       row.innerHTML = `<span>${escapeHtml(dest)}</span><span class="baggage-compare-unavailable">${escapeHtml(t("baggage_compare_unavailable"))}</span>`;
       results.appendChild(row);
       anyRendered = true;
       return;
     }
-    if (comparison.feeType === "variable_by_fare") {
-      row.innerHTML = `<span>${escapeHtml(dest)}</span><span class="baggage-compare-note">${escapeHtml(comparison.note)}</span>`;
+    // Più di una voce per la stessa compagnia+rotta (es. KLM: sia
+    // "per_extra_piece" sia "per_kg_overweight" per la rotta "eu") -> una
+    // riga PER CIASCUNA, mai una sola scelta a caso (bug corretto in
+    // revisione, ottobre 2026 — vedi findAirlineFeeEntries()). Con una
+    // sola voce (il caso di tutte le altre compagnie nel dataset di oggi)
+    // l'etichetta feeType resta omessa: comportamento identico a prima di
+    // questa correzione.
+    const showFeeTypeLabel = comparisons.length > 1;
+    comparisons.forEach((comparison) => {
+      const row = el("div", "baggage-compare-row");
+      if (comparison.feeType === "variable_by_fare") {
+        row.innerHTML = `<span>${escapeHtml(dest)}</span><span class="baggage-compare-note">${escapeHtml(comparison.note)}</span>`;
+        results.appendChild(row);
+        anyRendered = true;
+        return;
+      }
+      const destLabel = showFeeTypeLabel ? `${escapeHtml(dest)} (${g.weightKg} kg) — ${escapeHtml(baggageFeeTypeLabel(comparison.feeType))}` : `${escapeHtml(dest)} (${g.weightKg} kg)`;
+      const isUsd = comparison.currency === "USD";
+      const rangeLabel =
+        comparison.min === comparison.max
+          ? `${isUsd ? "$" : "€"}${comparison.min.toFixed(2)}`
+          : `${isUsd ? "$" : "€"}${comparison.min.toFixed(2)}–${comparison.max.toFixed(2)}`;
+      const eurApproxLabel = isUsd
+        ? ` (~€${convertToEurApprox(comparison.min).toFixed(2)}${comparison.min === comparison.max ? "" : `–${convertToEurApprox(comparison.max).toFixed(2)}`} ${t("baggage_compare_approx_conversion")})`
+        : "";
+      row.innerHTML = `<span>${destLabel}</span><span><b>${rangeLabel}</b>${eurApproxLabel}</span>`;
       results.appendChild(row);
       anyRendered = true;
-      return;
-    }
-    const isUsd = comparison.currency === "USD";
-    const rangeLabel =
-      comparison.min === comparison.max
-        ? `${isUsd ? "$" : "€"}${comparison.min.toFixed(2)}`
-        : `${isUsd ? "$" : "€"}${comparison.min.toFixed(2)}–${comparison.max.toFixed(2)}`;
-    const eurApproxLabel = isUsd
-      ? ` (~€${convertToEurApprox(comparison.min).toFixed(2)}${comparison.min === comparison.max ? "" : `–${convertToEurApprox(comparison.max).toFixed(2)}`} ${t("baggage_compare_approx_conversion")})`
-      : "";
-    row.innerHTML = `<span>${escapeHtml(dest)} (${g.weightKg} kg)</span><span><b>${rangeLabel}</b>${eurApproxLabel}</span>`;
-    results.appendChild(row);
-    anyRendered = true;
+    });
   });
   if (anyRendered) box.appendChild(results);
 

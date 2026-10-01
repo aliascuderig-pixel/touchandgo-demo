@@ -4,11 +4,11 @@
 //   1. routeClassForZone()/routeClassForDestinationName() — riuso della
 //      zona tariffaria Touch&Go esistente (DESTINATIONS), mai una nuova
 //      tabella di zone duplicata.
-//   2. findAirlineFeeEntry()/estimateAirlineBaggageCost() — il calcolo del
-//      confronto: per_kg_overweight moltiplica per l'intero billableWeight
-//      (nessuna franchigia sottratta, vedi report di investigazione
-//      concordato), per_extra_piece è un costo fisso indipendente dal
-//      peso, variable_by_fare non produce mai un numero.
+//   2. findAirlineFeeEntries()/estimateAirlineBaggageCost() — il calcolo
+//      del confronto: per_kg_overweight moltiplica per l'intero
+//      billableWeight (nessuna franchigia sottratta, vedi report di
+//      investigazione concordato), per_extra_piece è un costo fisso
+//      indipendente dal peso, variable_by_fare non produce mai un numero.
 //   3. Dati mancanti/compagnia non trovata — dataset non ancora arrivato,
 //      compagnia assente dal dataset, compagnia presente ma senza alcuna
 //      voce per la rotta richiesta: mai un crash, sempre uno stato
@@ -16,6 +16,11 @@
 //   4. Rendering del disclaimer (data di verifica più recente, testo
 //      obbligatorio) e della sezione completa in ConcludeScreen, incluso
 //      il caso di conversione USD->EUR approssimativa.
+//   5. Regressione (ottobre 2026, trovata in revisione): una compagnia con
+//      PIÙ voci per la stessa rotta (KLM: per_extra_piece E
+//      per_kg_overweight) deve mostrarle ENTRAMBE, mai solo la prima —
+//      vedi baggageComparisonsForGroup() (array, non più un singolo
+//      oggetto) e i test dedicati KLM più sotto.
 //
 // Stessa tecnica già usata in consolidated-group-price.test.js/
 // duty-estimate.test.js: app.js REALE caricato in una finestra jsdom
@@ -84,8 +89,18 @@ test("routeClassForDestinationName(): Italia/UE/UK/Svizzera -> eu, resto del mon
 
 const FAKE_FEES = [
   { airline: "Ryanair", feeType: "per_kg_overweight", routeClass: null, travelClass: null, amountMin: 13, amountMax: 13, currency: "EUR", sourceUrl: "https://example.com/ryanair", verifiedAt: "2026-09-30", note: null },
+  // KLM: QUATTRO voci, mirror della struttura reale in
+  // netlify/lib/airline-baggage-fees.js — sia per_extra_piece sia
+  // per_kg_overweight, per entrambe le rotte eu/intercontinental. Usata
+  // sotto per il bug trovato in revisione (ottobre 2026): la versione
+  // precedente di findAirlineFeeEntry() restituiva SEMPRE e SOLO la prima
+  // voce che matchava routeClass (qui per_extra_piece, perché scritta
+  // prima nell'array), nascondendo silenziosamente la tariffa al kg
+  // indipendentemente dal peso reale del pacco.
   { airline: "KLM", feeType: "per_extra_piece", routeClass: "eu", travelClass: null, amountMin: 20, amountMax: 70, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
   { airline: "KLM", feeType: "per_extra_piece", routeClass: "intercontinental", travelClass: null, amountMin: 30, amountMax: 240, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
+  { airline: "KLM", feeType: "per_kg_overweight", routeClass: "eu", travelClass: null, amountMin: 75, amountMax: 100, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
+  { airline: "KLM", feeType: "per_kg_overweight", routeClass: "intercontinental", travelClass: null, amountMin: 100, amountMax: 300, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
   { airline: "Lufthansa Group", feeType: "variable_by_fare", routeClass: null, travelClass: null, amountMin: null, amountMax: null, currency: "EUR", sourceUrl: "https://example.com/lh", verifiedAt: "2026-09-30", note: "Tariffa variabile, verifica la tua tariffa specifica." },
   { airline: "Qatar Airways", feeType: "per_extra_piece", routeClass: null, travelClass: null, amountMin: 130, amountMax: 255, currency: "USD", sourceUrl: "https://example.com/qatar", verifiedAt: "2026-09-30", note: null },
   // Compagnia con SOLO una voce "intercontinental" (nessun fallback
@@ -173,30 +188,103 @@ test("estimateAirlineBaggageCost(): nessuna voce trovata -> null, mai un crash",
 });
 
 // ---------------------------------------------------------------------
-// 3) baggageComparisonForGroup() — "tutto in uno" usata dalla UI: dati
-//    mancanti/compagnia non trovata gestiti esplicitamente.
+// 3) baggageComparisonsForGroup() — "tutto in uno" usata dalla UI: dati
+//    mancanti/compagnia non trovata gestiti esplicitamente. Restituisce
+//    sempre un ARRAY (mai un singolo oggetto) perché una compagnia può
+//    avere più voci per la stessa rotta — vedi il test dedicato KLM sotto
+//    (bug trovato in revisione, ottobre 2026).
 // ---------------------------------------------------------------------
 
-test("baggageComparisonForGroup(): dataset non ancora arrivato (fees vuoto) -> null, mai un crash", (t) => {
+test("baggageComparisonsForGroup(): dataset non ancora arrivato (fees vuoto) -> array vuoto, mai un crash", (t) => {
   const { context } = bootApp(t);
-  const result = callGlobal(context, 'baggageComparisonForGroup([], "Ryanair", "economy", "Italia", 5)');
-  assert.equal(result, null);
+  const result = callGlobal(context, 'baggageComparisonsForGroup([], "Ryanair", "economy", "Italia", 5)');
+  // Array.from(): result arriva dal realm sandbox (vm.runInContext) — un
+  // Array di quel realm non è reference-equal a un Array literal del
+  // realm host anche a contenuto identico, stessa tecnica già in uso
+  // altrove in questo repository per confronti cross-realm.
+  assert.deepEqual(Array.from(result), []);
 });
 
-test("baggageComparisonForGroup(): nessuna compagnia selezionata (null/undefined) -> null", (t) => {
+test("baggageComparisonsForGroup(): nessuna compagnia selezionata (null/undefined) -> array vuoto", (t) => {
   const { context } = bootApp(t);
   setState(context, { __t_fees: FAKE_FEES });
-  const result = callGlobal(context, "baggageComparisonForGroup(state.__t_fees, null, \"economy\", \"Italia\", 5)");
-  assert.equal(result, null);
+  const result = callGlobal(context, "baggageComparisonsForGroup(state.__t_fees, null, \"economy\", \"Italia\", 5)");
+  assert.deepEqual(Array.from(result), []);
 });
 
-test("baggageComparisonForGroup(): end-to-end, Ryanair su destinazione intercontinentale con peso reale", (t) => {
+test("baggageComparisonsForGroup(): end-to-end, Ryanair (una sola voce) su destinazione intercontinentale con peso reale", (t) => {
   const { context } = bootApp(t);
   setState(context, { __t_fees: FAKE_FEES });
-  const result = callGlobal(context, 'baggageComparisonForGroup(state.__t_fees, "Ryanair", "economy", "Stati Uniti", 2)');
-  assert.equal(result.min, 26);
-  assert.equal(result.max, 26);
-  assert.equal(result.currency, "EUR");
+  const result = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "Ryanair", "economy", "Stati Uniti", 2)');
+  assert.equal(result.length, 1, "una sola voce per Ryanair -> un solo confronto");
+  assert.equal(result[0].min, 26);
+  assert.equal(result[0].max, 26);
+  assert.equal(result[0].currency, "EUR");
+});
+
+// ---------------------------------------------------------------------
+// Regressione del bug trovato in revisione (ottobre 2026): per una
+// compagnia con PIÙ voci per la stessa rotta (KLM: per_extra_piece E
+// per_kg_overweight, sia per "eu" sia per "intercontinental"),
+// baggageComparisonsForGroup() deve restituire ENTRAMBE le voci — la
+// versione precedente (findAirlineFeeEntry a voce singola) restituiva
+// sempre e solo la prima (per_extra_piece, scritta prima nel dataset),
+// nascondendo silenziosamente la tariffa al kg indipendentemente dal peso
+// reale del pacco.
+// ---------------------------------------------------------------------
+
+test("baggageComparisonsForGroup(): KLM rotta 'eu' -> ENTRAMBE le voci (per_extra_piece E per_kg_overweight), non solo la prima", (t) => {
+  const { context } = bootApp(t);
+  setState(context, { __t_fees: FAKE_FEES });
+  const result = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Italia", 4)');
+
+  assert.equal(result.length, 2, "KLM ha due voci per la rotta eu: entrambe devono comparire");
+  const extraPiece = result.find((r) => r.feeType === "per_extra_piece");
+  const perKg = result.find((r) => r.feeType === "per_kg_overweight");
+  assert.ok(extraPiece, "la voce per_extra_piece deve essere presente");
+  assert.ok(perKg, "la voce per_kg_overweight NON deve sparire dietro la prima trovata (il bug corretto)");
+
+  // per_extra_piece: costo fisso, invariato rispetto al peso (20-70€, dal
+  // dataset).
+  assert.equal(extraPiece.min, 20);
+  assert.equal(extraPiece.max, 70);
+
+  // per_kg_overweight: 75-100€/kg (dal dataset) × 4kg di billableWeight.
+  assert.equal(perKg.min, 75 * 4);
+  assert.equal(perKg.max, 100 * 4);
+});
+
+test("baggageComparisonsForGroup(): KLM per_kg_overweight è effettivamente proporzionale al peso (doppio peso = doppio importo)", (t) => {
+  const { context } = bootApp(t);
+  setState(context, { __t_fees: FAKE_FEES });
+
+  const resultLight = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Italia", 3)');
+  const resultHeavy = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Italia", 6)');
+
+  const perKgLight = resultLight.find((r) => r.feeType === "per_kg_overweight");
+  const perKgHeavy = resultHeavy.find((r) => r.feeType === "per_kg_overweight");
+  assert.equal(perKgHeavy.min, perKgLight.min * 2, "doppio peso -> doppio importo minimo");
+  assert.equal(perKgHeavy.max, perKgLight.max * 2, "doppio peso -> doppio importo massimo");
+
+  // La voce per_extra_piece, invece, non deve MAI variare col peso — è un
+  // costo fisso, vedi test sopra.
+  const extraPieceLight = resultLight.find((r) => r.feeType === "per_extra_piece");
+  const extraPieceHeavy = resultHeavy.find((r) => r.feeType === "per_extra_piece");
+  assert.deepEqual(extraPieceLight, extraPieceHeavy);
+});
+
+test("baggageComparisonsForGroup(): KLM rotta 'intercontinental' -> le voci corrette per quella rotta, non quelle 'eu'", (t) => {
+  const { context } = bootApp(t);
+  setState(context, { __t_fees: FAKE_FEES });
+  const result = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Stati Uniti", 4)');
+
+  assert.equal(result.length, 2);
+  const extraPiece = result.find((r) => r.feeType === "per_extra_piece");
+  const perKg = result.find((r) => r.feeType === "per_kg_overweight");
+  assert.equal(extraPiece.min, 30);
+  assert.equal(extraPiece.max, 240);
+  assert.equal(perKg.min, 100 * 4);
+  assert.equal(perKg.max, 300 * 4);
 });
 
 // ---------------------------------------------------------------------
@@ -278,6 +366,29 @@ test("ConcludeScreen: Lufthansa Group mostra la nota, mai un numero", async (t) 
   const row = document.querySelector(".baggage-compare-row");
   assert.ok(row.textContent.includes("Tariffa variabile, verifica la tua tariffa specifica."));
   assert.ok(!/\d/.test(row.querySelector(".baggage-compare-note").textContent.replace(/2026/g, "")), "nessuna cifra di importo nella nota (a parte eventuali anni, qui non presenti)");
+});
+
+test("ConcludeScreen: KLM mostra DUE righe distinte (pezzo extra E sovrappeso al kg), mai solo la prima — regressione del bug trovato in revisione", async (t) => {
+  const { window, document, context } = bootApp(t, { fetchMock: fetchMockFor(FAKE_FEES, "2026-09-30") });
+  setState(context, { addresses: [ADDRESS_EU], pendingItems: [item({ weightKg: 4 })] });
+  gotoConclude(context, window);
+  await flushMicrotasks();
+
+  const airlineSelect = document.querySelector(".baggage-compare-airline");
+  airlineSelect.value = "KLM";
+  airlineSelect.dispatchEvent(new window.Event("change"));
+
+  const rows = Array.from(document.querySelectorAll(".baggage-compare-row"));
+  assert.equal(rows.length, 2, "KLM deve mostrare due righe (pezzo extra + sovrappeso al kg), mai una sola");
+
+  const extraPieceRow = rows.find((r) => r.textContent.includes("Se comprassi un bagaglio extra"));
+  const overweightRow = rows.find((r) => r.textContent.includes("Se sei in sovrappeso"));
+  assert.ok(extraPieceRow, "deve esserci la riga del pezzo extra, etichettata");
+  assert.ok(overweightRow, "deve esserci la riga del sovrappeso al kg, etichettata — quella che il bug nascondeva");
+
+  assert.ok(extraPieceRow.textContent.includes("20.00") && extraPieceRow.textContent.includes("70.00"), `riga pezzo extra attesa 20-70€, trovata: "${extraPieceRow.textContent}"`);
+  // Sovrappeso: 75-100€/kg × 4kg (vedi item({weightKg: 4}) sopra) = 300-400€.
+  assert.ok(overweightRow.textContent.includes("300.00") && overweightRow.textContent.includes("400.00"), `riga sovrappeso attesa 300-400€ (75-100 × 4kg), trovata: "${overweightRow.textContent}"`);
 });
 
 test("ConcludeScreen: compagnia senza alcuna voce per questa rotta -> messaggio esplicito, mai un numero inventato", async (t) => {
