@@ -176,7 +176,7 @@
 
   .back-to-hub{display:inline-block;margin-top:18px;font-size:12px;color:var(--clay);text-decoration:none}
 
-  /* ---- widget chat "Chiedi a Touch&Go" ---- */
+  /* ---- widget chat "Chiedi all'agente Touch&Go" ---- */
   #tg-chat-toggle{
     position:fixed;bottom:22px;right:22px;z-index:9999;
     background:var(--gold);color:var(--ink-fixed-dark);border:none;border-radius:999px;
@@ -221,7 +221,7 @@
   @media (max-width:480px){
     #tg-chat-panel{right:16px;left:16px;width:auto}
     /* Bug preesistente (non una regressione di questa modifica): il
-       bottone a larghezza piena ("💬 Chiedi a Touch&Go", ~190px su un
+       bottone a larghezza piena ("💬 Chiedi all'agente Touch&Go", ~190px su un
        viewport di 390px — quasi metà schermo) copriva parzialmente il
        testo delle card sottostanti durante lo scroll, in più punti della
        pagina (confermato con screenshot reali), non solo in fondo.
@@ -625,15 +625,15 @@
     Touch&Go — presentazione della suite e guida all'utilizzo, ad uso interno, investitori e partner commerciali. I link puntano ad ambienti reali di test: i dati generati seguendo questa guida sono chiaramente riconoscibili come tali nel CRM.
   </footer>
 
-</div>  <!-- ================= WIDGET CHIEDI A TOUCH&GO ================= -->
-  <button id="tg-chat-toggle" aria-label="Chiedi a Touch&Go" onclick="document.getElementById('tg-chat-panel').classList.add('open'); this.style.display='none'">
-    💬 <span class="tg-chat-label">Chiedi a Touch&Go</span>
+</div>  <!-- ================= WIDGET CHIEDI ALL'AGENTE TOUCH&GO ================= -->
+  <button id="tg-chat-toggle" aria-label="Chiedi all'agente Touch&Go" onclick="document.getElementById('tg-chat-panel').classList.add('open'); this.style.display='none'">
+    💬 <span class="tg-chat-label">Chiedi all'agente Touch&Go</span>
   </button>
 
   <div id="tg-chat-panel">
     <div id="tg-chat-head">
       <div>
-        <div class="th-title">Chiedi a Touch&Go</div>
+        <div class="th-title">Chiedi all'agente Touch&Go</div>
         <div class="th-sub">Domande sulla suite — risposta AI in tempo reale</div>
       </div>
       <button id="tg-chat-close" onclick="document.getElementById('tg-chat-panel').classList.remove('open'); document.getElementById('tg-chat-toggle').style.display='flex'">✕</button>
