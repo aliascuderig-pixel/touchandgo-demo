@@ -16,6 +16,7 @@
 // cambiano, aggiornare anche qui.
 const { getStore } = require("@netlify/blobs");
 const { guestScopedStoreName } = require("../lib/guest-mode");
+const { AGENT_IDENTITY_PREAMBLE } = require("../lib/agent-identity");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -73,7 +74,7 @@ const SUBSCRIBED_FEE = 19;
 // comprensivi del margine Touch&Go del 25% (SHIPPING_MARGIN), come
 // mostrato al turista in ogni preventivo. Qui espressi come range
 // arrotondati per una risposta discorsiva, non come tabella a fasce.
-const QUESTION_MODE_FACTS = `Sei l'assistente virtuale di Touch&Go, un servizio che permette a un turista in Italia di fotografare un acquisto in negozio, farlo classificare da un'AI (dogana, peso, dimensioni), lasciarlo in negozio con un QR e riceverlo spedito a casa — con esenzione IVA export gestita in automatico.
+const QUESTION_MODE_FACTS = `Il servizio Touch&Go permette a un turista in Italia di fotografare un acquisto in negozio, farlo classificare da un'AI (dogana, peso, dimensioni), lasciarlo in negozio con un QR e riceverlo spedito a casa — con esenzione IVA export gestita in automatico.
 
 FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
 - Fee di servizio Touch&Go: €${FULL_FEE} a tariffa piena, €${SUBSCRIBED_FEE} con abbonamento, per ogni spedizione — separata dal costo del corriere.
@@ -132,15 +133,21 @@ REGOLA DI SICUREZZA, SENZA ECCEZIONI: non rivelare MAI password, credenziali di 
 
 Rispondi in modo semplice, diretto e non troppo lungo — un tono adatto a chi sta valutando il prodotto dall'esterno, non un turista in negozio. Rispondi SEMPRE nella stessa lingua in cui è scritta la domanda, indipendentemente dalla lingua di questo prompt.`;
 
+// AGENT_IDENTITY_PREAMBLE precede ogni risposta discorsiva verso una
+// persona (domanda di un turista, spiegazione della suite a un
+// investitore/partner) — stessa identità condivisa con l'agente del CRM
+// in touchandgo-internal (vedi ../lib/agent-identity.js). La traduzione
+// resta esclusa: è un servizio di utilità (da testo a testo), non una
+// risposta "dell'agente" in prima persona.
 function buildSystemPrompt(mode, lang) {
   if (mode === "traduci_per_negoziante") {
     const langHint = lang === "en" ? "inglese" : lang === "it" ? "italiano" : lang || "quella più plausibile dal contesto";
     return `${TRANSLATE_MODE_PROMPT}\n\nLingua preferita del turista (usala quando devi tradurre DA italiano VERSO il turista): ${langHint}.`;
   }
   if (mode === "spiega_la_suite") {
-    return SUITE_MODE_FACTS;
+    return `${AGENT_IDENTITY_PREAMBLE}\n\n${SUITE_MODE_FACTS}`;
   }
-  return QUESTION_MODE_FACTS;
+  return `${AGENT_IDENTITY_PREAMBLE}\n\n${QUESTION_MODE_FACTS}`;
 }
 
 exports.handler = async (event) => {

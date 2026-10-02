@@ -533,10 +533,10 @@ const I18N = {
     history_price_reconciled_dismiss: "Tocca per confermare di aver visto l'aggiornamento",
     mode_tourist: "Turista",
     mode_partner: "Partner",
-    header_assistant_btn: "💬 Chiedi a Touch&Go",
+    header_assistant_btn: "💬 Chiedi all'agente Touch&Go",
 
     // ---- Assistente conversazionale (AssistantChatModal, netlify/functions/assistant.js) ----
-    assistant_chat_title: "Chiedi a Touch&Go",
+    assistant_chat_title: "Chiedi all'agente Touch&Go",
     assistant_chat_close_aria: "Chiudi",
     assistant_chat_mode_question: "Fai una domanda",
     assistant_chat_mode_translate: "Comunica col negozio",
@@ -818,10 +818,10 @@ const I18N = {
     history_price_reconciled_dismiss: "Tap to confirm you've seen the update",
     mode_tourist: "Tourist",
     mode_partner: "Partner",
-    header_assistant_btn: "💬 Ask Touch&Go",
+    header_assistant_btn: "💬 Ask the Touch&Go Agent",
 
     // ---- Conversational assistant (AssistantChatModal, netlify/functions/assistant.js) ----
-    assistant_chat_title: "Ask Touch&Go",
+    assistant_chat_title: "Ask the Touch&Go Agent",
     assistant_chat_close_aria: "Close",
     assistant_chat_mode_question: "Ask a question",
     assistant_chat_mode_translate: "Talk to the shop",
@@ -1344,7 +1344,7 @@ const state = {
   partnerGeneratedDiscountCode: null,
   partnerDiscountGenerateError: null,
   assistantDismissed: {},
-  // Modale "Chiedi a Touch&Go" (assistente conversazionale, netlify/functions/assistant.js)
+  // Modale "Chiedi all'agente Touch&Go" (assistente conversazionale, netlify/functions/assistant.js)
   // — nomi con prefisso assistantChat* per non confondersi con
   // assistantDismissed/AssistantAvatar sopra, che sono i piccoli
   // suggerimenti contestuali per-schermata, una feature diversa.
@@ -1631,7 +1631,7 @@ function Header() {
   return wrap;
 }
 
-// ---------------- Assistente conversazionale "Chiedi a Touch&Go" ----------------
+// ---------------- Assistente conversazionale "Chiedi all'agente Touch&Go" ----------------
 //
 // Overlay sempre raggiungibile dal pulsante in Header() (solo modalità
 // turista) — non una schermata a sé, così l'utente non perde il contesto

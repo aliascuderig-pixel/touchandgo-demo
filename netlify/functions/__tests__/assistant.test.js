@@ -96,10 +96,11 @@ function mockAnthropicFetch(replyText) {
   return () => lastCall;
 }
 
-test("(1) \"spiega_la_suite\": buildSystemPrompt() restituisce esattamente SUITE_MODE_FACTS", () => {
+test("(1) \"spiega_la_suite\": buildSystemPrompt() antepone l'identità condivisa a SUITE_MODE_FACTS", () => {
   const { buildSystemPrompt, SUITE_MODE_FACTS } = freshModule();
-  assert.equal(buildSystemPrompt("spiega_la_suite", "it"), SUITE_MODE_FACTS);
-  assert.equal(buildSystemPrompt("spiega_la_suite", undefined), SUITE_MODE_FACTS, "il prompt non dipende dalla lingua, sempre lo stesso testo fisso");
+  const { AGENT_IDENTITY_PREAMBLE } = require("../../lib/agent-identity");
+  assert.equal(buildSystemPrompt("spiega_la_suite", "it"), `${AGENT_IDENTITY_PREAMBLE}\n\n${SUITE_MODE_FACTS}`);
+  assert.equal(buildSystemPrompt("spiega_la_suite", undefined), `${AGENT_IDENTITY_PREAMBLE}\n\n${SUITE_MODE_FACTS}`, "il prompt non dipende dalla lingua, sempre lo stesso testo fisso");
 });
 
 test("(1) \"spiega_la_suite\": il system prompt copre i temi richiesti e l'istruzione di sicurezza", () => {
@@ -123,13 +124,14 @@ test("(1) \"spiega_la_suite\": il system prompt copre i temi richiesti e l'istru
   }
 });
 
-test("(1) \"spiega_la_suite\" end-to-end: l'handler invia esattamente SUITE_MODE_FACTS come \"system\" ad Anthropic", async () => {
+test("(1) \"spiega_la_suite\" end-to-end: l'handler invia esattamente l'identità condivisa + SUITE_MODE_FACTS come \"system\" ad Anthropic", async () => {
   const mod = freshModule();
+  const { AGENT_IDENTITY_PREAMBLE } = require("../../lib/agent-identity");
   const getLastCall = mockAnthropicFetch();
   const res = await mod.handler(makeEvent({ message: "Come funziona la suite Touch&Go?", mode: "spiega_la_suite", lang: "it" }, "1.1.1.1"));
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.system, mod.SUITE_MODE_FACTS);
+  assert.equal(call.body.system, `${AGENT_IDENTITY_PREAMBLE}\n\n${mod.SUITE_MODE_FACTS}`);
   assert.equal(call.body.messages[0].content, "Come funziona la suite Touch&Go?");
 });
 
@@ -150,7 +152,7 @@ test("(2) un tentativo di prompt injection nel messaggio NON cambia il system pr
   // quindi non può essere influenzato da nessuna istruzione al suo
   // interno.
   assert.equal(call2.body.system, systemWithBenignMessage, "il system prompt non deve mai cambiare in base al messaggio dell'utente");
-  assert.equal(call2.body.system, mod.SUITE_MODE_FACTS, "deve restare esattamente il prompt fisso lato server");
+  assert.equal(call2.body.system, `${require("../../lib/agent-identity").AGENT_IDENTITY_PREAMBLE}\n\n${mod.SUITE_MODE_FACTS}`, "deve restare esattamente il prompt fisso lato server (identità condivisa + fatti della suite)");
 
   // Il tentativo di injection finisce SOLO nel blocco "messages" (dove ci
   // si aspetta un input utente non fidato), MAI nel blocco "system".
@@ -163,11 +165,26 @@ test("(2) un tentativo di prompt injection nel messaggio NON cambia il system pr
   assert.match(call2.body.system, /ignorare le istruzioni precedenti/i);
 });
 
-test("(3) nessuna regressione: \"domanda\" (question_mode) costruisce ancora QUESTION_MODE_FACTS", () => {
+test("(3) nessuna regressione: \"domanda\" (question_mode) antepone l'identità condivisa a QUESTION_MODE_FACTS", () => {
   const { buildSystemPrompt, QUESTION_MODE_FACTS } = freshModule();
-  assert.equal(buildSystemPrompt("domanda", "it"), QUESTION_MODE_FACTS);
-  assert.equal(buildSystemPrompt(undefined, "it"), QUESTION_MODE_FACTS, "mode assente deve restare equivalente a domanda, come prima");
-  assert.equal(buildSystemPrompt("qualunque-altra-cosa", "it"), QUESTION_MODE_FACTS, "un mode sconosciuto deve continuare a ricadere su domanda, non su spiega_la_suite");
+  const { AGENT_IDENTITY_PREAMBLE } = require("../../lib/agent-identity");
+  const expected = `${AGENT_IDENTITY_PREAMBLE}\n\n${QUESTION_MODE_FACTS}`;
+  assert.equal(buildSystemPrompt("domanda", "it"), expected);
+  assert.equal(buildSystemPrompt(undefined, "it"), expected, "mode assente deve restare equivalente a domanda, come prima");
+  assert.equal(buildSystemPrompt("qualunque-altra-cosa", "it"), expected, "un mode sconosciuto deve continuare a ricadere su domanda, non su spiega_la_suite");
+});
+
+test("(nuovo) l'identità condivisa (agent-identity.js) è la stessa usata dall'agente del CRM in touchandgo-internal", () => {
+  const { AGENT_IDENTITY_PREAMBLE } = require("../../lib/agent-identity");
+  assert.match(AGENT_IDENTITY_PREAMBLE, /Agente Touch&Go/);
+  assert.match(AGENT_IDENTITY_PREAMBLE, /stessa identità su ogni canale della suite/);
+});
+
+test("(nuovo) \"traduci_per_negoziante\" NON include l'identità condivisa — è un servizio di traduzione, non una risposta in prima persona dell'agente", () => {
+  const { buildSystemPrompt } = freshModule();
+  const { AGENT_IDENTITY_PREAMBLE } = require("../../lib/agent-identity");
+  const result = buildSystemPrompt("traduci_per_negoziante", "en");
+  assert.ok(!result.includes(AGENT_IDENTITY_PREAMBLE), "la modalità traduzione resta esclusa dall'identità condivisa, per design");
 });
 
 test("(3) nessuna regressione: \"traduci_per_negoziante\" costruisce ancora lo stesso prompt di traduzione", () => {
@@ -190,7 +207,7 @@ test("mode sconosciuto o assente ricade su question_mode anche attraverso l'hand
   const mod = freshModule();
   const getLastCall = mockAnthropicFetch();
   await mod.handler(makeEvent({ message: "Ciao", mode: "qualcosa-di-inventato" }, "4.4.4.4"));
-  assert.equal(getLastCall().body.system, mod.QUESTION_MODE_FACTS);
+  assert.equal(getLastCall().body.system, `${require("../../lib/agent-identity").AGENT_IDENTITY_PREAMBLE}\n\n${mod.QUESTION_MODE_FACTS}`);
 });
 
 // ---------------------------------------------------------------------
@@ -300,10 +317,12 @@ test("CORS_HEADERS esportato corrisponde esattamente a quanto usato dall'handler
 test("(3) nessuna regressione: le tre modalità restano funzionanti end-to-end dopo l'aggiunta del CORS", async () => {
   const mod = freshModule();
 
+  const { AGENT_IDENTITY_PREAMBLE } = require("../../lib/agent-identity");
+
   const getCall1 = mockAnthropicFetch("risposta domanda");
   const res1 = await mod.handler(makeEvent({ message: "Quanto costa?", mode: "domanda" }, "30.0.0.1"));
   assert.equal(res1.statusCode, 200);
-  assert.equal(getCall1().body.system, mod.QUESTION_MODE_FACTS);
+  assert.equal(getCall1().body.system, `${AGENT_IDENTITY_PREAMBLE}\n\n${mod.QUESTION_MODE_FACTS}`);
 
   const getCall2 = mockAnthropicFetch("risposta traduzione");
   const res2 = await mod.handler(makeEvent({ message: "Quanto costa?", mode: "traduci_per_negoziante", lang: "en" }, "30.0.0.2"));
@@ -313,5 +332,5 @@ test("(3) nessuna regressione: le tre modalità restano funzionanti end-to-end d
   const getCall3 = mockAnthropicFetch("risposta suite");
   const res3 = await mod.handler(makeEvent({ message: "Come funziona?", mode: "spiega_la_suite" }, "30.0.0.3"));
   assert.equal(res3.statusCode, 200);
-  assert.equal(getCall3().body.system, mod.SUITE_MODE_FACTS);
+  assert.equal(getCall3().body.system, `${AGENT_IDENTITY_PREAMBLE}\n\n${mod.SUITE_MODE_FACTS}`);
 });
