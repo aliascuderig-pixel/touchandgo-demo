@@ -572,9 +572,18 @@ button{font-family:inherit;cursor:pointer}
 .header{display:flex;justify-content:space-between;align-items:center}
 /* ---------- Header actions / site link / offline ---------- */
 .header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.header-site-link{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);text-decoration:none;border:1px solid var(--ink-border);padding:6px 10px}
-.header-assistant-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--ink);background:var(--gold-soft);border:1px solid var(--gold-soft);padding:6px 10px;cursor:pointer}
-.header-support-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--text);background:none;border:1px solid var(--line);padding:6px 10px;cursor:pointer}
+/* Stesso box-model (altezza, allineamento, raggio) su tutti i bottoni/link
+   dell'header, indipendentemente da quanto testo contengono — prima
+   l'altezza variava impercettibilmente da un elemento all'altro e, quando
+   andavano a capo su schermi stretti, la riga sembrava disallineata
+   (feedback Giuseppe, 5/10). La larghezza resta naturale (il testo di
+   ciascuno ha lunghezza diversa per natura), ma altezza/padding/radius
+   sono ora identici: è quello che rende una riga di bottoni "ordinata"
+   anche quando non sono tutti uguali in larghezza. */
+.header-actions>a,.header-actions>button:not(.lang-btn){box-sizing:border-box;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;white-space:nowrap}
+.header-site-link{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);text-decoration:none;border:1px solid var(--ink-border);padding:0 10px}
+.header-assistant-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--ink);background:var(--gold-soft);border:1px solid var(--gold-soft);padding:0 10px;cursor:pointer}
+.header-support-btn{font-family:var(--body);font-size:10px;font-weight:600;color:var(--text);background:none;border:1px solid var(--line);padding:0 10px;cursor:pointer}
 .offline-banner{background:var(--offline-bg);color:var(--gold-soft);font-size:11px;padding:10px 20px;line-height:1.6}
 /* Spazio ospite (continuità operativa) — vedi state.guestMode in app.js.
    Verde "rassicurante" (stessa coppia --good/--good-bg già usata per
@@ -594,7 +603,7 @@ button{font-family:inherit;cursor:pointer}
 .loc-dismiss{background:none;border:none;color:var(--warn);font-size:12px;padding:4px;flex-shrink:0}
 
 .lock-line{font-family:var(--body);font-size:10px;color:var(--muted-on-ink);display:flex;align-items:center;gap:4px}
-.header-reset{background:none;border:1px solid var(--ink-border);color:var(--muted-on-ink);font-size:10px;padding:6px 10px;letter-spacing:.03em}
+.header-reset{background:none;border:1px solid var(--ink-border);color:var(--muted-on-ink);font-size:10px;padding:0 10px;letter-spacing:.03em}
 
 /* ---------- Assistant tip ---------- */
 .assistant-tip {
