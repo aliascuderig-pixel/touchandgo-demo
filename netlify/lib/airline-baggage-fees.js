@@ -150,8 +150,8 @@ const AIRLINE_BAGGAGE_FEES = [
     amountMin: null,
     amountMax: null,
     currency: "EUR",
-    sourceUrl: "https://www.lufthansa.com/it/it/bagaglio",
-    verifiedAt: "2026-09-30",
+    sourceUrl: "https://www.lufthansa.com/it/it/uebergepaeck",
+    verifiedAt: "2026-10-05",
     note: "Sistema a livelli tariffari complesso: dalla nuova tariffa \"Economy Basic\" (da aprile 2026) il bagaglio a mano non è più incluso. ITA Airways è esplicitamente esclusa da questa modifica. Nessun importo secco affidabile: verifica la tua tariffa specifica sul sito Lufthansa.",
   },
   {
@@ -164,7 +164,7 @@ const AIRLINE_BAGGAGE_FEES = [
     currency: "USD",
     sourceUrl: "https://www.qatarairways.com/it-it/baggage.html",
     verifiedAt: "2026-09-30",
-    note: "Bagaglio extra fino a 23kg — il prezzo varia in base alla rotta.",
+    note: "Bagaglio extra fino a 23kg — il prezzo varia in base alla rotta (soprattutto Africa/Americhe, dove Qatar applica un prezzo fisso a pezzo). ATTENZIONE: per la maggior parte delle rotte, incluse quelle da/per l'Europa, Qatar applica invece un sistema \"a peso\" (circa USD 30/kg online, USD 40/kg in aeroporto, a scatti di 5kg) — da verificare se per il caso d'uso Touch&Go (turisti in Europa) non sia questo il feeType corretto da modellare, non quello a pezzo qui riportato.",
   },
   {
     airline: "Turkish Airlines",
@@ -174,9 +174,9 @@ const AIRLINE_BAGGAGE_FEES = [
     amountMin: 100,
     amountMax: 120,
     currency: "USD",
-    sourceUrl: "https://www.turkishairlines.com/it-it/bagaglio/",
-    verifiedAt: "2026-09-30",
-    note: "Il prezzo varia a seconda che il volo sia diretto o in coincidenza.",
+    sourceUrl: "https://www.turkishairlines.com/en-int/any-questions/excess-baggage/terms-and-conditions/",
+    verifiedAt: "2026-10-05",
+    note: "Il prezzo varia a seconda che il volo sia diretto o in coincidenza (upgrade bagaglio da 23kg a 32kg: USD 100 voli diretti, USD 120 voli con tratte aggiuntive).",
   },
 ];
 
