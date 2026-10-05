@@ -19,6 +19,15 @@
 // handler) restituisce l'handler invariato a runtime (il cron è letto
 // staticamente in fase di build) — chiamare l'URL manualmente esegue
 // comunque l'handler reale.
+//
+// (5/10/2026) Aggiunto un sesto passo, indipendente dalla catena
+// classificazione→acquisto→gruppo sopra: una consultazione REALE (non
+// solo "risponde 200") dell'endpoint airline-baggage-fees — promemoria
+// aperto dall'1/10 (vedi MANUALE.md, "Confronto costo bagaglio extra
+// compagnia aerea"). Nessuna chiamata AI, stesso principio di
+// daily-healthcheck.js ma più approfondito (verifica il contenuto della
+// risposta: fees non vuoto, verifiedAt in forma valida) — vedi
+// checkAirlineBaggageFees() più sotto.
 const { schedule } = require("@netlify/functions");
 const { getStore } = require("@netlify/blobs");
 const { isGuestMode, guestScopedStoreName } = require("../lib/guest-mode");
@@ -57,6 +66,7 @@ function guestUrl(path) {
 
 const CLASSIFY_TIMEOUT_MS = 15000; // vera chiamata AI, più lenta di un semplice health-check
 const CALL_TIMEOUT_MS = 6000; // save-purchase/save-shipment-group
+const BAGGAGE_FEES_TIMEOUT_MS = 6000; // airline-baggage-fees, nessuna chiamata AI, stesso ordine di grandezza
 const TOTAL_BUDGET_MS = 30000;
 const REPORT_STORE_NAME = "weekly-e2e-reports";
 const KEEP_REPORTS = 12; // ~3 mesi a cadenza settimanale
@@ -193,6 +203,17 @@ async function timedFetch(url, options, timeoutMs) {
   }
 }
 
+// Stesso pattern di daily-healthcheck.js (non condiviso tra i due file per
+// lo stesso principio di duplicazione deliberata già in uso in questo
+// repository — vedi commento in testa a questo file sulle formule prezzo).
+function timeoutOrUnreachable(err, start) {
+  return {
+    status: "problem",
+    responseTimeMs: Date.now() - start,
+    error: err.name === "AbortError" ? "timeout" : err.message || "unreachable",
+  };
+}
+
 // Passi 1/2: classificazione AI reale (testo, non foto) sullo spazio
 // ospite — stesso prompt/schema esatti di classifyText() in app.js.
 async function classifyOnGuest(label) {
@@ -251,6 +272,43 @@ async function saveShipmentGroupOnGuest(group) {
 
 function randomSuffix() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+// ---------------------------------------------------------------------
+// Passo indipendente, aggiunto il 5/10/2026: consultazione REALE (non solo
+// "il sito risponde") dell'endpoint airline-baggage-fees sullo spazio
+// ospite — promemoria aperto dall'1/10 (vedi MANUALE.md, "Confronto costo
+// bagaglio extra compagnia aerea"). A differenza dei passi 1-5 sopra,
+// questo non dipende dalla catena classificazione→acquisto→gruppo e non fa
+// alcuna chiamata AI (stesso principio/costo di daily-healthcheck.js, solo
+// più approfondito: verifica il CONTENUTO della risposta, non solo che
+// l'endpoint risponda 200) — eseguito comunque una volta a settimana e non
+// ogni giorno per restare nello spirito "approfondito ma non quotidiano"
+// di questo file, non per un vincolo di costo che qui non c'è.
+// ---------------------------------------------------------------------
+async function checkAirlineBaggageFees() {
+  const start = Date.now();
+  try {
+    const { res, responseTimeMs } = await timedFetch(guestUrl(".netlify/functions/airline-baggage-fees"), {}, BAGGAGE_FEES_TIMEOUT_MS);
+    if (res.status !== 200) {
+      return { status: "problem", responseTimeMs, error: "http_" + res.status };
+    }
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      return { status: "problem", responseTimeMs, error: "invalid_json" };
+    }
+    if (!data || !Array.isArray(data.fees) || data.fees.length === 0) {
+      return { status: "problem", responseTimeMs, error: "fees_assente_o_vuoto" };
+    }
+    if (typeof data.verifiedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data.verifiedAt)) {
+      return { status: "problem", responseTimeMs, error: "verifiedAt_mancante_o_malformato" };
+    }
+    return { status: "ok", responseTimeMs, feeCount: data.fees.length, verifiedAt: data.verifiedAt };
+  } catch (err) {
+    return timeoutOrUnreachable(err, start);
+  }
 }
 
 async function cleanupOldReports(store) {
@@ -331,6 +389,13 @@ async function runWeeklyE2ETest() {
     }
     return report;
   }
+
+  // ---- Passo indipendente: consultazione reale di airline-baggage-fees ----
+  // Eseguito per primo, isolato dalla catena classificazione→acquisto→gruppo
+  // sotto: un suo eventuale fallimento non deve mai saltare né essere
+  // saltato dai passi della simulazione d'acquisto, e viceversa.
+  steps.airlineBaggageFees = await checkAirlineBaggageFees();
+  if (steps.airlineBaggageFees.status !== "ok") overallStatus = "problem";
 
   // ---- Passi 1+2: classificazione AI reale sui due oggetti di test ----
   let classification1 = null;
@@ -549,5 +614,6 @@ exports.runWeeklyE2ETest = runWeeklyE2ETest;
 exports.computeIndividualPrice = computeIndividualPrice;
 exports.computeConsolidatedPrice = computeConsolidatedPrice;
 exports.checkConsolidatedNotGreaterThanSum = checkConsolidatedNotGreaterThanSum;
+exports.checkAirlineBaggageFees = checkAirlineBaggageFees;
 exports.GUEST_BASE_URL = GUEST_BASE_URL;
 exports.KNOWN_PRODUCTION_URL = KNOWN_PRODUCTION_URL;
