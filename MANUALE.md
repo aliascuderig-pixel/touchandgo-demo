@@ -1107,6 +1107,34 @@ Un fallimento in un passo iniziale (es. una classificazione fallita) interrompe 
 
 Suite completa del repository verde (**448/448**, `npm test`), dopo l'aggiunta del 5/10.
 
+## Analytics di engagement — Fase 2 EaaS, lato app turista (5/10/2026)
+
+**Perché esiste**: decisione presa con Giuseppe il 5/10 (vedi lo stesso titolo in `touchandgo-internal/MANUALE.md` per il contesto completo e le scelte di scope) — validare l'adozione reale della suite EaaS **misurando l'uso effettivo**, non solo raccogliendo feedback qualitativo, su tutti i dispositivi/ruoli della suite (turisti, partner, staff), non solo lo staff. Questo repository (l'app turista pubblica, `dist/assets/app.js`) è una delle quattro fonti strumentate — le altre sono `touchandgo-internal` (le 4 funzionalità EaaS lato staff, già mergiata in PR #39), `touchandgo-gestionale` (area partner) ed `touchandgo-eshop`.
+
+**Stesso principio di duplicazione deliberata già in uso ovunque in questa suite**: nessun modulo condiviso tra repository — `netlify/lib/usage-analytics.js` qui è una copia indipendente (identica nella logica, diversa solo nel commento di intestazione) di quella di `touchandgo-internal`, **solo scrittura** (nessun `listRollups()` esportato: la lettura/aggregazione avviene unicamente nel CRM di `touchandgo-internal`, tab "Engagement").
+
+**Principio di privacy non negoziabile**: lo store condiviso `usage-analytics` (stesse credenziali `NETLIFY_BLOBS_SITE_ID`/`TOKEN` già condivise da tutta la suite) contiene SOLO conteggi aggregati per giorno+fonte+ruolo+evento (es. `"2026-10-05__demo__turista__app_opened"`) — mai un log per singolo evento con dettagli, mai un payload utente (nessun nome/email/indirizzo). Guest-scoped con lo stesso meccanismo (`guestScopedStoreName`, suffisso `-guest`) già in uso per tutti gli altri store condivisi di questo repository.
+
+### `netlify/functions/track-event.js` — endpoint pubblico
+
+POST, con allowlist esplicita (`DEMO_ALLOWED_EVENTS`): `app_opened`, `classification_completed`, `purchase_saved`, `agent_chat_opened`. Un evento fuori allowlist è rifiutato con 400 (mai registrato silenziosamente — stesso principio di `usage-analytics.js`). Rate limiting allo stesso store condiviso `rate-limits` già usato dalle altre funzioni pubbliche di questo repository, ma più permissivo (60 richieste/ora invece di 20): più eventi per sessione sono normali e previsti, a differenza di una lookup come `airline-baggage-fees`. `role`: sempre e solo `"turista"` qui — questa è l'app pubblica; un valore diverso/assente viene riportato a `"turista"` invece di essere rifiutato (mai bloccare un evento reale per un dettaglio di forma).
+
+### I quattro eventi lato client (`dist/assets/app.js`, `trackEvent()`)
+
+`trackEvent(name)` è fire-and-forget per principio, stesso schema già in uso per `checkGuestMode()`: non blocca mai il rendering, nessun `await` nel chiamante, qualunque errore (offline, funzione irraggiungibile) viene silenziosamente ignorato — un evento perso è solo un conteggio leggermente impreciso, mai un problema visibile al turista.
+
+1. **`app_opened`** — all'avvio dell'app, subito prima del primo `render()` (stesso punto di `checkGuestMode()`).
+2. **`classification_completed`** — in `runClassification()`, SOLO nel percorso di successo (dopo `state.screen = "result"`), mai nel percorso errore/offline.
+3. **`purchase_saved`** — SOLO al primo salvataggio di un nuovo acquisto (handler del bottone "Conferma e genera QR →" in `ChooseAddressScreen`), **non** alle risincronizzazioni successive di `syncPurchaseToCRM()` sparse nel resto del file (conferma di consegna, programmazione del ritiro, riconciliazione prezzo, finalizzazione gruppo spedito): quelle sono aggiornamenti di stato dello STESSO acquisto già contato, non un nuovo acquisto. Il percorso "genera spedizione per conto di un cliente" nell'area partner di questo stesso repository non è strumentato in questa v1 (resta fuori scope, come l'analogo caso in `touchandgo-gestionale`).
+4. **`agent_chat_opened`** — al click sul bottone header "Chiedi all'agente Touch&Go".
+
+### Verifica
+
+- `netlify/functions/__tests__/track-event.test.js` (9 test): rifiuto metodo diverso da POST, JSON malformato, evento fuori allowlist, ruolo sconosciuto riportato a "turista" invece che rifiutato, incremento corretto del rollup per chiamate ripetute nello stesso giorno, tutti gli eventi dell'allowlist accettati, rate limiting (soglia superata e IP indipendenti).
+- `dist/assets/__tests__/engagement-tracking.test.js` (5 test, stessa tecnica vm.runInContext già in uso per `app.js`): `app_opened` inviato esattamente una volta all'avvio, `classification_completed` inviato solo nel percorso di successo (mai in quello di errore), `agent_chat_opened` al click del bottone header, e un flusso d'acquisto end-to-end completo (home → descrivi → classifica mockata → destinazione → conferma indirizzo → identificazione → conferma finale) che dimostra `purchase_saved` inviato esattamente una volta.
+
+Suite completa del repository verde (**462/462**, `npm test`), dopo l'aggiunta del 5/10.
+
 ## Paese e città reali della spedizione (settembre 2026)
 
 **Perché esiste**: fino a questa modifica, ogni spedizione registrava la destinazione solo come uno dei 9 valori chiusi di `DESTINATIONS` (Italia, Unione Europea, Regno Unito, Svizzera, Stati Uniti, Emirati Arabi Uniti, Cina, Giappone, Altro/non specificata) — mai un paese o una città reali e specifici. Il CRM (`touchandgo-internal`, PR #17, "Mappa e classifica destinazioni") doveva ricostruire un'approssimazione a posteriori facendo il parsing del solo `addressLabel` testuale (`parseDestination()`). Giuseppe ha chiesto di correggere questo alla fonte: raccogliere un paese e una città reali già al momento in cui il turista inserisce l'indirizzo, come campi strutturati propri, non più derivati da una stringa.

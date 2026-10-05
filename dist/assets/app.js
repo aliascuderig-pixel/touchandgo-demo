@@ -1604,6 +1604,7 @@ function Header() {
   if (assistantBtn) {
     assistantBtn.addEventListener("click", () => {
       state.assistantChatOpen = true;
+      trackEvent("agent_chat_opened");
       render();
     });
   }
@@ -6726,6 +6727,7 @@ function ChooseAddressScreen() {
       savePending();
       saveHistory();
       syncPurchaseToCRM(item);
+      trackEvent("purchase_saved");
       state.lastQueuedItem = item;
       recordTrailEntry("action", state.resultIsProvisional ? "QR generato con classificazione provvisoria" : "QR generato per un oggetto");
       state.resultIsProvisional = false;
@@ -7252,6 +7254,7 @@ async function runClassification(promise) {
     state.partnerDiscountAmount = 0;
     state.partnerDiscountError = null;
     state.screen = "result";
+    trackEvent("classification_completed");
     // Stima dazi doganali — vedi refreshDutyEstimate(): DELIBERATAMENTE
     // non awaited. Il flusso critico (classificazione, prezzo, QR) deve
     // arrivare alla schermata Result esattamente come sopra, a
@@ -7694,6 +7697,25 @@ if (state.checkoutSessionId) verifyCheckoutSession();
 // booleano; se la chiamata fallisce (offline, funzione irraggiungibile)
 // il banner resta semplicemente nascosto — mai un falso positivo che
 // mostri "spazio ospite" su un deploy che non lo è davvero.
+// Analytics di engagement — Fase 2 EaaS (vedi MANUALE.md, "Analytics di
+// engagement" e netlify/functions/track-event.js). Fire-and-forget per
+// principio, come checkGuestMode() sopra: non deve MAI bloccare o
+// rallentare il percorso d'acquisto né mostrare un errore al turista — un
+// evento perso (offline, funzione irraggiungibile) è semplicemente un
+// conteggio leggermente impreciso, mai un problema per chi sta usando
+// l'app in quel momento. role sempre "turista" qui: questa è l'app
+// pubblica, il percorso "genera per conto di un cliente" nell'area
+// partner non è strumentato in questa v1.
+function trackEvent(name) {
+  try {
+    fetch("/.netlify/functions/track-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: name, role: "turista" }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+
 async function checkGuestMode() {
   try {
     const res = await fetch("/.netlify/functions/guest-status");
@@ -7720,6 +7742,7 @@ if (manualPickupAtStartup) {
   state.pickupPoint = manualPickupAtStartup;
   state.pickupSource = null;
 }
+trackEvent("app_opened");
 render();
 if (!manualPickupAtStartup) loadLocation();
 syncPurchaseUpdatesFromCRM();
