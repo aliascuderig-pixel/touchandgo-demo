@@ -83,6 +83,9 @@ function classifyResponse(obj) {
 function okJsonResponse(body) {
   return { status: 200, json: async () => body || { ok: true } };
 }
+function baggageFeesOkResponse() {
+  return okJsonResponse({ fees: [{ airline: "Ryanair", feeType: "per_kg_overweight", amountMin: 13, amountMax: 13, currency: "EUR" }], verifiedAt: "2026-10-05" });
+}
 
 const CLASSIFICATION_1 = {
   object_it: "Statuetta in legno intagliato",
@@ -135,6 +138,7 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
   // la function reale sul lato ospite.
   global.fetch = async (url, options) => {
     callLog.push({ url });
+    if (url.includes(".netlify/functions/airline-baggage-fees")) return baggageFeesOkResponse();
     const body = options && options.body ? JSON.parse(options.body) : {};
     if (url.includes(".netlify/functions/classify")) {
       // "sciarpa" è univoco per LABEL_2: "legno" invece compare SEMPRE
@@ -158,6 +162,9 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
   const report = await mod.runWeeklyE2ETest();
 
   assert.equal(report.overallStatus, "ok");
+  assert.equal(report.steps.airlineBaggageFees.status, "ok");
+  assert.equal(report.steps.airlineBaggageFees.feeCount, 1);
+  assert.equal(report.steps.airlineBaggageFees.verifiedAt, "2026-10-05");
   assert.equal(report.steps.classifyItem1.status, "ok");
   assert.equal(report.steps.classifyItem2.status, "ok");
   assert.equal(report.steps.savePurchase1.status, "ok");
@@ -177,7 +184,7 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
   assert.equal(report.withinTimeBudget, true);
 
   // Vincolo critico: OGNI URL chiamato deve puntare allo spazio ospite.
-  assert.ok(callLog.length >= 5, "ci si aspettano almeno 5 chiamate (2 classify, 2 save-purchase, 1 save-shipment-group)");
+  assert.ok(callLog.length >= 6, "ci si aspettano almeno 6 chiamate (1 airline-baggage-fees, 2 classify, 2 save-purchase, 1 save-shipment-group)");
   for (const { url } of callLog) {
     assert.ok(url.startsWith(mod.GUEST_BASE_URL), `URL fuori dallo spazio ospite: ${url}`);
     assert.ok(!url.startsWith(mod.KNOWN_PRODUCTION_URL), `URL punta a produzione: ${url}`);
@@ -202,6 +209,7 @@ test("spazio ospite (GUEST_MODE=true): si ferma subito, zero chiamate di rete", 
 
 test("un fallimento nella prima classificazione interrompe i passi dipendenti, ma il report viene comunque salvato (parziale)", async () => {
   global.fetch = async (url, options) => {
+    if (url.includes(".netlify/functions/airline-baggage-fees")) return baggageFeesOkResponse();
     if (url.includes(".netlify/functions/classify")) {
       const body = JSON.parse(options.body);
       // "sciarpa" è univoco per LABEL_2 (vedi commento nel test "tutto
@@ -219,6 +227,7 @@ test("un fallimento nella prima classificazione interrompe i passi dipendenti, m
   const report = await mod.runWeeklyE2ETest();
 
   assert.equal(report.overallStatus, "problem");
+  assert.equal(report.steps.airlineBaggageFees.status, "ok", "indipendente dalla catena classificazione: non deve essere saltato né influenzato");
   assert.equal(report.steps.classifyItem1.status, "problem");
   assert.match(report.steps.classifyItem1.error, /rete giù/);
   assert.equal(report.steps.classifyItem2.status, "ok");
@@ -234,6 +243,7 @@ test("verifica di lettura fallisce se l'acquisto non risulta davvero nello store
   // finto — simula un bug ipotetico in cui la function ospite conferma il
   // salvataggio senza che il dato sia davvero recuperabile.
   global.fetch = async (url, options) => {
+    if (url.includes(".netlify/functions/airline-baggage-fees")) return baggageFeesOkResponse();
     const body = JSON.parse(options.body);
     if (url.includes(".netlify/functions/classify")) {
       return classifyResponse(body.messages[0].content.includes("sciarpa") ? CLASSIFICATION_2 : CLASSIFICATION_1);
@@ -291,4 +301,66 @@ test("GUEST_BASE_URL punta davvero allo spazio ospite e mai al dominio di produz
   const mod = freshModule();
   assert.ok(mod.GUEST_BASE_URL.includes("touchandgo-guest.netlify.app"));
   assert.notEqual(mod.GUEST_BASE_URL, mod.KNOWN_PRODUCTION_URL);
+});
+
+// ---- checkAirlineBaggageFees(): consultazione reale dell'endpoint bagaglio aereo, aggiunta il 5/10/2026 ----
+
+test("checkAirlineBaggageFees: risposta valida -> ok, con feeCount e verifiedAt", async () => {
+  global.fetch = async (url) => {
+    assert.ok(url.includes(".netlify/functions/airline-baggage-fees"));
+    assert.ok(url.startsWith("https://touchandgo-guest.netlify.app/"), "deve puntare allo spazio ospite, mai a produzione");
+    return baggageFeesOkResponse();
+  };
+  const mod = freshModule();
+  const result = await mod.checkAirlineBaggageFees();
+  assert.equal(result.status, "ok");
+  assert.equal(result.feeCount, 1);
+  assert.equal(result.verifiedAt, "2026-10-05");
+});
+
+test("checkAirlineBaggageFees: HTTP diverso da 200 -> problem", async () => {
+  global.fetch = async () => ({ status: 500, json: async () => ({ error: "boom" }) });
+  const mod = freshModule();
+  const result = await mod.checkAirlineBaggageFees();
+  assert.equal(result.status, "problem");
+  assert.equal(result.error, "http_500");
+});
+
+test("checkAirlineBaggageFees: corpo non-JSON -> problem", async () => {
+  global.fetch = async () => ({
+    status: 200,
+    json: async () => {
+      throw new Error("not json");
+    },
+  });
+  const mod = freshModule();
+  const result = await mod.checkAirlineBaggageFees();
+  assert.equal(result.status, "problem");
+  assert.equal(result.error, "invalid_json");
+});
+
+test("checkAirlineBaggageFees: fees assente o vuoto -> problem, mai ignorato", async () => {
+  global.fetch = async () => okJsonResponse({ fees: [], verifiedAt: "2026-10-05" });
+  const mod = freshModule();
+  const result = await mod.checkAirlineBaggageFees();
+  assert.equal(result.status, "problem");
+  assert.equal(result.error, "fees_assente_o_vuoto");
+});
+
+test("checkAirlineBaggageFees: verifiedAt mancante o malformato -> problem", async () => {
+  global.fetch = async () => okJsonResponse({ fees: [{ airline: "Ryanair" }], verifiedAt: "non-una-data" });
+  const mod = freshModule();
+  const result = await mod.checkAirlineBaggageFees();
+  assert.equal(result.status, "problem");
+  assert.equal(result.error, "verifiedAt_mancante_o_malformato");
+});
+
+test("checkAirlineBaggageFees: rete irraggiungibile -> problem con errore descrittivo, mai un'eccezione", async () => {
+  global.fetch = async () => {
+    throw new Error("connessione rifiutata");
+  };
+  const mod = freshModule();
+  const result = await mod.checkAirlineBaggageFees();
+  assert.equal(result.status, "problem");
+  assert.match(result.error, /connessione rifiutata/);
 });
