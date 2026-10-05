@@ -106,12 +106,23 @@ test("Lufthansa Group: feeType variable_by_fare, nessun importo numerico, nota p
   assert.ok(lufthansa.note && lufthansa.note.length > 0);
 });
 
-test("compagnie senza fonte ufficiale pulita (Wizz Air, Vueling, Volotea, Transavia) non compaiono nel dataset", async () => {
+test("compagnie aggiunte il 5/10 (Wizz Air, Vueling, Volotea, Transavia, American Airlines) compaiono nel dataset con importo valido", async () => {
+  const handler = freshHandler();
+  const res = await handler(makeEvent());
+  const body = JSON.parse(res.body);
+  for (const airline of ["Wizz Air", "Vueling", "Volotea", "Transavia", "American Airlines"]) {
+    const entry = body.fees.find((f) => f.airline === airline);
+    assert.ok(entry, `${airline} deve comparire nel dataset`);
+    assert.ok(typeof entry.amountMin === "number" && entry.amountMin > 0, `${airline}: amountMin deve essere un numero positivo`);
+  }
+});
+
+test("compagnie ancora senza fonte ufficiale pulita (British Airways, Air France, Emirates) non compaiono nel dataset", async () => {
   const handler = freshHandler();
   const res = await handler(makeEvent());
   const body = JSON.parse(res.body);
   const names = body.fees.map((f) => f.airline);
-  for (const excluded of ["Wizz Air", "Vueling", "Volotea", "Transavia"]) {
+  for (const excluded of ["British Airways", "Air France", "Emirates"]) {
     assert.ok(!names.includes(excluded), `${excluded} non deve comparire nel dataset`);
   }
 });

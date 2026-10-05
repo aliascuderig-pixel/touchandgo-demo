@@ -178,14 +178,79 @@ const AIRLINE_BAGGAGE_FEES = [
     verifiedAt: "2026-10-05",
     note: "Il prezzo varia a seconda che il volo sia diretto o in coincidenza (upgrade bagaglio da 23kg a 32kg: USD 100 voli diretti, USD 120 voli con tratte aggiuntive).",
   },
+  // ---- 5 compagnie aggiunte il 5/10/2026, su richiesta esplicita di
+  // Giuseppe ("AGGIUNGI") dopo la verifica settimanale di quel giorno ----
+  {
+    airline: "Wizz Air",
+    feeType: "per_kg_overweight",
+    routeClass: null,
+    travelClass: null,
+    amountMin: 13,
+    amountMax: 13,
+    currency: "EUR",
+    sourceUrl: "https://www.cabinzero.com/blogs/air-travel-tips/wizz-air-baggage-allowance",
+    verifiedAt: "2026-10-05",
+    note: "Sovrappeso pagabile in aeroporto. Pagina ufficiale Wizz Air non raggiungibile da questa sessione (404 su più URL tentati) — dato confermato da una fonte secondaria indipendente, non dal sito della compagnia: da riverificare quando possibile contro la fonte ufficiale.",
+  },
+  {
+    airline: "Vueling",
+    feeType: "per_kg_overweight",
+    routeClass: null,
+    travelClass: null,
+    amountMin: 12,
+    amountMax: 12,
+    currency: "EUR",
+    sourceUrl: "https://www.infobae.com/espana/viajes/2025/10/15/este-es-el-precio-del-equipaje-facturado-en-vueling-en-2025-condiciones-pesos-permitidos-y-tipos-de-vuelo/",
+    verifiedAt: "2026-10-05",
+    note: "€12/kg al check-in, oltre i 25kg fino a un massimo di 32kg. Se il sovrappeso viene gestito al gate la tariffa sale a 110-140€ a pezzo. Pagina ufficiale Vueling non raggiungibile da questa sessione (404) — dato da fonte secondaria indipendente, da riverificare contro la fonte ufficiale quando possibile.",
+  },
+  {
+    airline: "Volotea",
+    feeType: "per_kg_overweight",
+    routeClass: null,
+    travelClass: null,
+    amountMin: 12,
+    amountMax: 12,
+    currency: "EUR",
+    sourceUrl: "https://www.volotea.com/it/bagaglio",
+    verifiedAt: "2026-10-05",
+    note: "Sovrappeso oltre il massimo consentito per valigia, fino a un massimo di 32kg. Bagaglio extra (non sovrappeso) ha invece 3 fasce di prezzo secondo il canale di acquisto (online/check-in/gate, da 9€ a oltre 65€) — qui modellato solo il sovrappeso, per coerenza con la struttura delle altre voci del dataset.",
+  },
+  {
+    airline: "Transavia",
+    feeType: "per_kg_overweight",
+    routeClass: null,
+    travelClass: null,
+    amountMin: 15,
+    amountMax: 15,
+    currency: "EUR",
+    sourceUrl: "https://www.transavia.com/aide/fr-fr/bagages/bagages-en-soute/tarifs-bagages-soute",
+    verifiedAt: "2026-10-05",
+    note: "Tariffa di sovrappeso in aeroporto (fonte ufficiale confermata). Acquistare bagaglio extra online in anticipo costa sensibilmente meno (es. 20kg: 36,99€ online contro 80€ in aeroporto) — qui modellato solo il sovrappeso last-minute, per coerenza con la struttura delle altre voci.",
+  },
+  {
+    airline: "American Airlines",
+    feeType: "per_extra_piece",
+    routeClass: null,
+    travelClass: null,
+    amountMin: 60,
+    amountMax: 100,
+    currency: "USD",
+    sourceUrl: "https://www.aa.com/i18n/travel-info/baggage/checked-baggage-policy.jsp",
+    verifiedAt: "2026-10-05",
+    note: "Prezzo del 2° bagaglio, variabile per rotta (55 USD online sui voli domestici, fino a 100 USD su rotte transatlantiche/transpacifiche). Il 3° bagaglio ha una tariffa fissa separata di 200 USD, non inclusa in questo range. Il sovrappeso (23-32kg) ha una tariffa separata a fasce (100 USD fino a 32kg, 200-450 USD oltre) — non modellata qui, per restare coerenti con la struttura a singola voce del dataset.",
+  },
 ];
 
-// Deliberatamente ESCLUSE (settembre 2026): nessuna fonte ufficiale pulita
-// verificata per queste compagnie al momento della stesura — meglio
-// un'assenza dichiarata che un dato inventato o preso da un aggregatore
-// terzo non ufficiale. Da aggiungere in un aggiornamento futuro, quando
-// disponibile una fonte ufficiale diretta.
-// Wizz Air, Vueling, Volotea, Transavia.
+// Deliberatamente ESCLUSE ancora (5 ottobre 2026): nessuna fonte ufficiale
+// pulita verificata per queste compagnie — meglio un'assenza dichiarata
+// che un dato inventato o preso da un aggregatore terzo non ufficiale.
+// Da aggiungere in un aggiornamento futuro, quando disponibile una fonte
+// ufficiale diretta: British Airways (bagaglio extra senza prezzo fisso
+// pubblicato, solo calcolatore dinamico), Air France (importi EUR non
+// pubblicati come tabella fissa, solo al momento dell'acquisto), Emirates
+// (sconto online dichiarato in modo ambiguo tra due pagine del sito, non
+// chiarito a cosa si applichi esattamente).
 
 // Elenco (deduplicato, ordine alfabetico) dei nomi compagnia presenti nel
 // dataset — usato per popolare il selettore in UI, mai hardcoded altrove.
