@@ -1572,15 +1572,16 @@ function Header() {
   const wrap = el("div");
   const header = el("div", "header");
   // Prima schermata (cover, "tap per continuare"): header ridotto al minimo
-  // utile — selettore lingua, l'agente (unico CTA che ha senso prima ancora
-  // che il turista abbia fatto qualunque cosa) e Reset. "Contatta
-  // assistenza" e il link al sito marketing sono utili più avanti nel
-  // percorso (quando c'è già uno stato/spedizione da chiedere aiuto su),
-  // non sulla primissima schermata — compaiono da qui in poi (vedi
-  // isLandingScreen sotto). Tutti i bottoni condividono le stesse classi
-  // di dimensione in style.css (.header-actions button/a), così restano
-  // di pari altezza indipendentemente da quanti ne sono visibili o da
-  // quanto è lungo il testo di ciascuno.
+  // utile — solo selettore lingua e Reset. "Chiedi all'agente Touch&Go",
+  // "Contatta assistenza" e il link al sito marketing sono tutti utili più
+  // avanti nel percorso (quando il turista ha già fatto qualcosa su cui
+  // chiedere aiuto), non sulla primissima schermata — compaiono da qui in
+  // poi (vedi isLandingScreen sotto; richiesta esplicita di Giuseppe,
+  // 5/10: anche l'agente va spostato, non solo gli altri due). Tutti i
+  // bottoni condividono le stesse classi di dimensione in style.css
+  // (.header-actions button/a), così restano di pari altezza
+  // indipendentemente da quanti ne sono visibili o da quanto è lungo il
+  // testo di ciascuno.
   const isLandingScreen = state.screen === "cover";
   header.innerHTML = `
     <div class="brand"><span class="brand-name">Touch<b>&amp;</b>Go</span></div>
@@ -1589,7 +1590,7 @@ function Header() {
         <button class="lang-btn ${state.lang === "it" ? "on" : ""}" data-lang="it" aria-label="Italiano">IT</button>
         <button class="lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>
       </div>
-      ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
+      ${state.mode === "turista" && !isLandingScreen ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
       ${state.mode === "turista" && !isLandingScreen ? `<button class="header-support-btn" id="header-support-btn" type="button">${t("header_support_btn")}</button>` : ""}
       ${!isLandingScreen ? `<a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">${t("header_site_link")}</a>` : ""}
       <button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
