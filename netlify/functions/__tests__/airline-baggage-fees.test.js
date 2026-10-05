@@ -117,6 +117,26 @@ test("compagnie aggiunte il 5/10 (Wizz Air, Vueling, Volotea, Transavia, America
   }
 });
 
+test("Qatar Airways: entrambe le tariffe sono presenti (a pezzo e a kg), non una sostituita dall'altra", async () => {
+  const handler = freshHandler();
+  const res = await handler(makeEvent());
+  const body = JSON.parse(res.body);
+  const qatarEntries = body.fees.filter((f) => f.airline === "Qatar Airways");
+  assert.equal(qatarEntries.length, 2, "Qatar Airways deve avere esattamente 2 voci");
+
+  const perPiece = qatarEntries.find((f) => f.feeType === "per_extra_piece");
+  assert.ok(perPiece, "deve esistere la voce a pezzo");
+  assert.equal(perPiece.amountMin, 130);
+  assert.equal(perPiece.amountMax, 255);
+  assert.equal(perPiece.currency, "USD");
+
+  const perKg = qatarEntries.find((f) => f.feeType === "per_kg_overweight");
+  assert.ok(perKg, "deve esistere la voce a kg");
+  assert.equal(perKg.amountMin, 30);
+  assert.equal(perKg.amountMax, 40);
+  assert.equal(perKg.currency, "USD");
+});
+
 test("compagnie ancora senza fonte ufficiale pulita (British Airways, Air France, Emirates) non compaiono nel dataset", async () => {
   const handler = freshHandler();
   const res = await handler(makeEvent());
