@@ -154,6 +154,15 @@ const AIRLINE_BAGGAGE_FEES = [
     verifiedAt: "2026-10-05",
     note: "Sistema a livelli tariffari complesso: dalla nuova tariffa \"Economy Basic\" (da aprile 2026) il bagaglio a mano non è più incluso. ITA Airways è esplicitamente esclusa da questa modifica. Nessun importo secco affidabile: verifica la tua tariffa specifica sul sito Lufthansa.",
   },
+  // Qatar Airways ha due sistemi tariffari distinti e paralleli (non uno
+  // sbagliato da sostituire con l'altro — Giuseppe, 5/10: "devi inserirle
+  // entrambe"): a pezzo su alcune rotte, a peso sulla maggior parte delle
+  // altre, incluse quelle Europa-Doha più rilevanti per i turisti Touch&Go.
+  // Stesso pattern già in uso per KLM (più voci per la stessa compagnia,
+  // disambiguate da feeType/note quando la fonte non fornisce un routeClass
+  // netto) — qui "note" distingue esplicitamente a quali rotte si applica
+  // ciascuna, dato che la fonte non lo esprime con un routeClass pulito
+  // "eu"/"intercontinental" come KLM.
   {
     airline: "Qatar Airways",
     feeType: "per_extra_piece",
@@ -164,7 +173,19 @@ const AIRLINE_BAGGAGE_FEES = [
     currency: "USD",
     sourceUrl: "https://www.qatarairways.com/it-it/baggage.html",
     verifiedAt: "2026-09-30",
-    note: "Bagaglio extra fino a 23kg — il prezzo varia in base alla rotta (soprattutto Africa/Americhe, dove Qatar applica un prezzo fisso a pezzo). ATTENZIONE: per la maggior parte delle rotte, incluse quelle da/per l'Europa, Qatar applica invece un sistema \"a peso\" (circa USD 30/kg online, USD 40/kg in aeroporto, a scatti di 5kg) — da verificare se per il caso d'uso Touch&Go (turisti in Europa) non sia questo il feeType corretto da modellare, non quello a pezzo qui riportato.",
+    note: "Bagaglio extra fino a 23kg a prezzo fisso per pezzo — si applica soprattutto sulle rotte Africa/Americhe. Per le rotte Europa-Doha (vedi voce 'per_kg_overweight' qui sotto) si applica invece il sistema a peso, non questo.",
+  },
+  {
+    airline: "Qatar Airways",
+    feeType: "per_kg_overweight",
+    routeClass: null,
+    travelClass: null,
+    amountMin: 30,
+    amountMax: 40,
+    currency: "USD",
+    sourceUrl: "https://www.qatarairways.com/it-it/baggage.html",
+    verifiedAt: "2026-10-05",
+    note: "Sistema a peso, a scatti di 5kg: USD 30/kg se acquistato online, USD 40/kg in aeroporto. Si applica sulla maggior parte della rete, incluse le rotte Europa-Doha — il caso più rilevante per i turisti Touch&Go. Pagina ufficiale Qatar Airways non raggiungibile da questa sessione (nessun importo fisso nel testo statico della pagina, solo calcolatore dinamico) — dato confermato da due ricerche indipendenti coerenti tra loro, da riverificare contro la fonte ufficiale quando possibile.",
   },
   {
     airline: "Turkish Airlines",
