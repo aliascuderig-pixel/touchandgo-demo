@@ -1421,3 +1421,15 @@ Screenshot generati in autonomia (Playwright, stessa tecnica già usata altre vo
 **8 nuovi test** (`dist/assets/__tests__/status-timeline.test.js`): i 4 stati reali producono sempre lo step corrente all'indice giusto con il numero corretto di step passati/futuri; ogni label inizia per "Touch&Go " e nessuna nomina mai il corriere partner; uno stato sconosciuto ricade sul primo step come corrente; il vecchio badge `.history-status` non compare più né in `HistoryScreen()` né in `DashboardScreen()` (resta nella sola schermata partner, invariata). Due test preesistenti (`identity-verification-pickup.test.js`) che leggevano `.history-status` sono stati aggiornati per leggere la nuova timeline (`dataset.status`) — la logica del gate identità che verificano resta invariata, solo l'asserzione sulla rappresentazione visiva del risultato è cambiata di conseguenza.
 
 Suite completa del repository verde (**355/355**, `npm test`).
+
+## Guida pubblica — promozione dell'EaaS e della classificazione AI come servizio (6 ottobre 2026)
+
+Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna function toccata). Tre inserimenti, tutti pensati per un lettore investitore:
+
+- **Checklist "Perché non è solo un mockup"** (PR #78, 5/10): nuovo punto sull'AI interna del CRM (agente, pre-triage ticket, controllo giornaliero interpretato, report settimanale) e sulla misurazione dell'uso reale (Fase 2 EaaS, analytics di engagement); nota di chiusura aggiornata di conseguenza.
+- **Elenco tab del CRM** (PR #78): aggiunta la voce "Engagement".
+- **Nuova sezione "Oltre il corebusiness — la classificazione AI come servizio"** (`id="s-catalogazione"`, numerata 04C, subito dopo "Report di rendimento"): descrive la struttura dello strumento "Fattura proforma" dell'e-shop (foto/descrizione → classificazione AI → dati dell'utente → documento stampabile), con un link a `touchandgo-eshop.netlify.app/site/fattura-proforma.html`. Dichiara esplicitamente i limiti: codice HS, peso e dimensioni sono stime; il valore non è mai inventato dall'AI; nessun dato resta sul server; **non esiste ancora** un confezionamento commerciale (identificazione del cliente, quota/prezzo, integrazione API) — oggi solo il limite anti-abuso di 20 richieste/ora per IP. Non è stata aggiunta una card nella griglia "otto schede" in alto: la sezione è raggiungibile solo scorrendo la pagina (scelta deliberata per non alterare la griglia a 4 colonne).
+
+Nota di processo: la PR #78 aveva modificato la guida senza aggiornare questo manuale, contro la regola di CLAUDE.md; questa voce copre anche quella modifica.
+
+**Verifica**: bilanciamento dei tag HTML controllato con `html.parser` (stack vuoto a fine file). `guida.html` non ha una suite di test dedicata.
