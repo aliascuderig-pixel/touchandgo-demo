@@ -801,6 +801,8 @@ const I18N = {
     onboarding_t3: "Concludi e consolidiamo",
     onboarding_p3: "Fine vacanza: un solo ordine di ritiro per tutti gli acquisti verso la stessa destinazione, invece di tante spedizioni separate.",
     onboarding_skip: "Salta",
+    onboarding_music_on: "Attiva la musica",
+    onboarding_music_off: "Disattiva la musica",
     onboarding_replay: "Rivedi come funziona",
   },
   en: {
@@ -1086,6 +1088,8 @@ const I18N = {
     onboarding_t3: "Wrap up and we consolidate",
     onboarding_p3: "End of trip: one single pickup order for everything going to the same destination, instead of many separate shipments.",
     onboarding_skip: "Skip",
+    onboarding_music_on: "Turn music on",
+    onboarding_music_off: "Turn music off",
     onboarding_replay: "See how it works again",
   },
 };
@@ -1491,6 +1495,9 @@ function GuestModeBanner() {
 
 function render() {
   recordScreenChange(state.screen);
+  // Solo se la musica è accesa: stopOnboardingMusic() azzera anche la
+  // dissolvenza in corso, e render() viene richiamato subito dopo lo stop.
+  if (state.screen !== "onboarding" && onboardingMusicOn) stopOnboardingMusic();
   document.documentElement.lang = state.lang;
   app.innerHTML = "";
   // Spazio ospite: mostrato PRIMA del controllo onboarding qui sotto (che
@@ -3376,8 +3383,90 @@ let onboardingSlide = 0;
 let onboardingTimer = null;
 const ONBOARDING_SLIDE_MS = 4200;
 
+// Musica di sottofondo dell'onboarding (stessa traccia del video di
+// presentazione dell'e-shop, generata da zero: nessun diritto di terzi).
+// I browser vietano l'audio che parte da solo senza un gesto dell'utente, e
+// l'onboarding parte in automatico al lancio: per questo la musica è SEMPRE
+// spenta all'inizio e si attiva solo col pulsante "🔇/🔊" in alto (un tap).
+// Le variabili sono a livello di modulo per lo stesso motivo di
+// onboardingSlide: cambiando lingua render() ricostruisce la schermata, ma la
+// musica già avviata non deve interrompersi né ripartire.
+const ONBOARDING_MUSIC_URL = "/assets/onboarding-music.m4a";
+let onboardingAudio = null;
+let onboardingMusicOn = false;
+let onboardingFadeTimer = null;
+
+function applyOnboardingSoundState(b) {
+  b.classList.toggle("on", onboardingMusicOn);
+  b.setAttribute("aria-pressed", onboardingMusicOn ? "true" : "false");
+  b.setAttribute("aria-label", t(onboardingMusicOn ? "onboarding_music_off" : "onboarding_music_on"));
+  b.textContent = onboardingMusicOn ? "🔊" : "🔇";
+}
+
+function syncOnboardingSoundButtons() {
+  document.querySelectorAll(".ob-sound-btn").forEach(applyOnboardingSoundState);
+}
+
+function startOnboardingMusic() {
+  try {
+    clearInterval(onboardingFadeTimer);
+    if (!onboardingAudio) {
+      onboardingAudio = new Audio(ONBOARDING_MUSIC_URL);
+      onboardingAudio.preload = "auto";
+    }
+    onboardingAudio.volume = 0.7;
+    onboardingMusicOn = true;
+    const p = onboardingAudio.play();
+    // Offline o file non raggiungibile: nessun errore al turista, la
+    // sequenza resta semplicemente muta e il pulsante torna "spento".
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        onboardingMusicOn = false;
+        syncOnboardingSoundButtons();
+      });
+    }
+  } catch (e) {
+    onboardingMusicOn = false;
+  }
+  syncOnboardingSoundButtons();
+}
+
+// Dissolvenza di mezzo secondo invece di uno stacco secco: usata quando si
+// spegne col pulsante, si salta, si arriva in fondo o si lascia la pagina.
+function stopOnboardingMusic() {
+  onboardingMusicOn = false;
+  const audio = onboardingAudio;
+  onboardingAudio = null;
+  clearInterval(onboardingFadeTimer);
+  if (audio) {
+    let v = typeof audio.volume === "number" ? audio.volume : 0.7;
+    onboardingFadeTimer = setInterval(() => {
+      v -= 0.14;
+      if (v <= 0) {
+        clearInterval(onboardingFadeTimer);
+        try { audio.pause(); } catch (e) {}
+      } else {
+        try { audio.volume = v; } catch (e) {}
+      }
+    }, 50);
+  }
+  syncOnboardingSoundButtons();
+}
+
+function toggleOnboardingMusic() {
+  if (onboardingMusicOn) stopOnboardingMusic();
+  else startOnboardingMusic();
+}
+
+// Il turista che esce dalla pagina (cambio scheda, app in secondo piano)
+// non deve sentire la musica continuare.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopOnboardingMusic();
+});
+
 function finishOnboarding() {
   clearTimeout(onboardingTimer);
+  stopOnboardingMusic();
   onboardingSlide = 0;
   state.screen = "cover";
   render();
@@ -3457,6 +3546,14 @@ function OnboardingScreen() {
   langGroup.querySelectorAll("[data-lang]").forEach((b) =>
     b.addEventListener("click", () => setLang(b.dataset.lang))
   );
+  const soundBtn = el("button", "ob-sound-btn");
+  soundBtn.type = "button";
+  soundBtn.addEventListener("click", toggleOnboardingMusic);
+  // Stato applicato subito al bottone appena creato: a questo punto la
+  // schermata non è ancora nel documento, quindi syncOnboardingSoundButtons()
+  // (che cerca nel document) non lo troverebbe.
+  applyOnboardingSoundState(soundBtn);
+  topRight.appendChild(soundBtn);
   topRight.appendChild(langGroup);
   const skipBtn = el("button", "ob-skip-btn", t("onboarding_skip"));
   skipBtn.addEventListener("click", finishOnboarding);
