@@ -255,7 +255,7 @@
     <div class="cover-meta">
       <div><b>Prototipo Touch&Go</b>Catania, 2026 · Pre-seed</div>
       <div><b>Classificazione AI reale</b>Quote e pagamenti simulati per il test</div>
-      <div><b>Aggiornato</b>1 ottobre 2026</div>
+      <div><b>Aggiornato</b>8 ottobre 2026</div>
     </div>
   </div>
 
@@ -630,15 +630,27 @@
       <a class="btn" href="https://touchandgo-eshop.netlify.app/site/fattura-proforma.html" target="_blank" rel="noopener">Apri</a>
     </div>
 
+    <div class="linkcard">
+      <div><div class="lc-label">Servizio a pagamento "Classificazione AI come servizio" (dispositivo indipendente: piani, chiave API, quota)</div><div class="lc-url">touchandgo-api.netlify.app</div></div>
+      <a class="btn" href="https://touchandgo-api.netlify.app" target="_blank" rel="noopener">Apri</a>
+    </div>
+
+    <div class="linkcard">
+      <div><div class="lc-label">CRM — tab Servizio API (piani, prezzi, clienti, chiavi; protetta da password)</div><div class="lc-url">touchandgo-crm.netlify.app/site/admin.html?tab=servizio-api</div></div>
+      <a class="btn" href="https://touchandgo-crm.netlify.app/site/admin.html?tab=servizio-api" target="_blank" rel="noopener">Apri</a>
+    </div>
+
     <ul class="checklist">
       <li><div class="cl-box"></div><div class="cl-text"><b>Lo stesso motore, due usi</b><span>Dentro l'app turista la classificazione alimenta il percorso di spedizione Touch&amp;Go; nello strumento "Fattura proforma" serve invece a chi spedisce per conto proprio, senza alcun legame con la nostra rete — e senza spedizione, QR o negozio partner</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Un dispositivo a sé, indipendente dal resto della suite</b><span>Il servizio a pagamento vive in un proprio sito e un proprio codice, come gli altri dispositivi della suite: si può attivare, fermare o sostituire senza toccare app, CRM, gestionale o e-shop. Condivide con la suite soltanto l'archivio dei dati, così il CRM può gestirne piani e clienti</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Come funziona il servizio a pagamento</b><span>Il cliente sceglie un piano mensile (ognuno ha una quota di classificazioni al mese), paga e riceve una chiave personale da inserire nel proprio software. Ogni chiamata consuma la quota; se la classificazione non riesce, la quota viene restituita. Prezzi e quote si cambiano dal CRM senza toccare il codice</span></div></li>
       <li><div class="cl-box"></div><div class="cl-text"><b>Un'AI che migliora con l'uso reale</b><span>Ogni classificazione riuscita arricchisce un archivio di riferimento dei codici più frequenti per categoria, e lo staff può correggere a mano un risultato nel CRM: è la base di dati per migliorare nel tempo, non ancora un modello addestrato</span></div></li>
       <li><div class="cl-box"></div><div class="cl-text"><b>Il valore non viene mai inventato</b><span>Il valore economico entra nel documento solo se l'utente lo indica; altrimenti resta un campo obbligatorio da compilare a mano. Anche l'esenzione IVA va scelta esplicitamente, mai preimpostata</span></div></li>
       <li><div class="cl-box"></div><div class="cl-text"><b>Nessun dato dell'utente resta sul server</b><span>Foto e descrizione entrano, il documento esce, e non viene salvato nulla: lo strumento "Fattura proforma" non scrive in nessun archivio di prodotto o clienti, e questo vincolo è verificato da un test automatico</span></div></li>
       <li><div class="cl-box"></div><div class="cl-text"><b>Onestà sui limiti delle stime</b><span>Codice doganale, peso e dimensioni sono stime dell'AI, non misure: il peso, in particolare, non si può dedurre con certezza da una foto. Il documento va sempre riletto da chi spedisce</span></div></li>
     </ul>
 
-    <p class="note"><b>Cosa non c'è ancora.</b> Oggi lo strumento è aperto con un solo limite anti-abuso (20 richieste l'ora per ciascun indirizzo). Per venderlo come servizio vero mancano ancora un'identificazione del cliente (ad esempio chiavi di accesso), una quota o un prezzo per cliente e un'interfaccia per integrarlo in altri sistemi. È una scelta consapevole: in questa fase conta mostrare come la capacità è strutturata e già funzionante, prima di costruirne il confezionamento commerciale.</p>
+    <p class="note"><b>Cosa c'è oggi e cosa manca.</b> La struttura commerciale esiste: piani mensili con quota, chiavi personali (conservate solo in forma non leggibile), pagamento con carta tramite Stripe, controllo dell'abbonamento e gestione dal CRM. Il pagamento è per ora in <b>modalità di prova</b>: nessun incasso reale. Mancano ancora un'area in cui il cliente gestisca da solo disdetta e cambio piano, una documentazione completa per chi integra l'API e la prova con clienti reali. I prezzi dei piani sono valori di partenza da rivedere.</p>
     <a class="back-to-hub" href="#top">↑ Torna alle otto schede</a>
   </section>
 

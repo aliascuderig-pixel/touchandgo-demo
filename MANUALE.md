@@ -1434,3 +1434,15 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna fu
 Nota di processo: la PR #78 aveva modificato la guida senza aggiornare questo manuale, contro la regola di CLAUDE.md; questa voce copre anche quella modifica.
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser` (stack vuoto a fine file). `guida.html` non ha una suite di test dedicata.
+
+## Guida pubblica — servizio a pagamento come dispositivo indipendente (8 ottobre 2026)
+
+Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna function toccata), sezione 04C "Oltre il corebusiness — la classificazione AI come servizio":
+
+- **Due nuove schede di accesso** (`linkcard`): il servizio a pagamento (`touchandgo-api.netlify.app`, **settimo dispositivo** della suite, repository `touchandgo-api`) e la tab **Servizio API** del CRM (`touchandgo-crm.netlify.app/site/admin.html?tab=servizio-api`, protetta da password). I due link funzionano solo dopo che il sito `touchandgo-api` è online e la PR del CRM è mergiata: il nome del sito Netlify deve essere esattamente `touchandgo-api`.
+- **Due nuovi punti nella checklist**: indipendenza del dispositivo (sito e codice propri, condivide con la suite solo l'archivio dei dati) e come funziona il servizio (piani con quota, chiave personale, quota restituita se la classificazione non riesce, prezzi modificabili dal CRM).
+- **Nota "Cosa non c'è ancora" riscritta** ("Cosa c'è oggi e cosa manca"): la struttura commerciale ora esiste, ma il pagamento è in modalità di prova e mancano l'area self-service per disdetta/cambio piano, la documentazione completa per l'API e la prova con clienti reali; i prezzi sono valori di partenza.
+- Data in copertina: 8 ottobre 2026. Nessuna card nuova nella griglia "otto schede" (scelta già fatta per la 04C: non alterare la griglia a 4 colonne).
+
+**Verifica**: bilanciamento dei tag HTML controllato con `html.parser` (stack vuoto). `guida.html` non ha una suite di test dedicata.
+
