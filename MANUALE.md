@@ -1441,6 +1441,7 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna fu
 
 - **Due nuove schede di accesso** (`linkcard`): il servizio a pagamento (`touchandgo-api.netlify.app`, **settimo dispositivo** della suite, repository `touchandgo-api`) e la tab **Servizio API** del CRM (`touchandgo-crm.netlify.app/site/admin.html?tab=servizio-api`, protetta da password). I due link funzionano solo dopo che il sito `touchandgo-api` è online e la PR del CRM è mergiata: il nome del sito Netlify deve essere esattamente `touchandgo-api`.
 - **Due nuovi punti nella checklist**: indipendenza del dispositivo (sito e codice propri, condivide con la suite solo l'archivio dei dati) e come funziona il servizio (piani con quota, chiave personale, quota restituita se la classificazione non riesce, prezzi modificabili dal CRM).
+- **Nuovo punto "Prova gratuita: 5 classificazioni"**: spiega la regola delle 5 classificazioni gratuite in totale (app turista: contate sul dispositivo; touchandgo-api: chiave di prova con la sola email, una per email).
 - **Nota "Cosa non c'è ancora" riscritta** ("Cosa c'è oggi e cosa manca"): la struttura commerciale ora esiste, ma il pagamento è in modalità di prova e mancano l'area self-service per disdetta/cambio piano, la documentazione completa per l'API e la prova con clienti reali; i prezzi sono valori di partenza.
 - Data in copertina: 8 ottobre 2026. Nessuna card nuova nella griglia "otto schede" (scelta già fatta per la 04C: non alterare la griglia a 4 colonne).
 
