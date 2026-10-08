@@ -449,6 +449,41 @@ function buildProvisionalResult(category, subcategory) {
   };
 }
 
+// ---------------------------------------------------------------------
+// Limite di classificazioni gratuite (8 ottobre 2026, vedi MANUALE.md,
+// "Limite di classificazioni gratuite"): chi usa l'app senza abbonamento può
+// far classificare dall'AI solo poche volte (FREE_CLASSIFICATIONS_LIMIT, in
+// totale, una tantum) prima che compaia il banner "abbonati a Touchandgo-app
+// o a Touchandgo-api". Il conteggio è SUL DISPOSITIVO (localStorage), scelta
+// esplicita di Giuseppe: semplice e senza dati personali sul server, ma
+// chi cancella i dati del browser ricomincia da zero. Se localStorage non è
+// disponibile il limite semplicemente non scatta (mai un errore al turista).
+// Si conta solo la classificazione dell'oggetto (runClassification() e la
+// riclassificazione in background), non gli altri usi dell'AI.
+// ---------------------------------------------------------------------
+const FREE_CLASSIFICATIONS_LIMIT = 5;
+const FREE_CLASSIFICATIONS_KEY = "tg_free_classifications";
+const TOUCHANDGO_API_URL = "https://touchandgo-api.netlify.app";
+
+function freeClassificationsUsed() {
+  try {
+    const n = parseInt(localStorage.getItem(FREE_CLASSIFICATIONS_KEY), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+function recordFreeClassificationUse() {
+  try {
+    localStorage.setItem(FREE_CLASSIFICATIONS_KEY, String(freeClassificationsUsed() + 1));
+  } catch (e) {
+    // senza localStorage non si conta: il limite non scatta
+  }
+}
+function classificationQuotaExhausted() {
+  return !state.isSubscribed && freeClassificationsUsed() >= FREE_CLASSIFICATIONS_LIMIT;
+}
+
 async function classify(messages) {
   let res;
   try {
@@ -621,6 +656,15 @@ const I18N = {
     offline_classify_pick_category: "Scegli la categoria più vicina",
     offline_classify_pick_subcategory: "{category} · scegli una sottocategoria",
     offline_classify_change_category: "← Cambia categoria",
+
+    // ---- ClassifyLimitScreen (limite classificazioni gratuite, ottobre 2026) ----
+    limit_title: "Hai usato le {count} classificazioni gratuite",
+    limit_text: "Per continuare a far classificare gli oggetti dall'AI, abbonati a Touchandgo-app oppure a Touchandgo-api. Se preferisci, puoi proseguire scegliendo a mano la categoria: il prezzo resterà provvisorio.",
+    limit_sub_app_btn: "Abbonati a Touchandgo-app",
+    limit_api_btn: "Abbonati a Touchandgo-api ↗",
+    limit_manual_btn: "Continua scegliendo la categoria a mano",
+    limit_manual_intro: "Hai finito le classificazioni gratuite: puoi comunque proseguire scegliendo a mano la categoria dell'oggetto. Il prezzo sarà provvisorio, confermato quando potrai di nuovo classificare (con un abbonamento).",
+    result_provisional_note_limit: "sarà confermata quando l'oggetto potrà essere classificato realmente, dopo l'abbonamento.",
 
     // ---- PickupField / DestinationField / GuestDestinationField ----
     pickup_lbl_gps: "Punto di ritiro (GPS)",
@@ -908,6 +952,15 @@ const I18N = {
     offline_classify_pick_category: "Choose the closest category",
     offline_classify_pick_subcategory: "{category} · choose a subcategory",
     offline_classify_change_category: "← Change category",
+
+    // ---- ClassifyLimitScreen (free classifications limit, October 2026) ----
+    limit_title: "You've used your {count} free classifications",
+    limit_text: "To keep having items classified by the AI, subscribe to Touchandgo-app or to Touchandgo-api. If you prefer, you can continue by choosing the category by hand: the price will stay provisional.",
+    limit_sub_app_btn: "Subscribe to Touchandgo-app",
+    limit_api_btn: "Subscribe to Touchandgo-api ↗",
+    limit_manual_btn: "Continue by choosing the category by hand",
+    limit_manual_intro: "You've run out of free classifications: you can still continue by choosing the item's category by hand. The price will be provisional, confirmed once you can classify again (with a subscription).",
+    result_provisional_note_limit: "will be confirmed once the item can actually be classified, after subscribing.",
 
     // ---- PickupField / DestinationField / GuestDestinationField ----
     pickup_lbl_gps: "Pickup point (GPS)",
@@ -1236,6 +1289,10 @@ const state = {
   resultIsProvisional: false,
   provisionalCategory: null,
   provisionalSubcategory: null,
+  // true quando il percorso manuale è stato scelto perché le classificazioni
+  // gratuite sono finite (ClassifyLimitScreen()) e non perché si è offline:
+  // cambia solo i testi e il motivo salvato sull'item (provisionalReason).
+  limitManualPath: false,
   // Stato transitorio SOLO per OfflineClassifyScreen() (selezione in due
   // passi categoria -> sottocategoria, prima della conferma che valorizza
   // provisionalCategory/provisionalSubcategory sopra) — azzerato ogni
@@ -1524,6 +1581,7 @@ function render() {
   else if (state.screen === "choose-address") app.appendChild(ChooseAddressScreen());
   else if (state.screen === "analyzing") app.appendChild(AnalyzingScreen());
   else if (state.screen === "offline-classify") app.appendChild(OfflineClassifyScreen());
+  else if (state.screen === "classify-limit") app.appendChild(ClassifyLimitScreen());
   else if (state.screen === "result") app.appendChild(ResultScreen());
   else if (state.screen === "queued") app.appendChild(QueuedScreen());
   else if (state.screen === "conclude") app.appendChild(ConcludeScreen());
@@ -3915,6 +3973,14 @@ function DestinationScreen() {
       render();
       return;
     }
+    // Limite di classificazioni gratuite: PRIMA di lanciare la chiamata AI
+    // (vedi classificationQuotaExhausted()), mai dopo averla già pagata.
+    if (classificationQuotaExhausted()) {
+      recordTrailEntry("action", "Limite di classificazioni gratuite raggiunto");
+      state.screen = "classify-limit";
+      render();
+      return;
+    }
     const promise =
       state.pendingInput.type === "image"
         ? classifyImage(state.pendingInput.base64, state.pendingInput.mediaType)
@@ -4058,6 +4124,55 @@ function DutyEstimateSection() {
 // gestiti con state.offlineClassifySelectedCategory (transitorio, non
 // ancora la scelta confermata). "Altro" non ha sottocategorie
 // (CATEGORY_SUBCATEGORIES["Altro"] === []): selezionarla conferma subito.
+// Banner del limite di classificazioni gratuite (vedi sopra,
+// FREE_CLASSIFICATIONS_LIMIT). "Abbonati a Touchandgo-app" riusa lo stesso
+// meccanismo già presente nel risultato ("Abbonati e risparmia": imposta
+// state.isSubscribed, abbonamento ancora SIMULATO come i pagamenti
+// dell'app); "Touchandgo-api" apre il dispositivo indipendente
+// touchandgo-api in una nuova scheda; la terza strada è il percorso manuale.
+function ClassifyLimitScreen() {
+  const wrap = el("div", "section");
+  wrap.appendChild(AssistantAvatar("destination"));
+  const back = el("div", "back", t("dest_back"));
+  back.addEventListener("click", () => {
+    state.screen = "destination";
+    render();
+  });
+  wrap.appendChild(back);
+
+  wrap.appendChild(
+    el("div", "alert classify-limit-banner", `⭐ <b>${t("limit_title", { count: FREE_CLASSIFICATIONS_LIMIT })}</b><br>${t("limit_text")}`)
+  );
+
+  const actions = el("div", "classify-limit-actions");
+  const appBtn = el("button", "btn-primary", t("limit_sub_app_btn"));
+  appBtn.addEventListener("click", () => {
+    state.isSubscribed = true;
+    saveProfile();
+    recordTrailEntry("action", "Abbonamento Touchandgo-app dal banner del limite");
+    state.screen = "destination";
+    render();
+  });
+  actions.appendChild(appBtn);
+
+  const apiLink = el("a", "btn-secondary", t("limit_api_btn"));
+  apiLink.setAttribute("href", TOUCHANDGO_API_URL);
+  apiLink.setAttribute("target", "_blank");
+  apiLink.setAttribute("rel", "noopener");
+  actions.appendChild(apiLink);
+
+  const manualBtn = el("button", "btn-secondary", t("limit_manual_btn"));
+  manualBtn.addEventListener("click", () => {
+    state.limitManualPath = true;
+    recordTrailEntry("action", "Percorso manuale scelto dopo il limite di classificazioni gratuite");
+    state.screen = "offline-classify";
+    render();
+  });
+  actions.appendChild(manualBtn);
+  wrap.appendChild(actions);
+  return wrap;
+}
+
 function OfflineClassifyScreen() {
   const wrap = el("div", "section");
   wrap.appendChild(AssistantAvatar("destination"));
@@ -4065,11 +4180,12 @@ function OfflineClassifyScreen() {
   back.addEventListener("click", () => {
     state.screen = "destination";
     state.offlineClassifySelectedCategory = null;
+    state.limitManualPath = false;
     render();
   });
   wrap.appendChild(back);
 
-  wrap.appendChild(el("div", "alert offline-classify-banner", `📡 ${t("offline_classify_intro")}`));
+  wrap.appendChild(el("div", "alert offline-classify-banner", `📡 ${t(state.limitManualPath ? "limit_manual_intro" : "offline_classify_intro")}`));
 
   const confirmCategory = (category, subcategory) => {
     const result = buildProvisionalResult(category, subcategory);
@@ -4158,7 +4274,7 @@ function ResultScreen() {
   // reale in nessun punto dell'interfaccia — etichetta sempre visibile,
   // in cima, prima di qualunque altro dettaglio del risultato.
   if (state.resultIsProvisional) {
-    wrap.appendChild(el("div", "alert offline-provisional-banner", `📡 <b>${t("result_provisional_badge")}</b> — ${t("result_provisional_note")}`));
+    wrap.appendChild(el("div", "alert offline-provisional-banner", `📡 <b>${t("result_provisional_badge")}</b> — ${t(state.limitManualPath ? "result_provisional_note_limit" : "result_provisional_note")}`));
   }
 
   const card = el("div", "result-card");
@@ -4718,6 +4834,11 @@ async function processPendingReclassifications() {
   let changed = false;
   try {
     for (const item of targets) {
+      // Dopo il limite gratuito la riclassificazione in background NON parte
+      // (sarebbe una scappatoia: ogni oggetto inserito a mano verrebbe
+      // comunque classificato dall'AI): le stime provvisorie restano tali
+      // finché ci si abbona, poi riprende da sola al prossimo innesco.
+      if (classificationQuotaExhausted()) continue;
       try {
         let result;
         if (item.photo) {
@@ -4764,6 +4885,7 @@ async function processPendingReclassifications() {
 
         syncPurchaseToCRM(item);
         changed = true;
+        if (!state.isSubscribed) recordFreeClassificationUse();
       } catch (e) {
         // Fallito questo giro (offline a metà, errore AI transitorio,
         // ecc.): l'item resta pendingRealClassification:true, ritentato al
@@ -6818,6 +6940,9 @@ function ChooseAddressScreen() {
         pendingRealClassification: state.resultIsProvisional || false,
         provisionalCategory: state.resultIsProvisional ? state.provisionalCategory : null,
         provisionalSubcategory: state.resultIsProvisional ? state.provisionalSubcategory : null,
+        // Perché è provvisorio: "quota" (classificazioni gratuite finite) o
+        // "offline"; null per un acquisto classificato online come sempre.
+        provisionalReason: state.resultIsProvisional ? (state.limitManualPath ? "quota" : "offline") : null,
       };
       state.pendingItems.push(item);
       state.purchaseHistory.push(item);
@@ -6830,6 +6955,7 @@ function ChooseAddressScreen() {
       state.resultIsProvisional = false;
       state.provisionalCategory = null;
       state.provisionalSubcategory = null;
+      state.limitManualPath = false;
       state.screen = "queued";
       render();
     }, 700);
@@ -7352,6 +7478,7 @@ async function runClassification(promise) {
     state.partnerDiscountError = null;
     state.screen = "result";
     trackEvent("classification_completed");
+    if (!state.isSubscribed) recordFreeClassificationUse();
     // Stima dazi doganali — vedi refreshDutyEstimate(): DELIBERATAMENTE
     // non awaited. Il flusso critico (classificazione, prezzo, QR) deve
     // arrivare alla schermata Result esattamente come sopra, a
