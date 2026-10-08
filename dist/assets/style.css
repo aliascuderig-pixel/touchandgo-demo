@@ -789,6 +789,8 @@ button{font-family:inherit;cursor:pointer}
 .ob-lang-group{display:flex;gap:4px;background:rgba(0,0,0,.45);border-radius:20px;padding:3px}
 .ob-lang-btn{background:transparent;border:none;color:var(--muted);font-family:var(--body);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:16px;cursor:pointer}
 .ob-lang-btn.on{background:var(--gold-hot);color:var(--ink)}
+.ob-sound-btn{background:rgba(0,0,0,.45);border:1px solid var(--line-on-ink);color:var(--muted);font-size:14px;line-height:1;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.ob-sound-btn.on{border-color:var(--gold-hot,#F0C877);color:var(--gold-hot,#F0C877)}
 .ob-skip-btn{background:rgba(0,0,0,.45);border:1px solid var(--line-on-ink);color:var(--muted);font-family:var(--body);font-size:10.5px;font-weight:700;padding:7px 13px;border-radius:20px;cursor:pointer;white-space:nowrap}
 
 .ob-wordmark{position:absolute;top:44px;left:0;right:0;z-index:6;text-align:center;pointer-events:none;font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.03em;color:var(--gold-hot)}
