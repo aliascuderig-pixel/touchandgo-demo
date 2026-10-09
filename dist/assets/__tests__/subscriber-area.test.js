@@ -212,3 +212,28 @@ test("un codice partner normale continua a vedere la dashboard partner completa 
   assert.ok(document.body.textContent.includes("Commissioni maturate"));
   assert.ok(document.body.textContent.includes("Credito disponibile"));
 });
+
+test("registrazione: manda l'email dell'utente se già nota; se arriva dopo, la associa UNA volta sola al riquadro del cruscotto", async (t) => {
+  // email nota alla registrazione
+  const calls1 = [];
+  const a = bootApp(t, { fetchMock: mockFetch({ calls: calls1 }) });
+  setState(a.context, { touristEmail: "mario@example.com" });
+  a.window.activateSubscription();
+  await wait(30);
+  assert.equal(calls1.find((c) => c.body.action === "register").body.email, "mario@example.com");
+  assert.equal(getState(a.context, "subscriberEmailSent"), true);
+
+  // email nota solo dopo: il cruscotto la associa, una volta
+  const calls2 = [];
+  const b = bootApp(t, { fetchMock: mockFetch({ calls: calls2 }) });
+  b.window.activateSubscription();
+  await wait(30);
+  assert.equal(calls2.find((c) => c.body.action === "register").body.email, undefined);
+  setState(b.context, { touristEmail: "dopo@example.com", screen: "dashboard" });
+  b.window.render();
+  b.window.render();
+  await wait(30);
+  const attach = calls2.filter((c) => c.body.action === "attach-email");
+  assert.equal(attach.length, 1, "una sola richiesta anche con più render");
+  assert.deepEqual([attach[0].body.code, attach[0].body.email], [CODE, "dopo@example.com"]);
+});

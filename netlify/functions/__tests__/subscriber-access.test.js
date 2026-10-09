@@ -103,3 +103,36 @@ test("rate limit: oltre 10 register/h per IP -> 429; oltre 30 verify/h per IP ->
   for (let i = 0; i < 31; i++) last = await call(handler, { action: "verify", code: "ABB-AAAAAAAA" }, "8.8.8.8");
   assert.equal(last.statusCode, 429);
 });
+
+test("register con email: la salva normalizzata; email non valida -> ignorata (codice emesso comunque, email null)", async () => {
+  const { handler } = freshModule();
+  const a = parse(await call(handler, { action: "register", email: "  Mario@Example.COM " })).code;
+  assert.equal(JSON.parse(stores["subscribers"].get(a)).email, "mario@example.com");
+  const b = parse(await call(handler, { action: "register", email: "non-una-email" })).code;
+  assert.equal(JSON.parse(stores["subscribers"].get(b)).email, null);
+});
+
+test("attach-email: associa l'email UNA volta sola (mai sovrascritta); codice inesistente o email non valida -> attached:false", async () => {
+  const { handler } = freshModule();
+  const { code } = parse(await call(handler, { action: "register" }));
+  assert.deepEqual(parse(await call(handler, { action: "attach-email", code, email: "a@b.it" })), { attached: true });
+  assert.equal(JSON.parse(stores["subscribers"].get(code)).email, "a@b.it");
+  assert.deepEqual(parse(await call(handler, { action: "attach-email", code, email: "altra@b.it" })), { attached: false });
+  assert.equal(JSON.parse(stores["subscribers"].get(code)).email, "a@b.it", "l'email già associata non si cambia");
+  const { code: c2 } = parse(await call(handler, { action: "register" }));
+  assert.deepEqual(parse(await call(handler, { action: "attach-email", code: c2, email: "no" })), { attached: false });
+  assert.deepEqual(parse(await call(handler, { action: "attach-email", code: "ABB-AAAAAAAA", email: "a@b.it" })), { attached: false });
+});
+
+test("un codice REVOCATO dallo staff (revoked:true) non è più valido e non accetta email", async () => {
+  const { handler } = freshModule();
+  const { code } = parse(await call(handler, { action: "register" }));
+  const rec = JSON.parse(stores["subscribers"].get(code));
+  rec.revoked = true;
+  stores["subscribers"].set(code, JSON.stringify(rec));
+  assert.deepEqual(parse(await call(handler, { action: "verify", code })), { valid: false });
+  assert.deepEqual(parse(await call(handler, { action: "attach-email", code, email: "a@b.it" })), { attached: false });
+  rec.revoked = false;
+  stores["subscribers"].set(code, JSON.stringify(rec));
+  assert.deepEqual(parse(await call(handler, { action: "verify", code })), { valid: true }, "riattivato: torna valido");
+});

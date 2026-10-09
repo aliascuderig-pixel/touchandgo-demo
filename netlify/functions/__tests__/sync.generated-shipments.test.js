@@ -162,3 +162,11 @@ test("list-generated-shipments: un ABBONATO (codice ABB-…, store subscribers) 
   const none = await handler(makeEvent({ action: "list-generated-shipments", code: "ABB-BBBBBBBB" }, "7.7.7.7"));
   assert.equal(none.statusCode, 404);
 });
+
+test("list-generated-shipments: un codice abbonato REVOCATO -> 404, nessun dato", async () => {
+  stores["subscribers"] = new Map([["ABB-AAAAAAAA", JSON.stringify({ code: "ABB-AAAAAAAA", revoked: true })]]);
+  seedPurchases([{ id: "gen-abb", touristName: "Cliente Abb", price: 39, pricingTier: "abbonato", generatedByPartnerCode: "ABB-AAAAAAAA", date: "2026-10-09T00:00:00.000Z" }]);
+  const res = await freshHandler()(makeEvent({ action: "list-generated-shipments", code: "ABB-AAAAAAAA" }, "11.11.11.11"));
+  assert.equal(res.statusCode, 404);
+  assert.ok(!res.body.includes("gen-abb"));
+});
