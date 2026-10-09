@@ -1389,6 +1389,7 @@ const state = {
   // activateSubscription()); null finché non emesso.
   subscriberCode: null,
   subscriberCodeLoading: false,
+  subscriberEmailSent: false,
   priceConfirmedForThisResult: false,
   priceConfirmedAsBreakeven: false,
   idDocument: null,
@@ -4208,11 +4209,12 @@ async function requestSubscriberCode() {
     const res = await fetch("/.netlify/functions/subscriber-access", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "register" }),
+      body: JSON.stringify({ action: "register", email: state.touristEmail || undefined }),
     });
     const data = await res.json();
     if (res.ok && data && typeof data.code === "string") {
       state.subscriberCode = data.code;
+      state.subscriberEmailSent = !!state.touristEmail;
       saveProfile();
     }
   } catch (e) {
@@ -4220,6 +4222,24 @@ async function requestSubscriberCode() {
   }
   state.subscriberCodeLoading = false;
   render();
+}
+
+// Se il codice è stato emesso prima che l'app conoscesse l'email dell'utente,
+// la associa appena disponibile (una volta sola, lato server): serve allo
+// staff per ritrovare il codice se l'utente lo perde (vedi MANUALE.md).
+async function attachSubscriberEmail() {
+  if (!state.subscriberCode || !state.touristEmail || state.subscriberEmailSent) return;
+  state.subscriberEmailSent = true;
+  try {
+    await fetch("/.netlify/functions/subscriber-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "attach-email", code: state.subscriberCode, email: state.touristEmail }),
+    });
+    saveProfile();
+  } catch (e) {
+    state.subscriberEmailSent = false;
+  }
 }
 
 function activateSubscription() {
@@ -7217,12 +7237,13 @@ function DashboardScreen() {
 
   // Abbonato: codice personale per usare "Genera spedizione" dal PC.
   if (state.isSubscribed) {
+    attachSubscriberEmail();
     const pcCard = el("div", "info-card subscriber-pc-card");
     if (state.subscriberCode) {
       pcCard.innerHTML = `<div class="doc-eyebrow">Area abbonato per PC</div>
         <div class="info-line">Dal computer apri <b>${escapeHtml(window.location.origin)}/?mode=partner</b> e inserisci questo codice per generare più spedizioni di fila, con foto e classificazione AI.</div>
         <div class="info-row"><span>Il tuo codice abbonato</span><b id="subscriber-code-value">${escapeHtml(state.subscriberCode)}</b></div>
-        <div class="info-line">Tienilo riservato: chi lo conosce può generare spedizioni a tuo nome.</div>`;
+        <div class="info-line">Tienilo riservato: chi lo conosce può generare spedizioni a tuo nome. Se lo perdi, scrivici da "Contatta assistenza" indicando l'email dell'abbonamento.</div>`;
     } else {
       pcCard.innerHTML = `<div class="doc-eyebrow">Area abbonato per PC</div>
         <div class="info-line">Il codice per usare Touch&amp;Go dal computer non è ancora stato emesso (serve connessione).</div>`;
@@ -7382,6 +7403,7 @@ function saveProfile() {
         biometricCredentialId: state.biometricCredentialId,
         isSubscribed: state.isSubscribed,
         subscriberCode: state.subscriberCode,
+        subscriberEmailSent: state.subscriberEmailSent,
       })
     );
     // TOU-14: marca il dispositivo come "ha già effettuato l'accesso" una
@@ -7410,6 +7432,7 @@ function loadProfile() {
     if (p.biometricCredentialId) state.biometricCredentialId = p.biometricCredentialId;
     if (typeof p.isSubscribed === "boolean") state.isSubscribed = p.isSubscribed;
     if (typeof p.subscriberCode === "string" && /^ABB-/.test(p.subscriberCode)) state.subscriberCode = p.subscriberCode;
+    if (typeof p.subscriberEmailSent === "boolean") state.subscriberEmailSent = p.subscriberEmailSent;
   } catch (e) {}
 }
 

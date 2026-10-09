@@ -378,7 +378,7 @@ exports.handler = async (event) => {
       const owner = isSubscriber
         ? await getStore({ name: guestScopedStoreName("subscribers"), ...blobsAuth }).get(normalized, { type: "json" })
         : await partners.get(normalized, { type: "json" });
-      if (!owner) return bad(isSubscriber ? "Abbonato non trovato" : "Partner non trovato", 404);
+      if (!owner || (isSubscriber && owner.revoked)) return bad(isSubscriber ? "Abbonato non trovato" : "Partner non trovato", 404);
 
       const { blobs } = await purchases.list();
       const all = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);
