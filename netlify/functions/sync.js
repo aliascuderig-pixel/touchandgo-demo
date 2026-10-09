@@ -371,8 +371,14 @@ exports.handler = async (event) => {
       if (!withinLimit) return bad("Troppe richieste, riprova tra qualche minuto.", 429);
       const normalized = (body.code || "").trim().toUpperCase();
       if (!normalized) return bad("Missing partner code");
-      const partner = await partners.get(normalized, { type: "json" });
-      if (!partner) return bad("Partner non trovato", 404);
+      // Un codice "ABB-…" è di un ABBONATO all'app (vedi subscriber-access.js),
+      // non di un partner: stesso spazio "Spedizioni generate", ma il codice
+      // si verifica nello store "subscribers". Stesso filtro per codice.
+      const isSubscriber = /^ABB-/.test(normalized);
+      const owner = isSubscriber
+        ? await getStore({ name: guestScopedStoreName("subscribers"), ...blobsAuth }).get(normalized, { type: "json" })
+        : await partners.get(normalized, { type: "json" });
+      if (!owner) return bad(isSubscriber ? "Abbonato non trovato" : "Partner non trovato", 404);
 
       const { blobs } = await purchases.list();
       const all = (await Promise.all(blobs.map((b) => purchases.get(b.key, { type: "json" })))).filter(Boolean);

@@ -1464,3 +1464,24 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna fu
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser` (stack vuoto). `guida.html` non ha una suite di test dedicata.
 
+
+## Area abbonato per PC — "Genera spedizione" con codice ABB- (9 ottobre 2026)
+
+**Cosa è**: chi si abbona a Touchandgo-app può caricare i propri ordini di ritiro **dal computer**, come fa un partner: foto o descrizione, classificazione AI, dati del destinatario, più spedizioni di fila. Riusa senza duplicarlo lo spazio "Genera spedizione" / "Spedizioni generate" dell'area partner.
+
+**Come si usa**:
+1. Nell'app, quando l'utente si abbona (da "Abbonati e risparmia" o dal banner del limite di classificazioni) l'app chiede al server un **codice personale `ABB-XXXXXXXX`** (8 caratteri senza simboli ambigui) e lo salva nel profilo del dispositivo.
+2. Il codice si vede nella schermata **"La tua spesa"** (riquadro "Area abbonato per PC"), con l'indirizzo da aprire dal PC: `<sito dell'app>/?mode=partner`. Se la richiesta del codice fallisce (offline) c'è il pulsante "Ottieni il codice"; l'abbonamento funziona comunque.
+3. Dal PC, nell'area partner, nel campo "Codice partner" si inserisce il codice abbonato: l'area mostra **solo** "Genera spedizione" e "Spedizioni generate" (niente vendite, commissioni, credito, QR, comunicati o piani partner).
+
+**Regole**:
+- **Prezzo**: la spedizione generata da un abbonato usa il tier `abbonato` (stessa fee da abbonato dell'app). `PARTNER_PLAN_TO_PRICING_TIER` ha la chiave `abbonato` solo lato client.
+- **Nessuna commissione, nessuna attribuzione**: l'item porta `generatedByPartnerCode = ABB-…` (come per i partner) e **mai** `partnerCode`. `save-purchase.js` non scrive l'attribuzione persistente per touristEmail se il codice è `ABB-…` (altrimenti i suoi acquisti successivi erediterebbero un partnerCode che non esiste).
+- **Isolamento**: `sync.js`, azione `list-generated-shipments`, accetta i codici `ABB-…` verificandoli nello store `subscribers` (quelli partner restano in `partners`); ognuno vede solo le spedizioni col proprio codice.
+- **Funzione `subscriber-access.js`**: `register` (emette il codice, max 10 richieste/ora per IP) e `verify` (risponde solo `valid:true|false`, max 30/ora per IP). Store Blobs `subscribers` (codice → `{code, createdAt, source:"app-simulated"}`), via `guestScopedStoreName()`.
+
+**Limite noto da conoscere**: l'abbonamento all'app è ancora **simulato** (`state.isSubscribed`, come i pagamenti dell'app), quindi `register` non può verificare un pagamento: **chiunque può ottenere un codice**. Il codice dà solo accesso a "Genera spedizione" (con la fee da abbonato), mai a dati di altri. Va agganciato al pagamento reale quando l'abbonamento sarà vero; `source:"app-simulated"` permette di distinguere i codici emessi prima. Il CRM non mostra ancora gli abbonati. Se l'utente cancella i dati del dispositivo perde il codice (resta valido sul server, ma non è recuperabile: serve emetterne uno nuovo).
+
+**File**: `netlify/functions/subscriber-access.js` (nuovo), `sync.js` e `save-purchase.js` (piccoli adattamenti), `dist/assets/app.js` (`activateSubscription`/`requestSubscriberCode`, `isSubscriberCodeFormat`, `subscriberStatsFor`, `PartnerGenerateEntryCard`, riquadro in "La tua spesa", ramo del login).
+
+**Verifica**: `subscriber-access.test.js` (7: formato, unicità, verify, codici partner non validi come abbonato, limiti), `sync.generated-shipments.test.js` e `save-purchase.generated-by-partner.test.js` (+1 e +2: isolamento e nessuna attribuzione), `dist/assets/__tests__/subscriber-area.test.js` (10: emissione una sola volta, offline, profilo, riquadro, login senza partner-stats, solo Genera spedizione, item con tier `abbonato` e mai `partnerCode`, nessuna regressione per i partner). Suite completa 499/499; i 4 comportamenti chiave sono stati verificati rompendoli di proposito. Non provato su un dispositivo reale né con Netlify.

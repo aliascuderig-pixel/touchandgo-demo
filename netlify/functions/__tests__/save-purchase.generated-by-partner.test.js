@@ -138,3 +138,25 @@ test("generatedByPartnerCode su un item NON attiva il meccanismo di commissione/
   const saved = await purchases.get(item.id, { type: "json" });
   assert.equal(saved.creditIssued, undefined, "il flag di accredito non deve mai essere impostato per questo campo");
 });
+
+test("una spedizione generata da un ABBONATO (codice ABB-…) non crea attribuzione partner: i suoi acquisti successivi non ereditano un partnerCode inesistente", async () => {
+  const handler = freshHandler();
+  const email = "cliente-abb@test.it";
+  const first = basePurchase({ generatedByPartnerCode: "ABB-AAAAAAAA", pricingTier: "abbonato", touristEmail: email });
+  assert.equal((await handler(makeEvent(first))).statusCode, 200);
+  const attribution = fakeBlobsModule.getStore("partner-attribution");
+  assert.equal(await attribution.get(email, { type: "json" }), null, "nessuna attribuzione scritta per un codice abbonato");
+
+  const second = basePurchase({ touristEmail: email });
+  assert.equal((await handler(makeEvent(second))).statusCode, 200);
+  const saved = await fakeBlobsModule.getStore("purchases").get(second.id, { type: "json" });
+  assert.equal(saved.partnerCode, undefined, "il secondo acquisto non deve ereditare alcun partnerCode");
+});
+
+test("un codice partner normale continua a creare l'attribuzione (comportamento invariato)", async () => {
+  const handler = freshHandler();
+  const email = "cliente-p@test.it";
+  assert.equal((await handler(makeEvent(basePurchase({ generatedByPartnerCode: "BOUTIQUE1", touristEmail: email })))).statusCode, 200);
+  const rec = await fakeBlobsModule.getStore("partner-attribution").get(email, { type: "json" });
+  assert.equal(rec.partnerCode, "BOUTIQUE1");
+});

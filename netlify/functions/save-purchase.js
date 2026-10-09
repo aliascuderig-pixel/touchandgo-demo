@@ -199,6 +199,10 @@ function usedByDifferentEmail(otherItems, field, value, ownEmail) {
 async function resolvePartnerAttribution(item, email, attribution) {
   if (!email) return; // nessuna email nota per questo cliente: nessuna attribuzione possibile, comportamento invariato
   const explicitCode = item.partnerCode || item.generatedByPartnerCode || null;
+  // Un codice "ABB-…" è di un ABBONATO all'app (subscriber-access.js), non di
+  // un partner: non crea mai attribuzione, altrimenti i suoi acquisti
+  // successivi erediterebbero un partnerCode che non esiste.
+  if (/^ABB-/.test(explicitCode || "") && !item.partnerCode) return;
   if (explicitCode) {
     await attribution.setJSON(email, {
       email,

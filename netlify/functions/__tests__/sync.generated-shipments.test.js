@@ -144,3 +144,21 @@ test("list-generated-shipments: rate limit (20 richieste/60min per IP), stesso s
   }
   assert.equal(lastStatus, 429, "la 21esima richiesta dallo stesso IP nella stessa finestra deve essere rifiutata");
 });
+
+test("list-generated-shipments: un ABBONATO (codice ABB-…, store subscribers) vede solo le proprie spedizioni; un ABB- inesistente -> 404; un partner non vede quelle dell'abbonato", async () => {
+  seedPartners({ P1: { code: "P1" } });
+  stores["subscribers"] = new Map([["ABB-AAAAAAAA", JSON.stringify({ code: "ABB-AAAAAAAA" })]]);
+  seedPurchases([
+    { id: "gen-abb", touristName: "Cliente Abb", price: 39, pricingTier: "abbonato", generatedByPartnerCode: "ABB-AAAAAAAA", date: "2026-10-09T00:00:00.000Z" },
+    { id: "gen-p1", touristName: "Cliente P", price: 39, pricingTier: "pieno", generatedByPartnerCode: "P1", date: "2026-10-09T01:00:00.000Z" },
+  ]);
+  const handler = freshHandler();
+  const abb = await handler(makeEvent({ action: "list-generated-shipments", code: "ABB-AAAAAAAA" }, "5.5.5.5"));
+  assert.equal(abb.statusCode, 200);
+  assert.deepEqual(JSON.parse(abb.body).items.map((i) => i.id), ["gen-abb"]);
+  assert.ok(!abb.body.includes("gen-p1"));
+  const p1 = await handler(makeEvent({ action: "list-generated-shipments", code: "P1" }, "6.6.6.6"));
+  assert.ok(!p1.body.includes("gen-abb"));
+  const none = await handler(makeEvent({ action: "list-generated-shipments", code: "ABB-BBBBBBBB" }, "7.7.7.7"));
+  assert.equal(none.statusCode, 404);
+});

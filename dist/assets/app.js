@@ -248,6 +248,9 @@ const PARTNER_PLAN_TO_PRICING_TIER = {
   hotel: "pieno",
   agenzie: "pieno",
   touroperator: "pieno",
+  // Abbonato all'app che usa "Genera spedizione" dal PC (codice "ABB-…",
+  // vedi subscriber-access.js): paga la fee da abbonato, come nell'app.
+  abbonato: "abbonato",
 };
 
 // Fallback "pieno" per un piano non riconosciuto (es. record storico senza
@@ -1382,6 +1385,10 @@ const state = {
   biometricCredentialId: null,
   biometricVerified: false,
   isSubscribed: false,
+  // Codice personale dell'abbonato per l'accesso da PC (vedi
+  // activateSubscription()); null finché non emesso.
+  subscriberCode: null,
+  subscriberCodeLoading: false,
   priceConfirmedForThisResult: false,
   priceConfirmedAsBreakeven: false,
   idDocument: null,
@@ -2242,6 +2249,35 @@ function buildDiscountCodeActions(code, noteEl) {
   return row;
 }
 
+// Scheda di accesso a "Genera spedizione" / "Spedizioni generate", comune
+// alla dashboard partner e all'area dell'abbonato da PC.
+function PartnerGenerateEntryCard(description) {
+  const generateSection = el("div", "info-card partner-generate-entry");
+  generateSection.innerHTML = `<div class="doc-eyebrow">Gestionale spedizioni</div>
+    <div class="info-line">${escapeHtml(description)}</div>`;
+  const generateBtn = el("button", "btn-primary", "Genera spedizione →");
+  generateBtn.id = "partner-generate-entry-btn";
+  generateBtn.addEventListener("click", () => {
+    state.partnerGenerateInput = null;
+    state.partnerGenerateResult = null;
+    state.partnerGenerateError = null;
+    state.partnerGenerateSaved = null;
+    state.partnerGenerateSaveError = null;
+    state.partnerView = "generate";
+    render();
+  });
+  generateSection.appendChild(generateBtn);
+  const shipmentsBtn = el("button", "btn-secondary", "Spedizioni generate →");
+  shipmentsBtn.id = "partner-shipments-entry-btn";
+  shipmentsBtn.addEventListener("click", () => {
+    state.partnerView = "shipments";
+    render();
+    loadPartnerGeneratedShipments();
+  });
+  generateSection.appendChild(shipmentsBtn);
+  return generateSection;
+}
+
 function PartnerScreen() {
   const wrap = el("div", "section");
 
@@ -2280,6 +2316,29 @@ function PartnerScreen() {
   return wrap;
 }
 
+function isSubscriberCodeFormat(code) {
+  return typeof code === "string" && /^ABB-[A-HJ-NP-Z2-9]{8}$/.test(code);
+}
+
+// Dati "di sessione" di un abbonato che accede dal PC: stessa forma di
+// state.partnerStats (così le schermate "Genera spedizione"/"Spedizioni
+// generate" restano invariate), senza alcun dato di vendita/commissione.
+function subscriberStatsFor() {
+  return {
+    partnerName: "Abbonato",
+    plan: "abbonato",
+    isSubscriber: true,
+    paid: true,
+    access: { blocked: false },
+    salesCount: 0,
+    totalSalesValue: 0,
+    totalCommission: 0,
+    creditBalance: 0,
+    monthlyBreakdown: [],
+    recentOrders: [],
+  };
+}
+
 function PartnerLoginAndHistory() {
   const wrap = el("div");
   wrap.appendChild(el("div", "tg-lbl", "Area riservata partner"));
@@ -2288,7 +2347,7 @@ function PartnerLoginAndHistory() {
     const intro = el(
       "div",
       "identify-intro",
-      "Inserisci il tuo codice partner per vedere solo le vendite generate tramite il tuo negozio e le commissioni maturate."
+      "Inserisci il tuo codice partner per vedere solo le vendite generate tramite il tuo negozio e le commissioni maturate. Se sei abbonato a Touchandgo-app, inserisci il tuo codice abbonato (inizia con ABB-) per generare spedizioni dal computer."
     );
     wrap.appendChild(intro);
 
@@ -2314,6 +2373,30 @@ function PartnerLoginAndHistory() {
       state.partnerLoginLoading = true;
       state.partnerLoginError = null;
       render();
+      // Codice "ABB-…": ABBONATO all'app (non partner) — accesso al solo
+      // spazio "Genera spedizione"/"Spedizioni generate", mai a vendite,
+      // commissioni o comunicati (vedi subscriber-access.js).
+      if (isSubscriberCodeFormat(code)) {
+        try {
+          const res = await fetch("/.netlify/functions/subscriber-access", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "verify", code }),
+          });
+          const data = await res.json();
+          if (data.valid) {
+            state.partnerLoggedCode = code;
+            state.partnerStats = subscriberStatsFor();
+          } else {
+            state.partnerLoginError = "Codice non riconosciuto.";
+          }
+        } catch (e) {
+          state.partnerLoginError = "Errore di connessione. Riprova.";
+        }
+        state.partnerLoginLoading = false;
+        render();
+        return;
+      }
       try {
         const res = await fetch("/.netlify/functions/partner-stats", {
           method: "POST",
@@ -2423,6 +2506,17 @@ function PartnerLoginAndHistory() {
     return wrap;
   }
 
+  // Abbonato da PC: solo "Genera spedizione" e storico, niente vendite,
+  // commissioni, QR, comunicati o piani partner.
+  if (stats.isSubscriber) {
+    const subCard = el("div", "info-card");
+    subCard.innerHTML = `<div class="info-row"><span>Codice abbonato</span><b>${escapeHtml(state.partnerLoggedCode)}</b></div>`;
+    wrap.appendChild(subCard);
+    wrap.appendChild(PartnerGenerateEntryCard("Genera più spedizioni di fila dal computer — foto, classificazione AI e dati del destinatario. Paghi la tariffa da abbonato."));
+    wrap.appendChild(logoutBtn);
+    return wrap;
+  }
+
   const summary = el("div", "info-card");
   summary.innerHTML = `
     <div class="info-row"><span>Codice partner</span><b>${escapeHtml(state.partnerLoggedCode)}</b></div>
@@ -2439,30 +2533,7 @@ function PartnerLoginAndHistory() {
   // vendite/commissioni/QR qui sopra ma raggiungibile dallo stesso login
   // partner, senza alcuna nuova autenticazione. Vedi PartnerScreen() per lo
   // switch che sostituisce l'intero contenuto quando partnerView cambia.
-  const generateSection = el("div", "info-card partner-generate-entry");
-  generateSection.innerHTML = `<div class="doc-eyebrow">Gestionale spedizioni</div>
-    <div class="info-line">Genera spedizioni per conto dei tuoi clienti — foto, classificazione AI e dati cliente, dallo stesso codice partner.</div>`;
-  const generateBtn = el("button", "btn-primary", "Genera spedizione →");
-  generateBtn.id = "partner-generate-entry-btn";
-  generateBtn.addEventListener("click", () => {
-    state.partnerGenerateInput = null;
-    state.partnerGenerateResult = null;
-    state.partnerGenerateError = null;
-    state.partnerGenerateSaved = null;
-    state.partnerGenerateSaveError = null;
-    state.partnerView = "generate";
-    render();
-  });
-  generateSection.appendChild(generateBtn);
-  const shipmentsBtn = el("button", "btn-secondary", "Spedizioni generate →");
-  shipmentsBtn.id = "partner-shipments-entry-btn";
-  shipmentsBtn.addEventListener("click", () => {
-    state.partnerView = "shipments";
-    render();
-    loadPartnerGeneratedShipments();
-  });
-  generateSection.appendChild(shipmentsBtn);
-  wrap.appendChild(generateSection);
+  wrap.appendChild(PartnerGenerateEntryCard("Genera spedizioni per conto dei tuoi clienti — foto, classificazione AI e dati cliente, dallo stesso codice partner."));
 
   wrap.appendChild(PartnerComunicatiSection());
 
@@ -2565,7 +2636,7 @@ function PartnerGenerateShipmentScreen() {
     el(
       "div",
       "identify-intro",
-      `Codice partner: ${state.partnerLoggedCode}. La spedizione generata comparirà nel tuo storico "Spedizioni generate", mai in quello di un altro partner.`
+      `${isSubscriberCodeFormat(state.partnerLoggedCode) ? "Codice abbonato" : "Codice partner"}: ${state.partnerLoggedCode}. La spedizione generata comparirà nel tuo storico "Spedizioni generate", mai in quello di un altro utente.`
     )
   );
 
@@ -4124,6 +4195,39 @@ function DutyEstimateSection() {
 // gestiti con state.offlineClassifySelectedCategory (transitorio, non
 // ancora la scelta confermata). "Altro" non ha sottocategorie
 // (CATEGORY_SUBCATEGORIES["Altro"] === []): selezionarla conferma subito.
+// Abbonamento all'app (ancora SIMULATO, come i pagamenti dell'app): imposta
+// state.isSubscribed e, se manca, chiede al server un codice personale
+// "ABB-…" per accedere dal PC a "Genera spedizione" (area partner, stesso
+// spazio — vedi subscriber-access.js). Il codice è emesso una volta sola:
+// se la richiesta fallisce (offline) lo si riprova alla prossima apertura
+// della schermata "La tua spesa", mai bloccando l'abbonamento stesso.
+async function requestSubscriberCode() {
+  if (state.subscriberCode || state.subscriberCodeLoading) return;
+  state.subscriberCodeLoading = true;
+  try {
+    const res = await fetch("/.netlify/functions/subscriber-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "register" }),
+    });
+    const data = await res.json();
+    if (res.ok && data && typeof data.code === "string") {
+      state.subscriberCode = data.code;
+      saveProfile();
+    }
+  } catch (e) {
+    // offline o errore: riprovato più tardi
+  }
+  state.subscriberCodeLoading = false;
+  render();
+}
+
+function activateSubscription() {
+  state.isSubscribed = true;
+  saveProfile();
+  requestSubscriberCode();
+}
+
 // Banner del limite di classificazioni gratuite (vedi sopra,
 // FREE_CLASSIFICATIONS_LIMIT). "Abbonati a Touchandgo-app" riusa lo stesso
 // meccanismo già presente nel risultato ("Abbonati e risparmia": imposta
@@ -4147,8 +4251,7 @@ function ClassifyLimitScreen() {
   const actions = el("div", "classify-limit-actions");
   const appBtn = el("button", "btn-primary", t("limit_sub_app_btn"));
   appBtn.addEventListener("click", () => {
-    state.isSubscribed = true;
-    saveProfile();
+    activateSubscription();
     recordTrailEntry("action", "Abbonamento Touchandgo-app dal banner del limite");
     state.screen = "destination";
     render();
@@ -4391,8 +4494,7 @@ function ResultScreen() {
       <div class="price-option-note">${t("result_price_sub_note", { fee: SUBSCRIBED_FEE, shipping: q.shipping.toFixed(2) })}</div>`;
     const subBtn = el("button", "btn-primary", t("result_price_sub_btn"));
     subBtn.addEventListener("click", () => {
-      state.isSubscribed = true;
-      saveProfile();
+      activateSubscription();
       state.price = { grandTotal: q.subscribed, eta: q.eta, quotes: q };
       state.priceConfirmedForThisResult = true;
       render();
@@ -7113,6 +7215,25 @@ function DashboardScreen() {
     <div class="info-row total"><span>Totale complessivo</span><b>€${(totalValue + totalService).toFixed(2)}</b></div>`;
   wrap.appendChild(summary);
 
+  // Abbonato: codice personale per usare "Genera spedizione" dal PC.
+  if (state.isSubscribed) {
+    const pcCard = el("div", "info-card subscriber-pc-card");
+    if (state.subscriberCode) {
+      pcCard.innerHTML = `<div class="doc-eyebrow">Area abbonato per PC</div>
+        <div class="info-line">Dal computer apri <b>${escapeHtml(window.location.origin)}/?mode=partner</b> e inserisci questo codice per generare più spedizioni di fila, con foto e classificazione AI.</div>
+        <div class="info-row"><span>Il tuo codice abbonato</span><b id="subscriber-code-value">${escapeHtml(state.subscriberCode)}</b></div>
+        <div class="info-line">Tienilo riservato: chi lo conosce può generare spedizioni a tuo nome.</div>`;
+    } else {
+      pcCard.innerHTML = `<div class="doc-eyebrow">Area abbonato per PC</div>
+        <div class="info-line">Il codice per usare Touch&amp;Go dal computer non è ancora stato emesso (serve connessione).</div>`;
+      const retry = el("button", "btn-secondary", "Ottieni il codice");
+      retry.id = "subscriber-code-retry-btn";
+      retry.addEventListener("click", () => requestSubscriberCode());
+      pcCard.appendChild(retry);
+    }
+    wrap.appendChild(pcCard);
+  }
+
   wrap.appendChild(el("div", "tg-lbl", "Dettaglio per acquisto"));
   const list = el("div", "history-list");
   if (!items.length) {
@@ -7153,6 +7274,7 @@ function resetEverything() {
   state.biometricCredentialId = null;
   state.biometricVerified = false;
   state.isSubscribed = false;
+  state.subscriberCode = null;
   state.idDocument = null;
   state.signatureDetected = false;
   state.addresses = [];
@@ -7259,6 +7381,7 @@ function saveProfile() {
         signatureDetected: state.signatureDetected,
         biometricCredentialId: state.biometricCredentialId,
         isSubscribed: state.isSubscribed,
+        subscriberCode: state.subscriberCode,
       })
     );
     // TOU-14: marca il dispositivo come "ha già effettuato l'accesso" una
@@ -7286,6 +7409,7 @@ function loadProfile() {
     if (typeof p.signatureDetected === "boolean") state.signatureDetected = p.signatureDetected;
     if (p.biometricCredentialId) state.biometricCredentialId = p.biometricCredentialId;
     if (typeof p.isSubscribed === "boolean") state.isSubscribed = p.isSubscribed;
+    if (typeof p.subscriberCode === "string" && /^ABB-/.test(p.subscriberCode)) state.subscriberCode = p.subscriberCode;
   } catch (e) {}
 }
 
