@@ -1435,6 +1435,23 @@ Nota di processo: la PR #78 aveva modificato la guida senza aggiornare questo ma
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser` (stack vuoto a fine file). `guida.html` non ha una suite di test dedicata.
 
+## Limite di classificazioni gratuite (8 ottobre 2026)
+
+**Regola** (richiesta di Giuseppe): chi usa l'app turista senza abbonamento può far classificare un oggetto dall'AI solo poche volte — **5 in totale, una tantum** (costante `FREE_CLASSIFICATIONS_LIMIT` in `app.js`) — poi compare un banner: *"abbonati a Touchandgo-app o a Touchandgo-api"*.
+
+**Scelte fatte con Giuseppe**: soglia 5 una tantum (non al mese); conteggio **sul dispositivo** (`localStorage`, chiave `tg_free_classifications`: semplice e senza dati personali sul server, ma chi cancella i dati del browser ricomincia da zero; se `localStorage` non è disponibile il limite semplicemente non scatta); dopo il limite la classificazione è **bloccata** ma resta il percorso manuale.
+
+**Come funziona**
+- Il conteggio sale solo quando una classificazione **riesce** (`runClassification()`); un errore non consuma nulla. Un abbonato (`state.isSubscribed`) non ha limite e non consuma il contatore. Si conta solo la classificazione dell'oggetto, non gli altri usi dell'AI (controllo imballo, riconoscimento firma) né il flusso "Genera spedizione" dell'area partner (i partner hanno il proprio limite di piano nel gestionale).
+- Il controllo avviene in `DestinationScreen()` **prima** di lanciare la chiamata AI (dopo il controllo "sei offline", che non usa l'AI). Al limite si apre la schermata `classify-limit` (`ClassifyLimitScreen()`) con tre strade:
+  1. **Abbonati a Touchandgo-app**: riusa lo stesso meccanismo di "Abbonati e risparmia" nel risultato (`state.isSubscribed = true`). **L'abbonamento resta SIMULATO, come i pagamenti dell'app**: finché non esiste un vero abbonamento a pagamento, chiunque tocchi quel pulsante toglie il limite.
+  2. **Abbonati a Touchandgo-api**: link in una nuova scheda al dispositivo `touchandgo-api.netlify.app` (settimo dispositivo, vedi il suo manuale).
+  3. **Continua scegliendo la categoria a mano**: stesso percorso provvisorio del funzionamento offline, con testi dedicati (`limit_manual_intro`, `result_provisional_note_limit`). L'item salvato porta `provisionalReason: "quota"` (`"offline"` per il percorso offline, `null` per un acquisto classificato online).
+- **Nessuna scappatoia dalla riclassificazione in background**: `processPendingReclassifications()` salta gli item finché il limite è raggiunto e non si è abbonati; le stime provvisorie restano tali e la classificazione reale riparte da sola dopo l'abbonamento. Una riclassificazione riuscita di un item offline **conta** come uso gratuito. Conseguenza: un item inserito a mano dopo il limite può restare "provvisorio" a tempo indeterminato se l'utente non si abbona.
+- Testi in italiano e inglese (`limit_*`); stili `.classify-limit-banner`/`.classify-limit-actions` in `style.css`. Il contatore **non** viene azzerato da "Reset".
+
+**Verifica**: `dist/assets/__tests__/classification-limit.test.js` (12 test: conteggio, sotto/alla soglia senza chiamata AI, i tre percorsi del banner, abbonato, provisionalReason, riclassificazione in background, `localStorage` guasto, inglese). Provato a togliere il blocco e la salta di riclassificazione: i test relativi falliscono. Suite completa 480/480.
+
 ## Guida pubblica — servizio a pagamento come dispositivo indipendente (8 ottobre 2026)
 
 Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna function toccata), sezione 04C "Oltre il corebusiness — la classificazione AI come servizio":

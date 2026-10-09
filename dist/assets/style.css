@@ -481,6 +481,10 @@ button{font-family:inherit;cursor:pointer}
 
 /* ---------- Percorso offline — classificazione provvisoria (settembre 2026) ---------- */
 .offline-classify-banner,.offline-provisional-banner{line-height:1.5}
+/* Limite di classificazioni gratuite (ottobre 2026) */
+.classify-limit-banner{line-height:1.5}
+.classify-limit-actions{display:flex;flex-direction:column;gap:10px;margin:16px 0}
+.classify-limit-actions a{display:block;text-align:center;text-decoration:none;box-sizing:border-box}
 .offline-category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
 .offline-category-btn{background:var(--surface);border:1px solid var(--line);padding:14px 12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;text-align:center}
 .offline-category-btn:active{background:var(--warn-bg);border-color:var(--gold)}
