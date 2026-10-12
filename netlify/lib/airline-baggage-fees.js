@@ -27,6 +27,17 @@
 //   "per_extra_piece" — costo FISSO per un pezzo/bagaglio extra,
 //     indipendente dal peso (entro i limiti di peso massimo della
 //     compagnia, non modellati qui).
+//   "per_oversize_piece" — costo FISSO (non per kg, come "per_extra_piece")
+//     per UN pezzo che supera i limiti standard di peso/dimensioni della
+//     compagnia (es. KLM: 23-32kg o oltre 158cm di somma delle
+//     dimensioni) — distinto da "per_extra_piece" perché descrive lo
+//     stesso pezzo del turista quando è FUORI MISURA/SOVRAPPESO, non un
+//     pezzo aggiuntivo entro i limiti standard. Introdotto il 2026-10-12
+//     correggendo un errore nelle due voci KLM qui sotto: erano
+//     etichettate "per_kg_overweight" ma la fonte ufficiale KLM descrive
+//     questo importo come una tariffa FISSA per collo fuori misura/
+//     sovrappeso (23-32kg), non un prezzo per kg di eccedenza — vedi nota
+//     sulle voci KLM corrette più sotto.
 //   "variable_by_fare" — nessun numero affidabile da mostrare (sistema
 //     tariffario troppo complesso/dipendente dalla tariffa specifica per
 //     ridurlo a un range onesto): amountMin/amountMax sono null, "note"
@@ -105,27 +116,27 @@ const AIRLINE_BAGGAGE_FEES = [
   },
   {
     airline: "KLM",
-    feeType: "per_kg_overweight",
+    feeType: "per_oversize_piece",
     routeClass: "eu",
     travelClass: null,
     amountMin: 75,
     amountMax: 100,
     currency: "EUR",
     sourceUrl: "https://www.klm.it/informazioni/bagagli",
-    verifiedAt: "2026-09-30",
-    note: null,
+    verifiedAt: "2026-10-12",
+    note: "Bagaglio fuori misura/sovrappeso (23-32kg o oltre 158cm di somma delle dimensioni): tariffa FISSA per collo, non un prezzo per kg di eccedenza — corretto il 2026-10-12 (era erroneamente etichettato 'per_kg_overweight').",
   },
   {
     airline: "KLM",
-    feeType: "per_kg_overweight",
+    feeType: "per_oversize_piece",
     routeClass: "intercontinental",
     travelClass: null,
     amountMin: 100,
     amountMax: 300,
     currency: "EUR",
     sourceUrl: "https://www.klm.it/informazioni/bagagli",
-    verifiedAt: "2026-09-30",
-    note: null,
+    verifiedAt: "2026-10-12",
+    note: "Bagaglio fuori misura/sovrappeso (23-32kg o oltre 158cm di somma delle dimensioni): tariffa FISSA per collo, non un prezzo per kg di eccedenza — corretto il 2026-10-12 (era erroneamente etichettato 'per_kg_overweight').",
   },
   {
     // "Pezzo extra dall'Italia" — 2° pezzo. Il 3° pezzo è una voce

@@ -18,9 +18,15 @@
 //      il caso di conversione USD->EUR approssimativa.
 //   5. Regressione (ottobre 2026, trovata in revisione): una compagnia con
 //      PIÙ voci per la stessa rotta (KLM: per_extra_piece E
-//      per_kg_overweight) deve mostrarle ENTRAMBE, mai solo la prima —
+//      per_oversize_piece) deve mostrarle ENTRAMBE, mai solo la prima —
 //      vedi baggageComparisonsForGroup() (array, non più un singolo
 //      oggetto) e i test dedicati KLM più sotto.
+//   6. Correzione dati (12/10/2026): le due voci KLM "oversize/sovrappeso"
+//      (75-100€ UE, 100-300€ intercontinentale) erano erroneamente
+//      etichettate "per_kg_overweight" (fonte ufficiale KLM: è una tariffa
+//      FISSA per collo fuori misura/sovrappeso 23-32kg, non un prezzo per
+//      kg di eccedenza) — ora "per_oversize_piece", un costo fisso come
+//      "per_extra_piece". Vedi test dedicati più sotto.
 //
 // Stessa tecnica già usata in consolidated-group-price.test.js/
 // duty-estimate.test.js: app.js REALE caricato in una finestra jsdom
@@ -91,16 +97,19 @@ const FAKE_FEES = [
   { airline: "Ryanair", feeType: "per_kg_overweight", routeClass: null, travelClass: null, amountMin: 13, amountMax: 13, currency: "EUR", sourceUrl: "https://example.com/ryanair", verifiedAt: "2026-09-30", note: null },
   // KLM: QUATTRO voci, mirror della struttura reale in
   // netlify/lib/airline-baggage-fees.js — sia per_extra_piece sia
-  // per_kg_overweight, per entrambe le rotte eu/intercontinental. Usata
+  // per_oversize_piece, per entrambe le rotte eu/intercontinental. Usata
   // sotto per il bug trovato in revisione (ottobre 2026): la versione
   // precedente di findAirlineFeeEntry() restituiva SEMPRE e SOLO la prima
   // voce che matchava routeClass (qui per_extra_piece, perché scritta
-  // prima nell'array), nascondendo silenziosamente la tariffa al kg
-  // indipendentemente dal peso reale del pacco.
+  // prima nell'array), nascondendo silenziosamente la seconda voce
+  // indipendentemente dal peso reale del pacco. per_oversize_piece (prima
+  // erroneamente "per_kg_overweight", corretto il 2026-10-12: è una
+  // tariffa FISSA per collo fuori misura/sovrappeso, non per kg) è un
+  // costo fisso come per_extra_piece, mai moltiplicato per il peso.
   { airline: "KLM", feeType: "per_extra_piece", routeClass: "eu", travelClass: null, amountMin: 20, amountMax: 70, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
   { airline: "KLM", feeType: "per_extra_piece", routeClass: "intercontinental", travelClass: null, amountMin: 30, amountMax: 240, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
-  { airline: "KLM", feeType: "per_kg_overweight", routeClass: "eu", travelClass: null, amountMin: 75, amountMax: 100, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
-  { airline: "KLM", feeType: "per_kg_overweight", routeClass: "intercontinental", travelClass: null, amountMin: 100, amountMax: 300, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-09-30", note: null },
+  { airline: "KLM", feeType: "per_oversize_piece", routeClass: "eu", travelClass: null, amountMin: 75, amountMax: 100, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-10-12", note: null },
+  { airline: "KLM", feeType: "per_oversize_piece", routeClass: "intercontinental", travelClass: null, amountMin: 100, amountMax: 300, currency: "EUR", sourceUrl: "https://example.com/klm", verifiedAt: "2026-10-12", note: null },
   { airline: "Lufthansa Group", feeType: "variable_by_fare", routeClass: null, travelClass: null, amountMin: null, amountMax: null, currency: "EUR", sourceUrl: "https://example.com/lh", verifiedAt: "2026-09-30", note: "Tariffa variabile, verifica la tua tariffa specifica." },
   { airline: "Qatar Airways", feeType: "per_extra_piece", routeClass: null, travelClass: null, amountMin: 130, amountMax: 255, currency: "USD", sourceUrl: "https://example.com/qatar", verifiedAt: "2026-09-30", note: null },
   // Compagnia con SOLO una voce "intercontinental" (nessun fallback
@@ -225,49 +234,53 @@ test("baggageComparisonsForGroup(): end-to-end, Ryanair (una sola voce) su desti
 // ---------------------------------------------------------------------
 // Regressione del bug trovato in revisione (ottobre 2026): per una
 // compagnia con PIÙ voci per la stessa rotta (KLM: per_extra_piece E
-// per_kg_overweight, sia per "eu" sia per "intercontinental"),
+// per_oversize_piece, sia per "eu" sia per "intercontinental"),
 // baggageComparisonsForGroup() deve restituire ENTRAMBE le voci — la
 // versione precedente (findAirlineFeeEntry a voce singola) restituiva
 // sempre e solo la prima (per_extra_piece, scritta prima nel dataset),
-// nascondendo silenziosamente la tariffa al kg indipendentemente dal peso
+// nascondendo silenziosamente la seconda voce indipendentemente dal peso
 // reale del pacco.
 // ---------------------------------------------------------------------
 
-test("baggageComparisonsForGroup(): KLM rotta 'eu' -> ENTRAMBE le voci (per_extra_piece E per_kg_overweight), non solo la prima", (t) => {
+test("baggageComparisonsForGroup(): KLM rotta 'eu' -> ENTRAMBE le voci (per_extra_piece E per_oversize_piece), non solo la prima", (t) => {
   const { context } = bootApp(t);
   setState(context, { __t_fees: FAKE_FEES });
   const result = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Italia", 4)');
 
   assert.equal(result.length, 2, "KLM ha due voci per la rotta eu: entrambe devono comparire");
   const extraPiece = result.find((r) => r.feeType === "per_extra_piece");
-  const perKg = result.find((r) => r.feeType === "per_kg_overweight");
+  const oversize = result.find((r) => r.feeType === "per_oversize_piece");
   assert.ok(extraPiece, "la voce per_extra_piece deve essere presente");
-  assert.ok(perKg, "la voce per_kg_overweight NON deve sparire dietro la prima trovata (il bug corretto)");
+  assert.ok(oversize, "la voce per_oversize_piece NON deve sparire dietro la prima trovata (il bug corretto)");
 
   // per_extra_piece: costo fisso, invariato rispetto al peso (20-70€, dal
   // dataset).
   assert.equal(extraPiece.min, 20);
   assert.equal(extraPiece.max, 70);
 
-  // per_kg_overweight: 75-100€/kg (dal dataset) × 4kg di billableWeight.
-  assert.equal(perKg.min, 75 * 4);
-  assert.equal(perKg.max, 100 * 4);
+  // per_oversize_piece: costo FISSO per collo fuori misura/sovrappeso
+  // (75-100€, dal dataset) — MAI moltiplicato per il peso (correzione del
+  // 2026-10-12: era erroneamente etichettato "per_kg_overweight").
+  assert.equal(oversize.min, 75);
+  assert.equal(oversize.max, 100);
 });
 
-test("baggageComparisonsForGroup(): KLM per_kg_overweight è effettivamente proporzionale al peso (doppio peso = doppio importo)", (t) => {
+test("baggageComparisonsForGroup(): KLM per_oversize_piece è un costo FISSO, non scala col peso (correzione del 2026-10-12: non è una tariffa al kg)", (t) => {
   const { context } = bootApp(t);
   setState(context, { __t_fees: FAKE_FEES });
 
   const resultLight = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Italia", 3)');
   const resultHeavy = callGlobal(context, 'baggageComparisonsForGroup(state.__t_fees, "KLM", "economy", "Italia", 6)');
 
-  const perKgLight = resultLight.find((r) => r.feeType === "per_kg_overweight");
-  const perKgHeavy = resultHeavy.find((r) => r.feeType === "per_kg_overweight");
-  assert.equal(perKgHeavy.min, perKgLight.min * 2, "doppio peso -> doppio importo minimo");
-  assert.equal(perKgHeavy.max, perKgLight.max * 2, "doppio peso -> doppio importo massimo");
+  const oversizeLight = resultLight.find((r) => r.feeType === "per_oversize_piece");
+  const oversizeHeavy = resultHeavy.find((r) => r.feeType === "per_oversize_piece");
+  assert.equal(oversizeLight.min, 75, "fisso, indipendente dal peso fatturabile");
+  assert.equal(oversizeHeavy.min, 75, "doppio peso -> stesso importo minimo, nessuna moltiplicazione");
+  assert.equal(oversizeLight.max, 100);
+  assert.equal(oversizeHeavy.max, 100, "doppio peso -> stesso importo massimo, nessuna moltiplicazione");
 
-  // La voce per_extra_piece, invece, non deve MAI variare col peso — è un
-  // costo fisso, vedi test sopra.
+  // La voce per_extra_piece, invece, resta un costo fisso indipendente dal
+  // peso come prima — stesso principio, nessuna modifica attesa qui.
   const extraPieceLight = resultLight.find((r) => r.feeType === "per_extra_piece");
   const extraPieceHeavy = resultHeavy.find((r) => r.feeType === "per_extra_piece");
   assert.deepEqual(extraPieceLight, extraPieceHeavy);
@@ -280,11 +293,11 @@ test("baggageComparisonsForGroup(): KLM rotta 'intercontinental' -> le voci corr
 
   assert.equal(result.length, 2);
   const extraPiece = result.find((r) => r.feeType === "per_extra_piece");
-  const perKg = result.find((r) => r.feeType === "per_kg_overweight");
+  const oversize = result.find((r) => r.feeType === "per_oversize_piece");
   assert.equal(extraPiece.min, 30);
   assert.equal(extraPiece.max, 240);
-  assert.equal(perKg.min, 100 * 4);
-  assert.equal(perKg.max, 300 * 4);
+  assert.equal(oversize.min, 100, "fisso, non moltiplicato per i 4kg di billableWeight");
+  assert.equal(oversize.max, 300);
 });
 
 // ---------------------------------------------------------------------
@@ -368,7 +381,7 @@ test("ConcludeScreen: Lufthansa Group mostra la nota, mai un numero", async (t) 
   assert.ok(!/\d/.test(row.querySelector(".baggage-compare-note").textContent.replace(/2026/g, "")), "nessuna cifra di importo nella nota (a parte eventuali anni, qui non presenti)");
 });
 
-test("ConcludeScreen: KLM mostra DUE righe distinte (pezzo extra E sovrappeso al kg), mai solo la prima — regressione del bug trovato in revisione", async (t) => {
+test("ConcludeScreen: KLM mostra DUE righe distinte (pezzo extra E fuori misura/sovrappeso), mai solo la prima — regressione del bug trovato in revisione", async (t) => {
   const { window, document, context } = bootApp(t, { fetchMock: fetchMockFor(FAKE_FEES, "2026-09-30") });
   setState(context, { addresses: [ADDRESS_EU], pendingItems: [item({ weightKg: 4 })] });
   gotoConclude(context, window);
@@ -379,16 +392,18 @@ test("ConcludeScreen: KLM mostra DUE righe distinte (pezzo extra E sovrappeso al
   airlineSelect.dispatchEvent(new window.Event("change"));
 
   const rows = Array.from(document.querySelectorAll(".baggage-compare-row"));
-  assert.equal(rows.length, 2, "KLM deve mostrare due righe (pezzo extra + sovrappeso al kg), mai una sola");
+  assert.equal(rows.length, 2, "KLM deve mostrare due righe (pezzo extra + fuori misura/sovrappeso), mai una sola");
 
   const extraPieceRow = rows.find((r) => r.textContent.includes("Se comprassi un bagaglio extra"));
-  const overweightRow = rows.find((r) => r.textContent.includes("Se sei in sovrappeso"));
+  const oversizeRow = rows.find((r) => r.textContent.includes("fuori misura/sovrappeso"));
   assert.ok(extraPieceRow, "deve esserci la riga del pezzo extra, etichettata");
-  assert.ok(overweightRow, "deve esserci la riga del sovrappeso al kg, etichettata — quella che il bug nascondeva");
+  assert.ok(oversizeRow, "deve esserci la riga fuori misura/sovrappeso, etichettata — quella che il bug nascondeva");
 
   assert.ok(extraPieceRow.textContent.includes("20.00") && extraPieceRow.textContent.includes("70.00"), `riga pezzo extra attesa 20-70€, trovata: "${extraPieceRow.textContent}"`);
-  // Sovrappeso: 75-100€/kg × 4kg (vedi item({weightKg: 4}) sopra) = 300-400€.
-  assert.ok(overweightRow.textContent.includes("300.00") && overweightRow.textContent.includes("400.00"), `riga sovrappeso attesa 300-400€ (75-100 × 4kg), trovata: "${overweightRow.textContent}"`);
+  // Fuori misura/sovrappeso: costo FISSO 75-100€ per collo (dal dataset),
+  // MAI moltiplicato per i 4kg di item({weightKg: 4}) — correzione del
+  // 2026-10-12 (era erroneamente etichettato "per_kg_overweight").
+  assert.ok(oversizeRow.textContent.includes("75.00") && oversizeRow.textContent.includes("100.00"), `riga fuori misura/sovrappeso attesa 75-100€ fisso, trovata: "${oversizeRow.textContent}"`);
 });
 
 test("ConcludeScreen: compagnia senza alcuna voce per questa rotta -> messaggio esplicito, mai un numero inventato", async (t) => {

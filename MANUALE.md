@@ -479,6 +479,20 @@ In `ConcludeScreen` — la stessa schermata del "Prezzo consolidato per gruppo d
 
 Suite completa del repository verde (**423/423**, `npm test`).
 
+#### Correzione dati: le due voci KLM "sovrappeso" erano in realtà una tariffa FISSA per bagaglio fuori misura, non un prezzo al kg (12 ottobre 2026)
+
+**Segnalato da Giuseppe**: verificare se il campo KLM `per_kg_overweight` in `netlify/lib/airline-baggage-fees.js` corrispondesse davvero a una tariffa al kg di sovrappeso, o se per errore riportasse la tariffa flat per bagagli oversize. La fonte ufficiale citata (`sourceUrl` KLM) non era raggiungibile da questa sessione (DNS non risolto su più domini KLM, incluso quello salvato); la verifica è stata fatta tramite ricerca che cita direttamente le pagine ufficiali KLM (US/SR) allo stesso percorso (`/information/baggage/extra-oversized-overweight-baggage`).
+
+**Conferma: il sospetto era corretto.** KLM distingue tre fasce, tutte a **tariffa fissa per collo**, non a tariffa per kg:
+- **Bagaglio extra** (pezzo aggiuntivo entro 23kg): 20-70€ UE, 30-240€ intercontinentale — questa parte del dataset (`per_extra_piece`) era già corretta.
+- **Bagaglio "heavy"/oversize** (23-32kg, o oltre 158cm di somma delle dimensioni): tariffa FISSA per collo, 75-100€ UE, 100-300€ intercontinentale — gli stessi importi già presenti nel dataset, ma etichettati `per_kg_overweight`. La fonte KLM descrive questo come un importo forfettario per collo, non un prezzo al kg: una vera tariffa al kg esiste solo come eccezione "in un numero crescente di aeroporti", senza una cifra ufficiale stabile pubblicata — non modellata qui, per lo stesso principio già applicato a Lufthansa Group/`variable_by_fare` (nessun numero inventato quando la fonte non ne fornisce uno affidabile).
+
+**L'errore aveva un impatto reale**: `estimateAirlineBaggageCost()` moltiplicava questo importo per l'intero `billableWeight` del pacco (comportamento corretto SOLO per una vera tariffa al kg) — un pacco di 25kg avrebbe mostrato "75€ × 25 = 1.875€" invece del vero importo fisso 75-100€, sovrastimando pesantemente il confronto per il turista.
+
+**Fix**: nuovo `feeType: "per_oversize_piece"` — costo FISSO per un pezzo fuori misura/sovrappeso, come `per_extra_piece` (mai moltiplicato per il peso), ma etichettato distintamente perché descrive concettualmente una cosa diversa (lo stesso collo del turista quando supera i limiti standard, non un pezzo aggiuntivo). Le due voci KLM interessate sono state rietichettate `per_oversize_piece` (importi invariati, `verifiedAt` aggiornato al 2026-10-12, `note` che spiega la correzione). `baggageFeeTypeLabel()`/i18n hanno una nuova etichetta dedicata ("Se il bagaglio è fuori misura/sovrappeso (tariffa fissa)" IT, "If your bag is oversized/overweight (flat fee)" EN) — `estimateAirlineBaggageCost()` non ha richiesto modifiche: il moltiplicatore si applica già solo a `per_kg_overweight` in modo esplicito, qualsiasi altro `feeType` resta implicitamente un importo fisso.
+
+**Test aggiornati** (stesso numero di test, solo le assertion): i 3 test KLM dedicati alla regressione multi-voce in `dist/assets/__tests__/airline-baggage-compare.test.js` ora verificano che `per_oversize_piece` resti un importo FISSO indipendentemente dal peso (75-100€/100-300€, mai moltiplicato) — prima verificavano erroneamente la proporzionalità al peso che l'errore sopra aveva introdotto nei test stessi.
+
 ### Persistenza del gruppo di spedizione (`save-shipment-group.js`)
 
 Prima di questa modifica, il "codice di ordine di ritiro consolidato" (`generateBookingCode()`, mostrato in `ShippedScreen`) esisteva solo lato client: nessun record persistente rappresentava la spedizione consolidata come entità, solo i singoli acquisti marcati "ritirato" separatamente — dal CRM non si poteva risalire a "quali oggetti sono stati ritirati insieme, con quale codice, a quale prezzo".
