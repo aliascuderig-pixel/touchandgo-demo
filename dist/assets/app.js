@@ -719,6 +719,7 @@ const I18N = {
     baggage_compare_approx_conversion: "~conversione stimata",
     baggage_compare_feetype_extra_piece: "Se comprassi un bagaglio extra",
     baggage_compare_feetype_overweight: "Se sei in sovrappeso (su questo peso)",
+    baggage_compare_feetype_heavy_bag: "Se il bagaglio è pesante (23–32 kg, tariffa fissa)",
     baggage_compare_disclaimer: "Dati di riferimento da fonti ufficiali delle compagnie aeree, verificati il {date}. Le tariffe reali variano per tariffa, rotta e canale di acquisto — verifica sempre con la compagnia.",
     result_promo_badge_breakeven: "Una tantum · invito {code}",
     result_promo_headline_breakeven: "La tua prima spedizione,<br><em>al prezzo che costa a noi.</em>",
@@ -1015,6 +1016,7 @@ const I18N = {
     baggage_compare_approx_conversion: "~estimated conversion",
     baggage_compare_feetype_extra_piece: "If you bought an extra bag",
     baggage_compare_feetype_overweight: "If you're overweight (on this weight)",
+    baggage_compare_feetype_heavy_bag: "If your bag is heavy (23–32 kg, flat fee)",
     baggage_compare_disclaimer: "Reference data from official airline sources, verified on {date}. Actual fares vary by fare type, route and purchase channel — always check with the airline.",
     result_promo_badge_breakeven: "One-time · invite {code}",
     result_promo_headline_breakeven: "Your first shipment,<br><em>at the price it costs us.</em>",
@@ -5995,6 +5997,7 @@ async function refreshAirlineBaggageFees() {
 function baggageFeeTypeLabel(feeType) {
   if (feeType === "per_kg_overweight") return t("baggage_compare_feetype_overweight");
   if (feeType === "per_extra_piece") return t("baggage_compare_feetype_extra_piece");
+  if (feeType === "flat_heavy_bag") return t("baggage_compare_feetype_heavy_bag");
   return "";
 }
 

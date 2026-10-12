@@ -85,7 +85,7 @@ test("ogni voce del dataset ha i campi richiesti nella forma attesa (amountMin/a
   const body = JSON.parse(res.body);
   for (const f of body.fees) {
     assert.equal(typeof f.airline, "string");
-    assert.ok(["per_kg_overweight", "per_extra_piece", "variable_by_fare"].includes(f.feeType));
+    assert.ok(["per_kg_overweight", "per_extra_piece", "variable_by_fare", "flat_heavy_bag"].includes(f.feeType));
     assert.ok("amountMin" in f && "amountMax" in f);
     assert.ok(!("amount" in f), "mai un campo 'amount' singolo — vedi commento nel file dati");
     assert.ok(["EUR", "USD"].includes(f.currency));
@@ -135,6 +135,15 @@ test("Qatar Airways: entrambe le tariffe sono presenti (a pezzo e a kg), non una
   assert.equal(perKg.amountMin, 30);
   assert.equal(perKg.amountMax, 40);
   assert.equal(perKg.currency, "USD");
+});
+
+test("KLM: le fasce 75-100 € (EU) e 100-300 € (intercontinentale) sono tariffe FISSE per bagaglio pesante, mai al kg (correzione 12/10/2026)", async () => {
+  const body = JSON.parse((await freshHandler()(makeEvent())).body);
+  const klm = body.fees.filter((f) => f.airline === "KLM");
+  assert.equal(klm.filter((f) => f.feeType === "per_kg_overweight").length, 0, "KLM non ha una tariffa al kg stabile pubblicata");
+  const heavy = klm.filter((f) => f.feeType === "flat_heavy_bag");
+  assert.deepEqual(heavy.map((f) => [f.routeClass, f.amountMin, f.amountMax]).sort(), [["eu", 75, 100], ["intercontinental", 100, 300]].sort());
+  for (const f of heavy) assert.match(f.note, /FISSA/);
 });
 
 test("compagnie ancora senza fonte ufficiale pulita (British Airways, Air France, Emirates) non compaiono nel dataset", async () => {

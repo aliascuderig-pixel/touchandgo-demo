@@ -27,6 +27,11 @@
 //   "per_extra_piece" — costo FISSO per un pezzo/bagaglio extra,
 //     indipendente dal peso (entro i limiti di peso massimo della
 //     compagnia, non modellati qui).
+//   "flat_heavy_bag" — costo FISSO per un bagaglio "pesante" (fascia di
+//     peso, es. 23–32 kg), indipendente dai kg esatti: NON è una tariffa
+//     al kg. Correzione del 2026-10-12: le voci KLM 75–100 € (EU) e
+//     100–300 € (intercontinentale) erano modellate per errore come
+//     "per_kg_overweight" e moltiplicate per i kg del pacco.
 //   "variable_by_fare" — nessun numero affidabile da mostrare (sistema
 //     tariffario troppo complesso/dipendente dalla tariffa specifica per
 //     ridurlo a un range onesto): amountMin/amountMax sono null, "note"
@@ -105,27 +110,27 @@ const AIRLINE_BAGGAGE_FEES = [
   },
   {
     airline: "KLM",
-    feeType: "per_kg_overweight",
+    feeType: "flat_heavy_bag",
     routeClass: "eu",
     travelClass: null,
     amountMin: 75,
     amountMax: 100,
     currency: "EUR",
     sourceUrl: "https://www.klm.it/informazioni/bagagli",
-    verifiedAt: "2026-09-30",
-    note: null,
+    verifiedAt: "2026-10-12",
+    note: "Tariffa FISSA per un bagaglio pesante (fascia 23-32 kg), non un prezzo al kg: KLM non pubblica una tariffa al kg stabile (esiste solo come eccezione su alcuni aeroporti). Importo indicativo della fascia, non proporzionale al peso.",
   },
   {
     airline: "KLM",
-    feeType: "per_kg_overweight",
+    feeType: "flat_heavy_bag",
     routeClass: "intercontinental",
     travelClass: null,
     amountMin: 100,
     amountMax: 300,
     currency: "EUR",
     sourceUrl: "https://www.klm.it/informazioni/bagagli",
-    verifiedAt: "2026-09-30",
-    note: null,
+    verifiedAt: "2026-10-12",
+    note: "Tariffa FISSA per un bagaglio pesante (fascia 23-32 kg), non un prezzo al kg: KLM non pubblica una tariffa al kg stabile (esiste solo come eccezione su alcuni aeroporti). Importo indicativo della fascia, non proporzionale al peso.",
   },
   {
     // "Pezzo extra dall'Italia" — 2° pezzo. Il 3° pezzo è una voce
