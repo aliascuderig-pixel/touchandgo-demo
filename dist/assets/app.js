@@ -719,6 +719,7 @@ const I18N = {
     baggage_compare_approx_conversion: "~conversione stimata",
     baggage_compare_feetype_extra_piece: "Se comprassi un bagaglio extra",
     baggage_compare_feetype_overweight: "Se sei in sovrappeso (su questo peso)",
+    baggage_compare_feetype_oversize: "Se il bagaglio è fuori misura/sovrappeso (tariffa fissa)",
     baggage_compare_disclaimer: "Dati di riferimento da fonti ufficiali delle compagnie aeree, verificati il {date}. Le tariffe reali variano per tariffa, rotta e canale di acquisto — verifica sempre con la compagnia.",
     result_promo_badge_breakeven: "Una tantum · invito {code}",
     result_promo_headline_breakeven: "La tua prima spedizione,<br><em>al prezzo che costa a noi.</em>",
@@ -1015,6 +1016,7 @@ const I18N = {
     baggage_compare_approx_conversion: "~estimated conversion",
     baggage_compare_feetype_extra_piece: "If you bought an extra bag",
     baggage_compare_feetype_overweight: "If you're overweight (on this weight)",
+    baggage_compare_feetype_oversize: "If your bag is oversized/overweight (flat fee)",
     baggage_compare_disclaimer: "Reference data from official airline sources, verified on {date}. Actual fares vary by fare type, route and purchase channel — always check with the airline.",
     result_promo_badge_breakeven: "One-time · invite {code}",
     result_promo_headline_breakeven: "Your first shipment,<br><em>at the price it costs us.</em>",
@@ -5868,7 +5870,7 @@ function airlineNamesFromFees(fees) {
 // Un array, non una singola voce (bug trovato in revisione, ottobre 2026):
 // una compagnia può avere PIÙ voci per la stessa combinazione
 // routeClass/travelClass quando la fonte distingue per feeType — es. KLM
-// ha SIA "per_extra_piece" SIA "per_kg_overweight" per la rotta "eu".
+// ha SIA "per_extra_piece" SIA "per_oversize_piece" per la rotta "eu".
 // Restituire solo la prima (come faceva la versione precedente di questa
 // funzione) nascondeva silenziosamente la tariffa al kg, mostrando sempre
 // e solo il costo fisso del pezzo extra indipendentemente dal peso reale
@@ -5923,7 +5925,7 @@ function estimateAirlineBaggageCost(entry, billableWeightKg) {
 // la routeClass) e il peso fatturabile del gruppo, restituisce un ARRAY di
 // confronti pronti per il rendering — mai un singolo oggetto (vedi
 // findAirlineFeeEntries() sopra: una compagnia può avere più voci per la
-// stessa rotta, es. KLM con per_extra_piece E per_kg_overweight, ed
+// stessa rotta, es. KLM con per_extra_piece E per_oversize_piece, ed
 // entrambe vanno mostrate, non solo la prima). Array vuoto se il dataset
 // non è (ancora) disponibile o la compagnia scelta non ha alcuna voce per
 // quella rotta (mai un errore, solo "nessun confronto disponibile" gestito
@@ -5987,14 +5989,16 @@ async function refreshAirlineBaggageFees() {
 
 // Etichetta leggibile per il feeType di UNA voce — usata SOLO quando una
 // compagnia ha più di una voce per la stessa rotta (vedi
-// AirlineBaggageCompareSection sotto): "per_extra_piece" e
-// "per_kg_overweight" sono due costi concettualmente diversi (un pezzo
-// extra fisso vs una tariffa al kg), mai da sommare né da mostrare come se
-// fossero la stessa cosa. "variable_by_fare" non arriva mai qui (gestito a
-// parte, solo testo della nota).
+// AirlineBaggageCompareSection sotto): "per_extra_piece", "per_oversize_piece"
+// e "per_kg_overweight" sono costi concettualmente diversi (un pezzo extra
+// fisso, un pezzo fuori misura/sovrappeso a tariffa fissa, una tariffa al
+// kg), mai da sommare né da mostrare come se fossero la stessa cosa.
+// "variable_by_fare" non arriva mai qui (gestito a parte, solo testo della
+// nota).
 function baggageFeeTypeLabel(feeType) {
   if (feeType === "per_kg_overweight") return t("baggage_compare_feetype_overweight");
   if (feeType === "per_extra_piece") return t("baggage_compare_feetype_extra_piece");
+  if (feeType === "per_oversize_piece") return t("baggage_compare_feetype_oversize");
   return "";
 }
 
@@ -6064,7 +6068,7 @@ function AirlineBaggageCompareSection(groupPricing) {
       return;
     }
     // Più di una voce per la stessa compagnia+rotta (es. KLM: sia
-    // "per_extra_piece" sia "per_kg_overweight" per la rotta "eu") -> una
+    // "per_extra_piece" sia "per_oversize_piece" per la rotta "eu") -> una
     // riga PER CIASCUNA, mai una sola scelta a caso (bug corretto in
     // revisione, ottobre 2026 — vedi findAirlineFeeEntries()). Con una
     // sola voce (il caso di tutte le altre compagnie nel dataset di oggi)

@@ -85,7 +85,7 @@ test("ogni voce del dataset ha i campi richiesti nella forma attesa (amountMin/a
   const body = JSON.parse(res.body);
   for (const f of body.fees) {
     assert.equal(typeof f.airline, "string");
-    assert.ok(["per_kg_overweight", "per_extra_piece", "variable_by_fare"].includes(f.feeType));
+    assert.ok(["per_kg_overweight", "per_extra_piece", "per_oversize_piece", "variable_by_fare"].includes(f.feeType));
     assert.ok("amountMin" in f && "amountMax" in f);
     assert.ok(!("amount" in f), "mai un campo 'amount' singolo — vedi commento nel file dati");
     assert.ok(["EUR", "USD"].includes(f.currency));
