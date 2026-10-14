@@ -311,6 +311,49 @@ async function checkAirlineBaggageFees() {
   }
 }
 
+// ---------------------------------------------------------------------
+// Passo indipendente: i link della guida (mezzo di promozione dei servizi
+// Touch&Go) devono atterrare nei dispositivi giusti. Legge guida.html dallo
+// spazio ospite (stessa pagina della produzione) e fa una GET a ogni link
+// touchandgo-*.netlify.app. Solo letture. I link al dominio di produzione
+// del sito NON vengono chiamati (regola sopra): si controlla lo stesso
+// percorso sullo spazio ospite.
+// ---------------------------------------------------------------------
+const GUIDE_LINK_RE = /href="(https:\/\/touchandgo-[a-z]+\.netlify\.app[^"]*)"/g;
+const GUIDE_LINK_TIMEOUT_MS = 10000;
+const GUIDE_MAX_LINKS = 30;
+
+async function checkGuideLinks() {
+  const start = Date.now();
+  try {
+    const { res, responseTimeMs } = await timedFetch(guestUrl("site/guida.html"), {}, GUIDE_LINK_TIMEOUT_MS);
+    if (res.status !== 200) return { status: "problem", responseTimeMs, error: "guida_http_" + res.status };
+    const html = await res.text();
+    const unique = Array.from(new Set(Array.from(html.matchAll(GUIDE_LINK_RE)).map((m) => m[1].split("?")[0]))).slice(0, GUIDE_MAX_LINKS);
+    if (unique.length === 0) return { status: "problem", responseTimeMs, error: "nessun_link_nella_guida" };
+    const broken = [];
+    await Promise.all(
+      unique.map(async (link) => {
+        let target = link;
+        if (link.startsWith(KNOWN_PRODUCTION_URL.replace(/\/$/, ""))) {
+          target = guestUrl(link.slice(KNOWN_PRODUCTION_URL.length));
+        }
+        try {
+          const r = await timedFetch(target, {}, GUIDE_LINK_TIMEOUT_MS);
+          if (r.res.status !== 200) broken.push({ url: link, error: "http_" + r.res.status });
+        } catch (err) {
+          broken.push({ url: link, error: err.name === "AbortError" ? "timeout" : err.message || "unreachable" });
+        }
+      })
+    );
+    return broken.length
+      ? { status: "problem", responseTimeMs: Date.now() - start, checked: unique.length, broken }
+      : { status: "ok", responseTimeMs: Date.now() - start, checked: unique.length };
+  } catch (err) {
+    return timeoutOrUnreachable(err, start);
+  }
+}
+
 async function cleanupOldReports(store) {
   try {
     const { blobs } = await store.list();
@@ -396,6 +439,10 @@ async function runWeeklyE2ETest() {
   // saltato dai passi della simulazione d'acquisto, e viceversa.
   steps.airlineBaggageFees = await checkAirlineBaggageFees();
   if (steps.airlineBaggageFees.status !== "ok") overallStatus = "problem";
+
+  // ---- Passo indipendente: i link della guida atterrano nei dispositivi giusti ----
+  steps.guideLinks = await checkGuideLinks();
+  if (steps.guideLinks.status !== "ok") overallStatus = "problem";
 
   // ---- Passi 1+2: classificazione AI reale sui due oggetti di test ----
   let classification1 = null;
@@ -615,5 +662,6 @@ exports.computeIndividualPrice = computeIndividualPrice;
 exports.computeConsolidatedPrice = computeConsolidatedPrice;
 exports.checkConsolidatedNotGreaterThanSum = checkConsolidatedNotGreaterThanSum;
 exports.checkAirlineBaggageFees = checkAirlineBaggageFees;
+exports.checkGuideLinks = checkGuideLinks;
 exports.GUEST_BASE_URL = GUEST_BASE_URL;
 exports.KNOWN_PRODUCTION_URL = KNOWN_PRODUCTION_URL;

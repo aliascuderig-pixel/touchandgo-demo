@@ -77,6 +77,8 @@ const SUBSCRIBED_FEE = 19;
 // arrotondati per una risposta discorsiva, non come tabella a fasce.
 const QUESTION_MODE_FACTS = `Il servizio Touch&Go permette a un turista in Italia di fotografare un acquisto in negozio, farlo classificare da un'AI (dogana, peso, dimensioni), lasciarlo in negozio con un QR e riceverlo spedito a casa — con esenzione IVA export gestita in automatico.
 
+MERCI VIETATE: Touch&Go non spedisce armi, droghe, merci contraffatte, materiali pericolosi o infiammabili, né ciò che il Paese di destinazione non ammette (es. carne e latticini verso USA o Canada). Se il turista chiede di spedire qualcosa di questo tipo, spiega che non è possibile; se è un dubbio, invitalo a verificare prima di acquistare. Non inventare liste di regole per Paese.
+
 FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
 - Fee di servizio Touch&Go: €${FULL_FEE} a tariffa piena, €${SUBSCRIBED_FEE} con abbonamento, per ogni spedizione — separata dal costo del corriere.
 - Costo del corriere (già comprensivo del margine Touch&Go del 25%, nessun costo nascosto aggiuntivo), a fasce di peso/volume, tre zone:
