@@ -1,6 +1,7 @@
 // Netlify serverless function — keeps the Anthropic API key on the server,
 // never exposed to visitors' browsers.
 const { getStore } = require("@netlify/blobs");
+const { buildRulesContext } = require("../lib/shipping-rules");
 const { guestScopedStoreName } = require("../lib/guest-mode");
 
 const RATE_LIMIT_MAX = 20;
@@ -114,7 +115,9 @@ exports.handler = async (event) => {
       max_tokens: 800,
       messages
     };
-    if (referenceContext) requestBody.system = referenceContext;
+    // Regole di spedizione per Paese (base di conoscenza verificata): servono
+    // all'AI per segnalare in anticipo ciò che probabilmente non è spedibile.
+    requestBody.system = [referenceContext, buildRulesContext()].filter(Boolean).join("\n\n");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
