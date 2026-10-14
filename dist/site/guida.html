@@ -239,6 +239,46 @@
   }
 
   footer{padding:44px 0 0;color:var(--muted);font-size:12px;border-top:1px solid var(--line);margin-top:40px}
+
+  /* Mappa interattiva della suite */
+  .mappa-tools{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+  .mappa-tools button{font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+  .mappa-tools button:hover,.mappa-tools button[aria-pressed="true"]{border-color:var(--gold);background:var(--gold-soft)}
+  .mappa-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:10px}
+  #mappa-svg{display:block;width:100%;min-width:860px;height:auto}
+  #mappa-svg text{fill:var(--text);font-family:'Familjen Grotesk',system-ui,sans-serif}
+  #mappa-svg .m-t{font-size:13.5px;font-weight:600}
+  #mappa-svg .m-s{font-size:11px;fill:var(--muted)}
+  #mappa-svg .m-b{font-size:10.5px;fill:var(--muted);letter-spacing:.07em}
+  #mappa-svg .m-l{font-size:10.5px;fill:var(--muted)}
+  #mappa-svg .m-box{fill:var(--panel-2);stroke:var(--line-strong);stroke-width:1.2}
+  #mappa-svg .m-ext{fill:var(--ink);stroke:var(--line);stroke-width:1.2}
+  #mappa-svg .m-dash{stroke-dasharray:5 4}
+  #mappa-svg .m-hub{fill:var(--gold-soft);stroke:var(--gold);stroke-width:1.6}
+  #mappa-svg .m-chip{fill:var(--ink);stroke:var(--line);stroke-width:1.2}
+  #mappa-svg .m-band{fill:none;stroke:var(--line);stroke-width:1.2;stroke-dasharray:2 4}
+  #mappa-svg .m-ln{stroke:var(--muted);stroke-width:1.4;fill:none}
+  #mappa-svg .m-ln.crm{stroke:var(--gold);stroke-width:1.8}
+  #mappa-svg .m-node{cursor:pointer;outline:none}
+  #mappa-svg .m-node:hover rect,#mappa-svg .m-node:focus-visible rect{stroke:var(--gold);stroke-width:2.2}
+  #mappa-svg .m-node.on rect{stroke:var(--gold);stroke-width:2.6;fill:var(--gold-soft)}
+  #mappa-svg .m-dim{opacity:.22}
+  #mappa-svg .m-ln.lit{stroke:var(--gold);stroke-width:2.4}
+  #mappa-panel{margin-top:14px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:14px;padding:18px 20px}
+  #mappa-panel h3{font-size:22px;margin:0 0 4px}
+  #mappa-panel p{margin:6px 0;color:var(--muted);font-size:14px;max-width:70ch}
+  #mappa-panel dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:10px 0;font-size:13.5px}
+  #mappa-panel dt{color:var(--clay)}
+  #mappa-panel dd{margin:0;color:var(--text)}
+  #mappa-panel ol{margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.8}
+  #mappa-panel ol li{cursor:pointer}
+  #mappa-panel ol li.cur{color:var(--gold)}
+  #mappa-panel a.btn{display:inline-block;margin-top:8px;color:var(--ink-fixed-dark);background:var(--gold);text-decoration:none;font-size:13px;font-weight:600;padding:8px 15px;border-radius:999px}
+  .mappa-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:18px}
+  .mappa-cards div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+  .mappa-cards b{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600}
+  .mappa-cards span{font-size:12.5px;color:var(--muted)}
+  .mappa-cards a{font-size:13px;color:var(--gold)}
 </style>
 </head>
 <body>
@@ -406,6 +446,34 @@
       <div><div class="lc-label">E-shop (vetrina prodotti per partner)</div><div class="lc-url">touchandgo-eshop.netlify.app/site/index.html</div></div>
       <a class="btn" href="https://touchandgo-eshop.netlify.app/site/index.html" target="_blank" rel="noopener">Apri</a>
     </div>
+  </section>
+
+  <section class="detail" id="s-mappa">
+    <div class="sec-num">COME È FATTA</div>
+    <h2>La mappa della suite, da esplorare</h2>
+    <p class="sec-intro">Otto dispositivi, ognuno con il suo sito. Non si chiamano tra loro: leggono e scrivono gli stessi archivi condivisi, e il CRM li vede tutti. Clicca un dispositivo per vedere cosa fa, cosa legge e scrive, e aprirlo; oppure scegli un percorso per vederlo passo dopo passo.</p>
+
+    <div class="mappa-tools" id="mappa-tools" role="group" aria-label="Percorsi da evidenziare">
+      <button type="button" data-flow="acquisto" aria-pressed="false">Un acquisto</button>
+      <button type="button" data-flow="fda" aria-pressed="false">Una pratica FDA</button>
+      <button type="button" data-flow="api" aria-pressed="false">Il servizio API</button>
+      <button type="button" data-flow="settimanale" aria-pressed="false">Il controllo settimanale</button>
+      <button type="button" data-flow="" id="mappa-reset">Mostra tutto</button>
+    </div>
+
+    <div class="mappa-scroll"><svg id="mappa-svg" viewBox="0 0 1068 690" role="group" aria-label="Mappa interattiva dei dispositivi Touch&amp;Go e degli archivi condivisi"></svg></div>
+    <div id="mappa-panel" aria-live="polite"><h3>Scegli un dispositivo</h3><p>Clicca (o seleziona con la tastiera) un dispositivo, il CRM o un archivio: qui compaiono i dettagli.</p></div>
+
+    <div class="mappa-cards" id="mappa-cards">
+      <div data-device="suite"><b>App turista</b><span>Classifica da una foto, calcola il prezzo, genera la spedizione.</span><a href="https://touchandgo-suite.netlify.app/site/index.html" target="_blank" rel="noopener">Apri l'app →</a></div>
+      <div data-device="router"><b>Router</b><span>Il link stabile che apre sempre la suite.</span><a href="https://touchandgo-router.netlify.app/" target="_blank" rel="noopener">Apri il link stabile →</a></div>
+      <div data-device="eshop"><b>E-shop</b><span>Vetrina e aste per i partner.</span><a href="https://touchandgo-eshop.netlify.app/site/index.html" target="_blank" rel="noopener">Apri la vetrina →</a></div>
+      <div data-device="gestionale"><b>Gestionale</b><span>Spedizioni e pratiche per agenzie e negozi.</span><a href="https://touchandgo-gestionale.netlify.app" target="_blank" rel="noopener">Apri il gestionale →</a></div>
+      <div data-device="pratiche"><b>Pratiche</b><span>Prior Notice FDA, dal dato alla presentazione.</span><a href="https://touchandgo-pratiche.netlify.app" target="_blank" rel="noopener">Apri le pratiche →</a></div>
+      <div data-device="api"><b>Servizio API</b><span>La classificazione doganale AI, venduta ad altri sistemi.</span><a href="https://touchandgo-api.netlify.app" target="_blank" rel="noopener">Scopri il servizio →</a></div>
+      <div data-device="crm"><b>CRM</b><span>Il quadro di tutto: acquisti, partner, pratiche, controlli.</span><a href="https://touchandgo-crm.netlify.app/site/admin.html" target="_blank" rel="noopener">Apri il CRM →</a></div>
+    </div>
+    <p class="note">Limiti attuali, dichiarati: i corrieri sono simulati (nessuna API reale collegata) e la presentazione a FDA resta un passaggio manuale dello staff.</p>
   </section>
 
   <section class="detail">
@@ -711,6 +779,237 @@
       <button id="tg-chat-send" onclick="tgSendMessage()">Invia</button>
     </div>
   </div>
+
+  <script id="mappa-script">
+  (function(){
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.getElementById('mappa-svg');
+    var panel = document.getElementById('mappa-panel');
+    if (!svg || !panel) return;
+
+    // id: [x, y, w, h, classe, titolo, riga1, riga2]
+    var N = {
+      stripe:[20,22,270,40,'m-ext','Stripe · pagamenti (modalità test)'],
+      ai:[320,22,728,40,'m-ext','Anthropic · AI: classificazione, assistente, preventivi, riassunti'],
+      guest:[20,140,128,96,'m-box','Spazio ospite','touchandgo-guest','copia di continuità'],
+      router:[170,140,128,96,'m-box','Router','link stabile','suite o ospite'],
+      suite:[320,140,128,96,'m-box','App turista','touchandgo-suite','con sito e guida'],
+      eshop:[470,140,128,96,'m-box','E-shop','vetrina e aste'],
+      gestionale:[620,140,128,96,'m-box','Gestionale','partner B2B'],
+      pratiche:[770,140,128,96,'m-box','Pratiche','Prior Notice FDA'],
+      api:[920,140,128,96,'m-box','Servizio API','classificazione','a pagamento'],
+      band:[20,290,1028,188,'m-band','ARCHIVI CONDIVISI · Netlify Blobs · stesse credenziali per tutti, nessuna chiamata tra siti'],
+      st_guest:[20,322,128,44,'m-chip m-dash','stessi archivi','con suffisso -guest'],
+      st_main:[320,322,428,44,'m-chip','purchases  ·  partners','scritti da suite, e-shop e gestionale'],
+      st_prat:[770,322,128,44,'m-chip','pratiche','(con versione)'],
+      st_api:[920,322,128,44,'m-chip','chiavi · piani','consumo API'],
+      st_subs:[320,374,128,44,'m-chip','subscribers','reviews · tickets'],
+      st_eshop:[470,374,128,44,'m-chip','eshop-products','eshop-auctions'],
+      st_gest:[620,374,128,44,'m-chip','gestionale-customers','packaging-catalog'],
+      st_prat2:[770,374,128,44,'m-chip m-dash','pratiche scritte','anche dal gestionale'],
+      st_e2e:[320,426,728,40,'m-chip','weekly-e2e-reports  ·  -gestionale  ·  -pratiche','un report dei controlli per dispositivo'],
+      crm:[20,520,840,96,'m-hub','CRM · touchandgo-crm','legge tutti gli archivi · modifica partner, acquisti, pratiche, ticket e recensioni','tab Sistema e Registro · usa l’AI per domande, pre-triage e report'],
+      fda:[920,520,128,96,'m-ext m-dash','FDA PNSI','presentazione','a mano dallo staff'],
+      cour:[20,636,840,36,'m-ext m-dash','Corrieri: tutto simulato, nessuna API reale collegata (gap più urgente)']
+    };
+    var CLICK = ['stripe','ai','guest','router','suite','eshop','gestionale','pratiche','api','crm','fda','cour','st_guest','st_main','st_prat','st_api','st_subs','st_eshop','st_gest','st_prat2','st_e2e'];
+    var STORES = ['st_guest','st_main','st_prat','st_api','st_subs','st_eshop','st_gest','st_prat2','st_e2e'];
+
+    // chi tocca cosa (le relazioni sono simmetriche)
+    var REL = {
+      guest:['router','band','st_guest'],
+      router:['guest','suite'],
+      suite:['stripe','ai','band','st_main','st_subs','st_e2e','crm','router','cour'],
+      eshop:['ai','band','st_main','st_eshop','crm'],
+      gestionale:['ai','band','st_main','st_gest','st_prat2','st_e2e','crm','cour'],
+      pratiche:['band','st_prat','st_prat2','st_e2e','crm','fda'],
+      api:['ai','band','st_api','crm'],
+      crm:['ai','band','fda'].concat(STORES),
+      st_guest:['guest','crm','band']
+    };
+    Object.keys(REL).forEach(function(a){ REL[a].forEach(function(b){ (REL[b] = REL[b] || []); if (REL[b].indexOf(a) < 0) REL[b].push(a); }); });
+
+    var EDGES = [
+      ['stripe','suite','155,62 155,104 350,104 350,140'],
+      ['ai','suite','410,62 410,140'],['ai','eshop','534,62 534,140'],['ai','gestionale','684,62 684,140'],['ai','api','984,62 984,140'],
+      ['router','guest','170,178 148,178'],['router','suite','298,178 320,178'],
+      ['guest','band','84,236 84,290'],['suite','band','384,236 384,290'],['eshop','band','534,236 534,290'],
+      ['gestionale','band','684,236 684,290'],['pratiche','band','834,236 834,290'],['api','band','984,236 984,290'],
+      ['crm','band','150,520 150,478','crm'],['crm','band','420,520 420,478','crm'],['crm','band','690,520 690,478','crm'],['crm','band','820,520 820,478','crm']
+    ];
+
+    var INFO = {
+      stripe:{t:'Stripe',w:'Il servizio che incassa gli abbonamenti. In questa fase funziona in modalità test: nessun pagamento reale.',r:'—',s:'Esito del pagamento verso l’app turista',y:'Chi si abbona al servizio paga in modo sicuro; nessuna carta passa dai nostri archivi.'},
+      ai:{t:'Anthropic · AI',w:'L’intelligenza artificiale che classifica la merce da una foto, risponde alle domande, prepara preventivi e riassunti. Ogni dispositivo la chiama da solo, quando serve.',r:'Foto e descrizioni inviate dal dispositivo che chiede',s:'Classificazione, risposte, rischio merce vietata (indicativo)',y:'Il cuore del prodotto: dalla foto al codice doganale in pochi secondi.'},
+      guest:{t:'Spazio ospite',w:'Una copia di continuità della suite: se il sito principale ha un problema, si può continuare a lavorare qui con archivi separati (suffisso -guest).',r:'Gli stessi archivi, con suffisso -guest',s:'Gli stessi archivi, con suffisso -guest',y:'Il servizio non si ferma mai: c’è sempre un posto dove provare e lavorare.'},
+      router:{t:'Router',w:'Il link stabile da dare ai clienti: apre la suite e, se non risponde, l’ospite. Non scrive nessun dato.',r:'—',s:'—',y:'Un solo indirizzo da ricordare, che funziona sempre.'},
+      suite:{t:'App turista',w:'Il percorso d’acquisto del turista: foto, classificazione AI, prezzo, consolidamento di più acquisti, QR e ritiro. Ospita anche sito istituzionale e guida.',r:'Archivi di acquisti, partner, abbonati, recensioni',s:'Acquisti, abbonati, recensioni, ticket, report dei controlli',y:'Il turista porta a casa quello che ha comprato senza pratiche doganali da fare a mano.'},
+      eshop:{t:'E-shop',w:'La vetrina per i partner: prodotti, aste e proforma.',r:'Prodotti e aste; acquisti e partner',s:'Prodotti, aste, acquisti',y:'Il negozio vende anche a chi non è in negozio, con la spedizione già gestita.'},
+      gestionale:{t:'Gestionale',w:'Lo strumento per agenzie, tour operator e negozi: genera spedizioni per i clienti, gestisce clienti e imballi, avvia le pratiche FDA.',r:'Acquisti, partner, clienti, imballi, pratiche',s:'Acquisti, clienti, imballi, pratiche, report dei controlli',y:'Il partner guadagna il 10% su ogni spedizione generata e lavora da un solo posto.'},
+      pratiche:{t:'Pratiche',w:'Prepara la Prior Notice per la FDA: dati validati, stato della pratica, storico. La presentazione a FDA la fa lo staff a mano.',r:'Pratiche',s:'Pratiche (con numero di versione), report dei controlli',y:'Le spedizioni di alimenti verso gli USA partono con la documentazione in ordine.'},
+      api:{t:'Servizio API',w:'La nostra classificazione doganale AI, venduta ad altri sistemi tramite chiave e piano.',r:'Chiavi e piani',s:'Consumo per chiave',y:'Chi ha già un software (e-commerce, spedizioniere) usa la nostra classificazione senza costruirla.'},
+      crm:{t:'CRM',w:'Il quadro di tutto: legge ogni archivio, gestisce partner e commissioni, acquisti, pratiche, ticket e recensioni. Ha le tab Sistema (controlli) e Registro (banner e malfunzionamenti catalogati).',r:'Tutti gli archivi',s:'Modifiche a partner, acquisti, pratiche, ticket; registro malfunzionamenti',y:'Ogni servizio lascia traccia qui: si vede cosa funziona e cosa migliorare.'},
+      fda:{t:'FDA · Prior Notice',w:'La presentazione all’autorità americana per le spedizioni di alimenti verso gli USA. Oggi è un passaggio manuale dello staff.',r:'Dati dalla pratica',s:'—',y:'Il passaggio che oggi resta a mano e che vorremmo collegare.'},
+      cour:{t:'Corrieri',w:'Oggi tutto simulato: nessuna API reale di corriere è collegata. È il gap più urgente.',r:'—',s:'—',y:'—'},
+      st_guest:{t:'Archivi dell’ospite',w:'Gli stessi archivi della suite, in uno spazio separato con suffisso -guest.',r:'Spazio ospite, CRM',s:'Spazio ospite',y:''},
+      st_main:{t:'purchases · partners',w:'Gli acquisti e i partner con le loro commissioni. È l’archivio scritto da più dispositivi.',r:'Suite, e-shop, gestionale, CRM',s:'Suite, e-shop, gestionale (il CRM li modifica)',y:''},
+      st_prat:{t:'pratiche',w:'Le pratiche doganali, con numero di versione dello schema.',r:'Pratiche, gestionale, CRM',s:'Pratiche, gestionale',y:''},
+      st_api:{t:'Chiavi, piani, consumo API',w:'Chi usa il servizio API e quanto lo usa.',r:'Servizio API, CRM',s:'Servizio API',y:''},
+      st_subs:{t:'subscribers · reviews · tickets',w:'Abbonati, recensioni post-consegna e richieste di assistenza.',r:'Suite, CRM',s:'Suite',y:''},
+      st_eshop:{t:'eshop-products · eshop-auctions',w:'Prodotti e aste della vetrina.',r:'E-shop, CRM',s:'E-shop',y:''},
+      st_gest:{t:'gestionale-customers · packaging-catalog',w:'Clienti dei partner e catalogo degli imballi.',r:'Gestionale, CRM',s:'Gestionale',y:''},
+      st_prat2:{t:'Pratiche scritte anche dal gestionale',w:'Il gestionale può avviare una pratica: finisce nello stesso archivio delle pratiche.',r:'Pratiche, gestionale, CRM',s:'Gestionale, pratiche',y:''},
+      st_e2e:{t:'weekly-e2e-reports',w:'Un report dei controlli settimanali per dispositivo; il CRM li legge per aprire e chiudere i malfunzionamenti nel Registro.',r:'CRM',s:'I controlli settimanali',y:''}
+    };
+
+    var FLOWS = {
+      acquisto:{t:'Un acquisto',steps:[
+        ['Il turista apre il link stabile: il Router lo porta alla suite.',['router','suite']],
+        ['Fotografa l’oggetto: l’AI propone la classificazione doganale.',['suite','ai']],
+        ['Vede il prezzo, consolida più acquisti; l’abbonamento passa da Stripe (test).',['suite','stripe']],
+        ['Acquisto e partner vengono salvati negli archivi condivisi.',['suite','st_main','band']],
+        ['Il CRM li legge e calcola la commissione del partner (10%).',['crm','st_main','band']],
+        ['Il ritiro del corriere, oggi, è simulato.',['cour']]]},
+      fda:{t:'Una pratica FDA',steps:[
+        ['Il partner avvia la pratica dal Gestionale.',['gestionale','st_prat2','band']],
+        ['Pratiche la completa, la valida e ne tiene lo stato (con versione).',['pratiche','st_prat','band']],
+        ['Il CRM la vede e la segue insieme agli altri dati.',['crm','st_prat2','band']],
+        ['Lo staff la presenta a FDA a mano.',['crm','fda']]]},
+      api:{t:'Il servizio API',steps:[
+        ['Un sistema esterno chiede la classificazione con la sua chiave.',['api','st_api','band']],
+        ['L’AI classifica e restituisce codice e rischio merce vietata.',['api','ai']],
+        ['Il consumo viene contato sulla chiave.',['st_api','band']],
+        ['Il CRM (tab Servizio API) mostra chiavi, piani e consumi.',['crm','st_api']]]},
+      settimanale:{t:'Il controllo settimanale',steps:[
+        ['Ogni settimana, in automatico, si simula un utente su ogni dispositivo.',['suite','gestionale','pratiche']],
+        ['Ogni dispositivo lascia il suo report negli archivi.',['st_e2e','band']],
+        ['Il CRM legge i report e apre o chiude i malfunzionamenti nel Registro.',['crm','st_e2e']],
+        ['Lo stesso controllo verifica che i link di questa guida arrivino al dispositivo giusto.',['suite']]]}
+    };
+
+    function el(tag, attrs, text){
+      var e = document.createElementNS(NS, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    var nodeEls = {}, edgeEls = [];
+    var defs = el('defs', {}), mk = el('marker', {id:'mappa-ah', viewBox:'0 0 10 10', refX:'8', refY:'5', markerWidth:'7', markerHeight:'7', orient:'auto-start-reverse'});
+    mk.appendChild(el('path', {d:'M0 0L10 5L0 10z', fill:'#A79C8A'})); defs.appendChild(mk); svg.appendChild(defs);
+
+    EDGES.forEach(function(ed){
+      var p = el('polyline', {points:ed[2], 'class':'m-ln ' + (ed[3]||''), 'marker-end':'url(#mappa-ah)', fill:'none'});
+      p.setAttribute('data-a', ed[0]); p.setAttribute('data-b', ed[1]);
+      svg.appendChild(p); edgeEls.push(p);
+    });
+    // tratto manuale CRM → FDA
+    var man = el('polyline', {points:'860,568 920,568', 'class':'m-ln m-dash', 'marker-end':'url(#mappa-ah)', fill:'none'});
+    man.setAttribute('data-a','crm'); man.setAttribute('data-b','fda'); svg.appendChild(man); edgeEls.push(man);
+    svg.appendChild(el('text', {x:250, y:98, 'class':'m-l', 'text-anchor':'middle'}, 'abbonamento'));
+
+    Object.keys(N).forEach(function(id){
+      var d = N[id], g = el('g', {'class':'m-node', 'data-id':id});
+      var isBand = id === 'band';
+      g.appendChild(el('rect', {x:d[0], y:d[1], width:d[2], height:d[3], rx:isBand?8:(id.indexOf('st_')===0?4:6), 'class':d[4]}));
+      var cx = d[0] + d[2]/2;
+      if (isBand) {
+        g.appendChild(el('text', {x:d[0]+14, y:d[1]+20, 'class':'m-b'}, d[5]));
+        g.removeAttribute('class'); g.setAttribute('class','m-band-g');
+      } else if (id.indexOf('st_') === 0) {
+        g.appendChild(el('text', {x:cx, y:d[1]+d[3]/2-3, 'class':'m-s', 'text-anchor':'middle'}, d[5]));
+        if (d[6]) g.appendChild(el('text', {x:cx, y:d[1]+d[3]/2+11, 'class':'m-s', 'text-anchor':'middle'}, d[6]));
+      } else if (!d[6]) {
+        g.appendChild(el('text', {x:cx, y:d[1]+d[3]/2+4, 'class':'m-s', 'text-anchor':'middle'}, d[5]));
+      } else {
+        g.appendChild(el('text', {x:cx, y:d[1]+22, 'class':'m-t', 'text-anchor':'middle'}, d[5]));
+        for (var i = 6; i < d.length; i++) g.appendChild(el('text', {x:cx, y:d[1]+38+(i-6)*13.5, 'class':'m-s', 'text-anchor':'middle'}, d[i]));
+      }
+      if (CLICK.indexOf(id) >= 0) {
+        g.setAttribute('tabindex','0'); g.setAttribute('role','button');
+        g.setAttribute('aria-label', (INFO[id] ? INFO[id].t : id) + ': mostra i dettagli');
+      }
+      svg.appendChild(g); nodeEls[id] = g;
+    });
+    // il fondo della banda va dietro ai chip: portalo davanti alle linee ma prima dei chip
+    svg.insertBefore(nodeEls.band, nodeEls.st_guest);
+
+    function cta(id){
+      var a = document.querySelector('#mappa-cards [data-device="' + id + '"] a');
+      return a ? a.getAttribute('href') : '';
+    }
+    function clear(){ panel.removeAttribute('data-sel'); Object.keys(nodeEls).forEach(function(k){ nodeEls[k].classList.remove('m-dim','on'); }); edgeEls.forEach(function(e){ e.classList.remove('m-dim','lit'); }); }
+    function paint(active, sel){
+      Object.keys(nodeEls).forEach(function(k){
+        var on = active.indexOf(k) >= 0;
+        nodeEls[k].classList.toggle('m-dim', !on);
+        nodeEls[k].classList.toggle('on', k === sel);
+      });
+      edgeEls.forEach(function(e){
+        var lit = active.indexOf(e.getAttribute('data-a')) >= 0 && active.indexOf(e.getAttribute('data-b')) >= 0;
+        e.classList.toggle('lit', lit); e.classList.toggle('m-dim', !lit);
+      });
+    }
+    function setButtons(flow){
+      var bs = document.querySelectorAll('#mappa-tools button[data-flow]');
+      for (var i = 0; i < bs.length; i++) bs[i].setAttribute('aria-pressed', String(bs[i].getAttribute('data-flow') === flow && flow !== ''));
+    }
+    function row(dl, k, v){ if (!v || v === '—') return; var dt = document.createElement('dt'); dt.textContent = k; var dd = document.createElement('dd'); dd.textContent = v; dl.appendChild(dt); dl.appendChild(dd); }
+
+    function selectNode(id){
+      var inf = INFO[id]; if (!inf) return;
+      setButtons('');
+      panel.setAttribute('data-sel', id);
+      paint([id].concat(REL[id] || []), id);
+      panel.textContent = '';
+      var h = document.createElement('h3'); h.textContent = inf.t; panel.appendChild(h);
+      var p = document.createElement('p'); p.textContent = inf.w; panel.appendChild(p);
+      var dl = document.createElement('dl');
+      row(dl, 'Legge', inf.r); row(dl, 'Scrive', inf.s); row(dl, 'Per te', inf.y);
+      panel.appendChild(dl);
+      var url = cta(id);
+      if (url) { var a = document.createElement('a'); a.className = 'btn'; a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Apri ' + inf.t; panel.appendChild(a); }
+    }
+    function showFlow(key, stepIdx){
+      var f = FLOWS[key]; if (!f) return;
+      setButtons(key);
+      var step = stepIdx == null ? -1 : stepIdx;
+      var all = []; f.steps.forEach(function(s){ s[1].forEach(function(n){ if (all.indexOf(n) < 0) all.push(n); }); });
+      paint(step < 0 ? all : f.steps[step][1], null);
+      panel.setAttribute('data-sel', 'flow:' + key);
+      panel.textContent = '';
+      var h = document.createElement('h3'); h.textContent = f.t; panel.appendChild(h);
+      var p = document.createElement('p'); p.textContent = 'Clicca un passaggio per vedere dove avviene.'; panel.appendChild(p);
+      var ol = document.createElement('ol');
+      f.steps.forEach(function(s, i){
+        var li = document.createElement('li'); li.textContent = s[0]; li.tabIndex = 0; li.setAttribute('data-step', String(i));
+        if (i === step) li.className = 'cur';
+        var go = function(){ showFlow(key, i); };
+        li.addEventListener('click', go);
+        li.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+        ol.appendChild(li);
+      });
+      panel.appendChild(ol);
+    }
+    function reset(){
+      clear(); setButtons('');
+      panel.textContent = '';
+      var h = document.createElement('h3'); h.textContent = 'Scegli un dispositivo'; panel.appendChild(h);
+      var p = document.createElement('p'); p.textContent = 'Clicca (o seleziona con la tastiera) un dispositivo, il CRM o un archivio: qui compaiono i dettagli.'; panel.appendChild(p);
+    }
+
+    CLICK.forEach(function(id){
+      var g = nodeEls[id];
+      g.addEventListener('click', function(){ selectNode(id); });
+      g.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectNode(id); } });
+    });
+    var bs = document.querySelectorAll('#mappa-tools button');
+    for (var i = 0; i < bs.length; i++) (function(b){
+      b.addEventListener('click', function(){ var f = b.getAttribute('data-flow'); if (f) showFlow(f); else reset(); });
+    })(bs[i]);
+    document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape' && panel.getAttribute('data-sel')) reset(); });
+  })();
+  </script>
 
   <script>
   (function(){

@@ -1532,3 +1532,15 @@ La guida pubblica (`dist/site/guida.html`) è il mezzo di promozione dei servizi
 - **Avviso predittivo dell'AI**: lo schema di classificazione (`CLASSIFY_SCHEMA`) ha i campi `prohibited_risk` (nessuno/possibile/probabile) e `prohibited_reason_it/en`. `ProhibitedRiskNotice(result)` li mostra nel risultato solo se il rischio è possibile o probabile. È solo informativo, mai un blocco automatico: la decisione resta allo staff.
 - **Assistente** (`netlify/functions/assistant.js`): il prompt in modalità domanda include la regola sulle merci vietate.
 - Test: `dist/assets/__tests__/prohibited-banner.test.js`.
+
+### Mappa interattiva della suite (sezione `#s-mappa` di `guida.html`)
+
+Aggiunta alla guida (che è un mezzo di promozione dei servizi) una mappa cliccabile dei dispositivi: Spazio ospite, Router, App turista, E-shop, Gestionale, Pratiche, Servizio API, CRM, più gli archivi condivisi (Netlify Blobs), Stripe, Anthropic, FDA e corrieri.
+
+- **Cosa fa**: clic (o Invio da tastiera) su un nodo → pannello con descrizione, cosa legge e scrive, "Per te" e pulsante "Apri"; gli altri nodi si attenuano e restano accesi archivi e collegamenti pertinenti. Quattro percorsi evidenziabili passo dopo passo (acquisto, pratica FDA, servizio API, controllo settimanale). Esc o "Mostra tutto" azzera.
+- **Dove sta il codice**: tutto dentro `dist/site/guida.html` (CSS `#mappa-*`, markup della sezione, `<script id="mappa-script">`). Il disegno SVG è generato dal JS a partire da tre tabelle: `N` (nodi e coordinate), `REL` (chi tocca cosa, simmetrico), `FLOWS` (percorsi), più `INFO` (testi del pannello). Per aggiungere un dispositivo: una voce in `N`, `REL`, `INFO`, un arco in `EDGES` e una scheda in `#mappa-cards`.
+- **Link**: i pulsanti "Apri" non hanno URL nel JS: leggono l'href dalle schede `#mappa-cards` della stessa sezione. Così i link restano veri `<a href>` nella pagina e sono coperti da `guida-links.test.js` e dal controllo settimanale (`checkGuideLinks`). Lo spazio ospite non ha pulsante (non è un indirizzo da promuovere).
+- **Testo**: il pannello usa solo `textContent` (nessun HTML interpretato).
+- **Aggiornare la mappa**: se cambia la suite (nuovo dispositivo, nuovo archivio), va aggiornata qui e anche la copia su Drive (file datato, nuova versione ad ogni modifica).
+- **Test**: `dist/assets/__tests__/guida-mappa.test.js` (jsdom, clic e tastiera veri; verificato con mutazione che fallisce se l'attenuazione viene rimossa).
+- **Limite noto**: il link a Pratiche (`touchandgo-pratiche.netlify.app`) non è ancora raggiungibile finché non esistono repository e sito; il controllo settimanale lo segnala.
