@@ -15,6 +15,7 @@
 // SHIPPING_RATES, SHIPPING_MARGIN, stati di un acquisto) — se quei valori
 // cambiano, aggiornare anche qui.
 const { getStore } = require("@netlify/blobs");
+const { buildRulesContext } = require("../lib/shipping-rules");
 const { guestScopedStoreName } = require("../lib/guest-mode");
 const { AGENT_IDENTITY_PREAMBLE } = require("../lib/agent-identity");
 
@@ -88,6 +89,8 @@ FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
 - Durante il soggiorno si possono lasciare più oggetti in negozi diversi: alla fine, tutti gli acquisti "in sospeso" verso la stessa destinazione vengono consolidati in un unico ordine di ritiro, invece di tante spedizioni separate.
 - Non esiste ancora un piano "Touch&Go Black" o abbonamenti a più livelli nell'app reale (solo tariffa piena/abbonamento base come sopra) — se ti viene chiesto, di' semplicemente che oggi il servizio ha questi due livelli.
 - Non sei un consulente fiscale o legale: per casi doganali molto specifici (soglie insolite, paesi con regole particolari) consiglia di verificare col supporto Touch&Go o un professionista, senza inventare una risposta.
+
+${buildRulesContext()}
 
 Rispondi in modo semplice, diretto e breve (poche frasi, salvo quando servono i numeri sopra) — non serve un tono formale. Rispondi SEMPRE nella stessa lingua in cui è scritta la domanda del turista, indipendentemente dalla lingua di questo prompt.`;
 

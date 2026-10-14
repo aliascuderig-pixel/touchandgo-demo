@@ -1511,3 +1511,12 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa toccata): n
 - Nessuna card nuova nella griglia "otto schede" (come per 04C).
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser`.
+
+## Base di conoscenza sulle regole di spedizione per Paese (14 ottobre 2026)
+
+`netlify/lib/shipping-rules.js` raccoglie, per ogni Paese di destinazione, le regole di spedizione estratte e sintetizzate da fonti ufficiali (non copiate), ognuna con fonte e data di verifica (`VERIFIED_AT`). Coperti: Stati Uniti (Prior Notice FDA: una notifica per prodotto, anticipo 4/2/8 ore per aereo-treno/strada/mare, tracking della posta dal 1/10/2026, avvisi su alcolici, carne e formaggi), Canada, Giappone, Cina, Regno Unito, Australia, Corea del Sud e le regole UE verso l'Italia. Emirati, India, Svizzera e Brasile sono dichiarati "non verificati".
+
+- **Uso nelle AI**: `buildRulesContext()` entra nel prompt dell'assistente (modalità domanda, `assistant.js`) e nel system prompt del classificatore (`classify.js`). L'AI deve usare solo queste regole, dire che un Paese non è verificato invece di inventarle, e non sostituisce mai la presentazione ufficiale (es. FDA PNSI), che resta allo staff.
+- **Manutenzione**: quando una regola cambia, aggiornare la voce e `VERIFIED_AT`. La ricerca di partenza è il documento "FDA Prior Notice: ricerche per le spedizioni Touch&Go".
+- Il file va copiato negli altri repository che hanno AI interrogabili (duplicazione deliberata, come le altre librerie): oggi solo la demo.
+- Test: `netlify/functions/__tests__/shipping-rules.test.js`.
