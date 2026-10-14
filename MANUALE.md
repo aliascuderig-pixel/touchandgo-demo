@@ -1511,3 +1511,7 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa toccata): n
 - Nessuna card nuova nella griglia "otto schede" (come per 04C).
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser`.
+
+## Test sui link della guida (14 ottobre 2026)
+
+La guida pubblica (`dist/site/guida.html`) è il mezzo di promozione dei servizi Touch&Go: ogni suo link deve atterrare nel dispositivo giusto. `dist/assets/__tests__/guida-links.test.js` controlla che ogni link `touchandgo-*.netlify.app` usi un host e un percorso dell'elenco ammesso (da aggiornare insieme alla guida quando nasce un dispositivo) e che ogni `?tab=` del CRM esista davvero in `admin.html` del repo gemello (saltato se il repo non è presente). Non verifica che il sito sia raggiungibile online: da qui `netlify.app` è bloccato.
