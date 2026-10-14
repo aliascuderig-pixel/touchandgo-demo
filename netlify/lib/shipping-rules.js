@@ -62,11 +62,32 @@ const RULES = [
     sources: ["https://food.chemlinked.com/news/food-news/south-korea-to-designate-prohibited-ingredients-of-online-purchased-overseas-food"],
   },
   {
-    id: "non-verificati",
-    countries: ["Emirati Arabi", "UAE", "India", "Svizzera", "Switzerland", "Brasile", "Brazil"],
+    id: "svizzera-alimenti",
+    countries: ["Svizzera", "Switzerland"],
     summary:
-      "Regole per l'uso personale non verificate per questo Paese: non inventarle, consiglia di verificare con il supporto Touch&Go o con le autorità doganali.",
-    sources: [],
+      "Dall'UE (quindi dall'Italia) gli alimenti per uso personale sono ammessi, con le franchigie doganali del BAZG. Da Paesi terzi invece carne, latte e latticini (formaggio compreso) sono vietati. I pacchi a privati seguono le stesse regole dei viaggiatori e vanno indirizzati a economie domestiche private. In caso di epizoozie un alimento può essere vietato dal Paese colpito. Franchigie e imposte sui pacchi: non verificate qui.",
+    sources: ["https://www.blv.admin.ch/de/lebensmittel-im-privaten-reiseverkehr", "https://www.bazg.admin.ch/en/general-information-on-duty-free-allowances-and-value-limits"],
+  },
+  {
+    id: "brasile-alimenti",
+    countries: ["Brasile", "Brazil"],
+    summary:
+      "Gli alimenti di origine animale (formaggi, carni, pesce, miele) sono tra i prodotti controllati dal servizio agricolo Vigiagro del ministero dell'agricoltura (MAPA), che decide se possono entrare; i prodotti senza autorizzazione sanitaria vengono distrutti. Alimenti molto lavorati di origine vegetale (olio, cioccolato, caffè tostato, riso, farina) sono generalmente ammessi. La fonte ufficiale riguarda i bagagli dei viaggiatori: per i pacchi postali le regole precise non sono verificate qui.",
+    sources: ["https://www.gov.br/agricultura/pt-br/assuntos/vigilancia-agropecuaria/viajantes-e-bagagens/lista-de-bens-agropecuarios-que-podem-ou-nao-ingressar-no-brasil", "https://www.revistacultivar.com.br/noticias/transporte-de-alimentos-entre-paises-tem-restricoes"],
+  },
+  {
+    id: "emirati-alimenti",
+    countries: ["Emirati Arabi", "Emirati Arabi Uniti", "UAE", "United Arab Emirates"],
+    summary:
+      "Gli alimenti cotti e fatti in casa sono vietati; gli alimenti confezionati richiedono un'etichetta con ingredienti, valori nutrizionali, peso netto, Paese d'origine e scadenza, in inglese o arabo. I prodotti a base di maiale sono limitati (etichetta che lo dichiari, niente immagini di maiale). Altri divieti: droghe, dispositivi da gioco d'azzardo, contenuti pirata, merci di origine israeliana. Regole su alcolici e soglie per i pacchi privati: non verificate qui (fonte non ufficiale).",
+    sources: ["https://www.dhl.com/discover/en-au/e-commerce-advice/shipping-guides-by-country/country-guide-UAE"],
+  },
+  {
+    id: "india-alimenti",
+    countries: ["India"],
+    summary:
+      "Gli alimenti importati sono controllati dall'FSSAI. Per uso personale si può essere esentati dal nulla osta presentando una dichiarazione (Form 7). Etichetta in inglese o hindi (devanagari). La dogana non sdogana alimenti con meno del 60% della durata di conservazione (o meno di 3 mesi, il valore minore) residua. Le regole specifiche per corriere e posta vanno chiarite con gli uffici FSSAI di porto: non verificate qui.",
+    sources: ["https://fictac.fssai.gov.in/Images/FAQ.pdf"],
   },
 ];
 
