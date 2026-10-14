@@ -1554,3 +1554,12 @@ Il test end-to-end settimanale (`weekly-e2e-test.js`) ha un nuovo passo indipend
 - I giudizi dell'AI non sono deterministici: se un caso diventa instabile, cambia l'esempio in `PREDICTIVE_CASES` (non rilassare il controllo). Aggiungere un caso = una riga nella lista e una nella simulazione dei test.
 - Test: `netlify/functions/__tests__/weekly-e2e-test.test.js` (mancato avviso, falso allarme, campo assente, errore di rete; verificato con mutazione).
 
+### `schemaVersion` sugli acquisti (store condiviso `purchases`, 14 ottobre 2026 sera)
+
+`save-purchase.js` stampa `schemaVersion: 1` su ogni nuovo acquisto (costante `PURCHASE_SCHEMA_VERSION`). È il contratto con gli altri tre repository che scrivono o leggono lo stesso store (CRM, e-shop, gestionale): il CRM controlla le versioni (tab Registro, voce `integrity-purchases`). Regole:
+
+- **La versione la decide il server**, mai il client: un `schemaVersion` mandato nel corpo della richiesta viene sovrascritto.
+- **Additivo**: i record già esistenti non hanno il campo e restano validi (il CRM li conta come «precedenti alla versione», senza avviso). Il campo si cambia solo quando cambia in modo non compatibile la forma di un acquisto; in quel caso si alza la costante in TUTTI i repository che creano acquisti (demo, e-shop, gestionale) e nel CRM.
+- Gli aggiornamenti di un acquisto esistente (stato, ritiro, ecc.) non toccano il campo.
+- Test: `netlify/functions/__tests__/save-purchase.schema-version.test.js`.
+
