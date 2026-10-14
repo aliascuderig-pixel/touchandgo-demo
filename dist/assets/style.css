@@ -854,3 +854,5 @@ button{font-family:inherit;cursor:pointer}
 .vf-shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);z-index:2;width:70px;height:70px;border-radius:50%;background:transparent;border:3px solid #fff;cursor:pointer;padding:0}
 .vf-shutter::after{content:"";display:block;width:56px;height:56px;margin:4px auto;border-radius:50%;background:#fff}
 .vf-shutter:active::after{background:var(--gold-hot)}
+
+.prohibited-banner{background:var(--warn-bg,#fff4e0);color:var(--warn,#8a5300);border:1px solid currentColor;border-radius:10px;font-size:11px;font-weight:600;padding:10px 14px;margin:10px 16px;line-height:1.5}
