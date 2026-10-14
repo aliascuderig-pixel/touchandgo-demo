@@ -69,6 +69,9 @@ async function recordCustomsReference(item, blobsAuth) {
   }
 }
 
+// Versione del formato dei record "purchases" (additiva: i record vecchi non ce l'hanno).
+const PURCHASE_SCHEMA_VERSION = 1;
+
 function getClientIp(event) {
   return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
 }
@@ -433,6 +436,10 @@ exports.handler = async (event) => {
       item.flaggedAt = new Date().toISOString();
     }
 
+    // Versione del formato del record (contratto con CRM, e-shop e gestionale,
+    // che scrivono e leggono lo stesso store "purchases"): stampata dal
+    // server alla creazione, mai presa dal client. Vedi MANUALE.md.
+    item.schemaVersion = PURCHASE_SCHEMA_VERSION;
     await purchases.setJSON(item.id, item);
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true }) };
   } catch (err) {
