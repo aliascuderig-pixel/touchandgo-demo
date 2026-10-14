@@ -1511,3 +1511,10 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa toccata): n
 - Nessuna card nuova nella griglia "otto schede" (come per 04C).
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser`.
+
+## Avviso merci vietate (14 ottobre 2026)
+
+- **Banner fisso** `ProhibitedGoodsBanner()` (`dist/assets/app.js`, stile `.prohibited-banner`, testo `prohibited_banner` in italiano e inglese): nessun pulsante per chiuderlo. Compare in home, nel risultato di classificazione, in "Concludi il soggiorno", nella generazione spedizione dell'area partner, nella chat assistente e nella richiesta di assistenza. Testo volutamente generico (armi, droghe, contraffatti, materiali pericolosi, ciò che il Paese di destinazione non ammette): nessuna lista legale per Paese.
+- **Avviso predittivo dell'AI**: lo schema di classificazione (`CLASSIFY_SCHEMA`) ha i campi `prohibited_risk` (nessuno/possibile/probabile) e `prohibited_reason_it/en`. `ProhibitedRiskNotice(result)` li mostra nel risultato solo se il rischio è possibile o probabile. È solo informativo, mai un blocco automatico: la decisione resta allo staff.
+- **Assistente** (`netlify/functions/assistant.js`): il prompt in modalità domanda include la regola sulle merci vietate.
+- Test: `dist/assets/__tests__/prohibited-banner.test.js`.
