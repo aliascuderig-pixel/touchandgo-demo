@@ -1507,7 +1507,7 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna fu
 Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa toccata): nuova sezione **04D** "Oltre il corebusiness — le pratiche doganali (Prior Notice FDA)" (`id="s-pratiche"`), subito prima della sezione 05.
 
 - **Scheda di accesso** (`linkcard`) alla pagina di atterraggio `touchandgo-pratiche.netlify.app` (ottavo dispositivo, repository `touchandgo-pratiche`). Il link funziona solo dopo la pubblicazione del sito Netlify, che deve chiamarsi esattamente `touchandgo-pratiche`.
-- **Tre punti nella checklist**: che cosa fa, differenza privato/azienda, e il flusso che passa dal CRM (invio → tab Pratiche del CRM → presentazione della notifica e numero di conferma → stato visibile al cliente; nessun pagamento né email automatiche; non è consulenza legale).
+- **Tre punti nella checklist**: che cosa fa, differenza privato/azienda, e il flusso che passa dal CRM (invio dal sito pubblico o dal gestionale → tab Pratiche del CRM → presentazione della notifica e numero di conferma → stato visibile al cliente; nessun pagamento né email automatiche; non è consulenza legale).
 - Nessuna card nuova nella griglia "otto schede" (come per 04C).
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser`.
