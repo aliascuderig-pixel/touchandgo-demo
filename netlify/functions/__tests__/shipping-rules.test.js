@@ -65,3 +65,22 @@ test("il classificatore manda le regole nel system prompt", async () => {
     global.fetch = orig;
   }
 });
+
+test("Svizzera, Brasile, Emirati e India hanno regole con fonte; nessun Paese resta senza", () => {
+  for (const [dest, id] of [["Svizzera", "svizzera-alimenti"], ["Switzerland", "svizzera-alimenti"], ["Brasile", "brasile-alimenti"], ["Brazil", "brasile-alimenti"], ["UAE", "emirati-alimenti"], ["Emirati Arabi Uniti", "emirati-alimenti"], ["India", "india-alimenti"]]) {
+    const r = rules.rulesForDestination(dest)[0];
+    assert.equal(r && r.id, id, dest);
+    assert.ok(r.sources.length > 0, id);
+  }
+  assert.ok(!rules.RULES.some((r) => r.id === "non-verificati"));
+});
+
+test("Svizzera: dall'UE gli alimenti per uso personale sono ammessi, da Paesi terzi carne e latticini vietati", () => {
+  const t = rules.rulesForDestination("Svizzera")[0].summary;
+  assert.match(t, /Dall'UE .* ammessi/);
+  assert.match(t, /carne, latte e latticini .* vietati/);
+});
+
+test("i Paesi con verifica solo parziale lo dichiarano nel testo (l'AI non deve inventare il resto)", () => {
+  for (const d of ["Emirati Arabi", "India", "Brasile"]) assert.match(rules.rulesForDestination(d)[0].summary, /non (sono )?verificat/, d);
+});
