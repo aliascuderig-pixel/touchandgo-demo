@@ -1511,3 +1511,7 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa toccata): n
 - Nessuna card nuova nella griglia "otto schede" (come per 04C).
 
 **Verifica**: bilanciamento dei tag HTML controllato con `html.parser`.
+
+## Controllo settimanale dei link della guida (14 ottobre 2026)
+
+Il test end-to-end settimanale (`weekly-e2e-test.js`) ha un nuovo passo indipendente, `guideLinks` (`checkGuideLinks()`), che insieme agli altri controlli verifica che i link della guida (mezzo di promozione dei servizi Touch&Go) atterrino nei dispositivi giusti. Legge `site/guida.html` dallo spazio ospite e fa una GET a ogni link `touchandgo-*.netlify.app` (parte `?query` esclusa, massimo 30 link): risposta diversa da 200 o timeout lo segna come `problem`, con l'elenco `broken` nel report (stesso store `weekly-e2e-reports`). Sono solo letture. I link al dominio di produzione del sito non vengono mai chiamati: si controlla lo stesso percorso sullo spazio ospite. Un dispositivo non ancora pubblicato (es. Pratiche) compare quindi come problema finché il suo sito non esiste. Il test statico sugli host e sui percorsi ammessi è `dist/assets/__tests__/guida-links.test.js`.

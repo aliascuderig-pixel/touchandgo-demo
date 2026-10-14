@@ -83,6 +83,10 @@ function classifyResponse(obj) {
 function okJsonResponse(body) {
   return { status: 200, json: async () => body || { ok: true } };
 }
+const GUIDE_HTML = '<a href="https://touchandgo-suite.netlify.app/site/index.html">x</a><a href="https://touchandgo-crm.netlify.app/site/admin.html?tab=sistema">y</a><a href="https://touchandgo-pratiche.netlify.app">z</a>';
+function guideOkResponse() {
+  return { status: 200, text: async () => GUIDE_HTML };
+}
 function baggageFeesOkResponse() {
   return okJsonResponse({ fees: [{ airline: "Ryanair", feeType: "per_kg_overweight", amountMin: 13, amountMax: 13, currency: "EUR" }], verifiedAt: "2026-10-05" });
 }
@@ -139,6 +143,8 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
   global.fetch = async (url, options) => {
     callLog.push({ url });
     if (url.includes(".netlify/functions/airline-baggage-fees")) return baggageFeesOkResponse();
+    if (url.includes("guida.html")) return guideOkResponse();
+    if (url.includes("touchandgo-crm.netlify.app") || url.includes("touchandgo-pratiche.netlify.app") || url.includes("site/index.html")) return { status: 200 };
     const body = options && options.body ? JSON.parse(options.body) : {};
     if (url.includes(".netlify/functions/classify")) {
       // "sciarpa" è univoco per LABEL_2: "legno" invece compare SEMPRE
@@ -186,7 +192,11 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
   // Vincolo critico: OGNI URL chiamato deve puntare allo spazio ospite.
   assert.ok(callLog.length >= 6, "ci si aspettano almeno 6 chiamate (1 airline-baggage-fees, 2 classify, 2 save-purchase, 1 save-shipment-group)");
   for (const { url } of callLog) {
-    assert.ok(url.startsWith(mod.GUEST_BASE_URL), `URL fuori dallo spazio ospite: ${url}`);
+    // Unica eccezione: le GET di sola lettura ai link della guida verso gli
+    // ALTRI dispositivi (mai il dominio di produzione del sito).
+    const guideReadOnly = /^https:\/\/touchandgo-(crm|pratiche|gestionale|eshop|api|router)\.netlify\.app/.test(url);
+    assert.ok(url.startsWith(mod.GUEST_BASE_URL) || guideReadOnly, `URL fuori dallo spazio ospite: ${url}`);
+    assert.ok(!url.startsWith(mod.KNOWN_PRODUCTION_URL), "mai il dominio di produzione");
     assert.ok(!url.startsWith(mod.KNOWN_PRODUCTION_URL), `URL punta a produzione: ${url}`);
   }
 
@@ -363,4 +373,36 @@ test("checkAirlineBaggageFees: rete irraggiungibile -> problem con errore descri
   const result = await mod.checkAirlineBaggageFees();
   assert.equal(result.status, "problem");
   assert.match(result.error, /connessione rifiutata/);
+});
+
+test("checkGuideLinks: tutti i link rispondono 200 -> ok, e il dominio di produzione non viene mai chiamato", async () => {
+  const urls = [];
+  global.fetch = async (url) => {
+    urls.push(url);
+    if (url.includes("guida.html")) return guideOkResponse();
+    return { status: 200 };
+  };
+  const r = await freshModule().checkGuideLinks();
+  assert.equal(r.status, "ok");
+  assert.equal(r.checked, 3);
+  assert.ok(urls.every((u) => !u.startsWith("https://touchandgo-suite.netlify.app")), "mai la produzione");
+  assert.ok(urls.some((u) => u.startsWith("https://touchandgo-guest.netlify.app/site/index.html")));
+});
+
+test("checkGuideLinks: un link che risponde 404 (es. dispositivo non ancora pubblicato) -> problem con l'elenco", async () => {
+  global.fetch = async (url) => {
+    if (url.includes("guida.html")) return guideOkResponse();
+    if (url.includes("touchandgo-pratiche")) return { status: 404 };
+    return { status: 200 };
+  };
+  const r = await freshModule().checkGuideLinks();
+  assert.equal(r.status, "problem");
+  assert.deepEqual(JSON.parse(JSON.stringify(r.broken)), [{ url: "https://touchandgo-pratiche.netlify.app", error: "http_404" }]);
+});
+
+test("checkGuideLinks: guida senza link -> problem", async () => {
+  global.fetch = async () => ({ status: 200, text: async () => "<html></html>" });
+  const r = await freshModule().checkGuideLinks();
+  assert.equal(r.status, "problem");
+  assert.equal(r.error, "nessun_link_nella_guida");
 });
