@@ -1544,3 +1544,13 @@ Aggiunta alla guida (che è un mezzo di promozione dei servizi) una mappa clicca
 - **Aggiornare la mappa**: se cambia la suite (nuovo dispositivo, nuovo archivio), va aggiornata qui e anche la copia su Drive (file datato, nuova versione ad ogni modifica).
 - **Test**: `dist/assets/__tests__/guida-mappa.test.js` (jsdom, clic e tastiera veri; verificato con mutazione che fallisce se l'attenuazione viene rimossa).
 - **Limite noto**: il link a Pratiche (`touchandgo-pratiche.netlify.app`) non è ancora raggiungibile finché non esistono repository e sito; il controllo settimanale lo segnala.
+
+### Controllo settimanale dell'avviso predittivo «merce vietata» (passo `predictiveRisk`, 14 ottobre 2026 sera)
+
+Il test end-to-end settimanale (`weekly-e2e-test.js`) ha un nuovo passo indipendente, `predictiveRisk` (`checkPredictiveRisk()`), che prova davvero il campo predittivo `prohibited_risk` dell'AI (non solo che il banner ci sia). Classifica sullo spazio ospite, con lo stesso endpoint `classify` e uno schema con i campi `prohibited_*` (`PREDICTIVE_SCHEMA`, allineato a `CLASSIFY_SCHEMA` di `app.js`), tre casi fissi (`PREDICTIVE_CASES`): spray al peperoncino e salame verso gli Stati Uniti devono dare `possibile` o `probabile`; un maglione di lana deve dare `nessuno`.
+
+- È `problem` se il campo manca o ha un valore non ammesso (`nessuno|possibile|probabile`), se un articolo a rischio non viene segnalato (mancato avviso) o se uno innocuo viene segnalato (falso allarme). L'errore elenca i casi sbagliati con atteso e ottenuto.
+- Non salva nulla (solo AI); costa tre chiamate AI a settimana. Un esito `problem` si apre da solo nel Registro del CRM (id `e2e-demo-predictiveRisk`) e si chiude quando torna ok.
+- I giudizi dell'AI non sono deterministici: se un caso diventa instabile, cambia l'esempio in `PREDICTIVE_CASES` (non rilassare il controllo). Aggiungere un caso = una riga nella lista e una nella simulazione dei test.
+- Test: `netlify/functions/__tests__/weekly-e2e-test.test.js` (mancato avviso, falso allarme, campo assente, errore di rete; verificato con mutazione).
+

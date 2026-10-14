@@ -100,6 +100,21 @@ function guestSuffixedStore(baseName) {
 const CLASSIFY_SCHEMA =
   '{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}';
 
+// Schema con il campo predittivo "merce vietata" (stesso di CLASSIFY_SCHEMA in
+// dist/assets/app.js): serve al passo predictiveRisk, che controlla ogni
+// settimana che l'avviso dell'AI funzioni davvero (non solo che il banner ci sia).
+const PREDICTIVE_SCHEMA =
+  '{"object_it":"...","object_en":"...","hs_code":"6 cifre","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Attrezzatura sportiva|Altro","weight_kg":1.0,"value_eur":0,"confidence":"alta|media|bassa","prohibited_risk":"nessuno|possibile|probabile (probabile se l\'articolo è armi, droghe, contraffatto, pericoloso/infiammabile o ammesso da pochi Paesi, es. carne o latticini verso USA/Canada)","prohibited_reason_it":"... (vuoto se nessuno)","prohibited_reason_en":"... (empty if none)"}';
+
+// Casi fissi: expectRisk "si" = l'AI NON deve rispondere "nessuno"; "no" = deve
+// rispondere "nessuno". Sono giudizi netti: un esito diverso è un segnale reale.
+const PREDICTIVE_CASES = [
+  { item: "spray al peperoncino per difesa personale", expectRisk: "si" },
+  { item: "salame stagionato di 1 kg, destinazione Stati Uniti", expectRisk: "si" },
+  { item: "maglione di lana", expectRisk: "no" },
+];
+const PREDICTIVE_VALUES = ["nessuno", "possibile", "probabile"];
+
 const LABEL_1 = "Test automatico settimanale — oggetto artigianale in legno, non cancellare manualmente se visto nel CRM ospite";
 const LABEL_2 = "Test automatico settimanale — sciarpa di seta dipinta a mano, non cancellare manualmente se visto nel CRM ospite";
 
@@ -216,8 +231,8 @@ function timeoutOrUnreachable(err, start) {
 
 // Passi 1/2: classificazione AI reale (testo, non foto) sullo spazio
 // ospite — stesso prompt/schema esatti di classifyText() in app.js.
-async function classifyOnGuest(label) {
-  const prompt = `Sei un esperto di classificazione doganale per acquisti turistici in Italia.\nClassifica: "${label}"\nRispondi SOLO con JSON valido:\n${CLASSIFY_SCHEMA}`;
+async function classifyOnGuest(label, schema = CLASSIFY_SCHEMA) {
+  const prompt = `Sei un esperto di classificazione doganale per acquisti turistici in Italia.\nClassifica: "${label}"\nRispondi SOLO con JSON valido:\n${schema}`;
   const { res, responseTimeMs } = await timedFetch(
     guestUrl(".netlify/functions/classify"),
     {
@@ -322,6 +337,32 @@ async function checkAirlineBaggageFees() {
 const GUIDE_LINK_RE = /href="(https:\/\/touchandgo-[a-z]+\.netlify\.app[^"]*)"/g;
 const GUIDE_LINK_TIMEOUT_MS = 10000;
 const GUIDE_MAX_LINKS = 30;
+
+// Passo indipendente: l'avviso predittivo "merce vietata" dell'AI. Tre casi
+// fissi classificati davvero sull'ospite; si controlla che il campo ci sia, sia
+// uno dei valori ammessi e che l'esito sia quello atteso. Solo letture/AI: non
+// salva nulla.
+async function checkPredictiveRisk() {
+  const cases = [];
+  let totalMs = 0;
+  try {
+    for (const c of PREDICTIVE_CASES) {
+      const { parsed, responseTimeMs } = await classifyOnGuest("Test automatico settimanale — " + c.item, PREDICTIVE_SCHEMA);
+      totalMs += responseTimeMs;
+      const got = parsed && parsed.prohibited_risk;
+      const valid = PREDICTIVE_VALUES.includes(got);
+      const ok = valid && (c.expectRisk === "si" ? got !== "nessuno" : got === "nessuno");
+      cases.push({ item: c.item, expected: c.expectRisk === "si" ? "possibile o probabile" : "nessuno", got: valid ? got : "campo assente o non valido", ok });
+    }
+  } catch (e) {
+    return { status: "problem", responseTimeMs: totalMs, cases, error: e.message || String(e) };
+  }
+  const wrong = cases.filter((c) => !c.ok);
+  if (wrong.length) {
+    return { status: "problem", responseTimeMs: totalMs, cases, error: wrong.map((c) => `«${c.item}»: atteso ${c.expected}, ottenuto ${c.got}`).join("; ") };
+  }
+  return { status: "ok", responseTimeMs: totalMs, cases };
+}
 
 async function checkGuideLinks() {
   const start = Date.now();
@@ -439,6 +480,10 @@ async function runWeeklyE2ETest() {
   // saltato dai passi della simulazione d'acquisto, e viceversa.
   steps.airlineBaggageFees = await checkAirlineBaggageFees();
   if (steps.airlineBaggageFees.status !== "ok") overallStatus = "problem";
+
+  // ---- Passo indipendente: l'avviso predittivo dell'AI funziona ----
+  steps.predictiveRisk = await checkPredictiveRisk();
+  if (steps.predictiveRisk.status !== "ok") overallStatus = "problem";
 
   // ---- Passo indipendente: i link della guida atterrano nei dispositivi giusti ----
   steps.guideLinks = await checkGuideLinks();
@@ -663,5 +708,6 @@ exports.computeConsolidatedPrice = computeConsolidatedPrice;
 exports.checkConsolidatedNotGreaterThanSum = checkConsolidatedNotGreaterThanSum;
 exports.checkAirlineBaggageFees = checkAirlineBaggageFees;
 exports.checkGuideLinks = checkGuideLinks;
+exports.checkPredictiveRisk = checkPredictiveRisk;
 exports.GUEST_BASE_URL = GUEST_BASE_URL;
 exports.KNOWN_PRODUCTION_URL = KNOWN_PRODUCTION_URL;

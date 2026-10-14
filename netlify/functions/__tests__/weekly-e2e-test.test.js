@@ -152,6 +152,8 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
       // CLASSIFY_SCHEMA stesso, appeso in fondo a ogni prompt — non un
       // discriminante valido.
       const label = body.messages[0].content;
+      if (/peperoncino|salame/.test(label)) return classifyResponse({ prohibited_risk: "probabile", prohibited_reason_it: "x" });
+      if (/maglione/.test(label)) return classifyResponse({ prohibited_risk: "nessuno", prohibited_reason_it: "" });
       return classifyResponse(label.includes("sciarpa") ? CLASSIFICATION_2 : CLASSIFICATION_1);
     }
     if (url.includes(".netlify/functions/save-purchase")) {
@@ -171,6 +173,8 @@ test("caso tutto ok: pipeline completa, overallStatus ok, priceSanityCheck ok, v
   assert.equal(report.steps.airlineBaggageFees.status, "ok");
   assert.equal(report.steps.airlineBaggageFees.feeCount, 1);
   assert.equal(report.steps.airlineBaggageFees.verifiedAt, "2026-10-05");
+  assert.equal(report.steps.predictiveRisk.status, "ok");
+  assert.equal(report.steps.predictiveRisk.cases.length, 3);
   assert.equal(report.steps.classifyItem1.status, "ok");
   assert.equal(report.steps.classifyItem2.status, "ok");
   assert.equal(report.steps.savePurchase1.status, "ok");
@@ -405,4 +409,53 @@ test("checkGuideLinks: guida senza link -> problem", async () => {
   const r = await freshModule().checkGuideLinks();
   assert.equal(r.status, "problem");
   assert.equal(r.error, "nessun_link_nella_guida");
+});
+
+
+// ---- Passo predictiveRisk: l'avviso predittivo "merce vietata" dell'AI ----
+function riskMock(answers) {
+  return async (url, options) => {
+    if (url.includes(".netlify/functions/classify")) {
+      const label = JSON.parse(options.body).messages[0].content;
+      const key = /peperoncino/.test(label) ? "peperoncino" : /salame/.test(label) ? "salame" : "maglione";
+      return classifyResponse(answers[key]);
+    }
+    throw new Error("URL non atteso: " + url);
+  };
+}
+
+test("predictiveRisk: ok se l'AI segnala i due articoli a rischio e non il maglione", async () => {
+  global.fetch = riskMock({ peperoncino: { prohibited_risk: "possibile" }, salame: { prohibited_risk: "probabile" }, maglione: { prohibited_risk: "nessuno" } });
+  const mod = freshModule();
+  const r = await mod.checkPredictiveRisk();
+  assert.equal(r.status, "ok");
+  assert.ok(r.cases.every((c) => c.ok));
+});
+
+test("predictiveRisk: problema se l'AI non segnala un articolo pericoloso (mancato avviso)", async () => {
+  global.fetch = riskMock({ peperoncino: { prohibited_risk: "nessuno" }, salame: { prohibited_risk: "probabile" }, maglione: { prohibited_risk: "nessuno" } });
+  const r = await freshModule().checkPredictiveRisk();
+  assert.equal(r.status, "problem");
+  assert.match(r.error, /peperoncino.*atteso possibile o probabile, ottenuto nessuno/);
+});
+
+test("predictiveRisk: problema se segnala un articolo innocuo (falso allarme)", async () => {
+  global.fetch = riskMock({ peperoncino: { prohibited_risk: "probabile" }, salame: { prohibited_risk: "probabile" }, maglione: { prohibited_risk: "possibile" } });
+  const r = await freshModule().checkPredictiveRisk();
+  assert.equal(r.status, "problem");
+  assert.match(r.error, /maglione.*atteso nessuno, ottenuto possibile/);
+});
+
+test("predictiveRisk: problema se il campo manca o ha un valore non ammesso", async () => {
+  global.fetch = riskMock({ peperoncino: { object_it: "x" }, salame: { prohibited_risk: "forse" }, maglione: { prohibited_risk: "nessuno" } });
+  const r = await freshModule().checkPredictiveRisk();
+  assert.equal(r.status, "problem");
+  assert.match(r.error, /campo assente o non valido/);
+});
+
+test("predictiveRisk: errore di rete = problema con messaggio, mai eccezione", async () => {
+  global.fetch = async () => { throw new Error("rete giù"); };
+  const r = await freshModule().checkPredictiveRisk();
+  assert.equal(r.status, "problem");
+  assert.match(r.error, /rete giù/);
 });
