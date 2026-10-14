@@ -1501,3 +1501,13 @@ Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa, nessuna fu
 **File**: `netlify/functions/subscriber-access.js` (nuovo), `sync.js` e `save-purchase.js` (piccoli adattamenti), `dist/assets/app.js` (`activateSubscription`/`requestSubscriberCode`, `isSubscriberCodeFormat`, `subscriberStatsFor`, `PartnerGenerateEntryCard`, riquadro in "La tua spesa", ramo del login).
 
 **Verifica**: `subscriber-access.test.js` (7: formato, unicità, verify, codici partner non validi come abbonato, limiti), `sync.generated-shipments.test.js` e `save-purchase.generated-by-partner.test.js` (+1 e +2: isolamento e nessuna attribuzione), `dist/assets/__tests__/subscriber-area.test.js` (10: emissione una sola volta, offline, profilo, riquadro, login senza partner-stats, solo Genera spedizione, item con tier `abbonato` e mai `partnerCode`, nessuna regressione per i partner). Suite completa 504/504 (+3 server, +1 sync, +1 app per email e revoca); i comportamenti chiave sono stati verificati rompendoli di proposito. Non provato su un dispositivo reale né con Netlify.
+
+## Guida pubblica — Touchandgo Pratiche, ottavo dispositivo (14 ottobre 2026)
+
+Solo contenuto di `dist/site/guida.html` (nessuna logica applicativa toccata): nuova sezione **04D** "Oltre il corebusiness — le pratiche doganali (Prior Notice FDA)" (`id="s-pratiche"`), subito prima della sezione 05.
+
+- **Scheda di accesso** (`linkcard`) alla pagina di atterraggio `touchandgo-pratiche.netlify.app` (ottavo dispositivo, repository `touchandgo-pratiche`). Il link funziona solo dopo la pubblicazione del sito Netlify, che deve chiamarsi esattamente `touchandgo-pratiche`.
+- **Tre punti nella checklist**: che cosa fa, differenza privato/azienda, e il flusso che passa dal CRM (invio dal sito pubblico o dal gestionale → tab Pratiche del CRM → presentazione della notifica e numero di conferma → stato visibile al cliente; nessun pagamento né email automatiche; non è consulenza legale).
+- Nessuna card nuova nella griglia "otto schede" (come per 04C).
+
+**Verifica**: bilanciamento dei tag HTML controllato con `html.parser`.
