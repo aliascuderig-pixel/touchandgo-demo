@@ -31,7 +31,7 @@ const STEPS = [
 // sotto e ../netlify/lib/category-stats.js, CATEGORIES, che duplica questo
 // stesso elenco lato server per le regole anti-frode statistiche e la
 // cache dei valori medi del percorso offline, vedi MANUALE.md).
-const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Attrezzatura sportiva|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"..."}`;
+const CLASSIFY_SCHEMA = `{"object_it":"...","object_en":"...","hs_code":"6 cifre","hs_description_it":"...","hs_description_en":"...","category":"Ceramica|Abbigliamento|Alimentari|Vino & Spirits|Accessori Moda|Arte & Antiquariato|Gioielleria|Artigianato|Attrezzatura sportiva|Altro","material":"materiale costruttivo principale, breve (es. pelle, cotone, ceramica, vetro, legno, metallo, misto)","weight_kg":1.0,"length_cm":0,"width_cm":0,"height_cm":0,"value_eur":0,"fragile":false,"made_in_italy":true,"confidence":"alta|media|bassa","shipping_note_it":"...","shipping_note_en":"...","prohibited_risk":"nessuno|possibile|probabile (probabile se l'articolo è armi, droghe, contraffatto, pericoloso/infiammabile o ammesso da pochi Paesi, es. carne o latticini verso USA/Canada)","prohibited_reason_it":"... (vuoto se nessuno)","prohibited_reason_en":"... (empty if none)"}`;
 
 // Sottocategorie — SOLO lato client, per il selettore del percorso offline
 // (vedi OfflineClassifyScreen()/MANUALE.md, "Percorso offline"): l'AI di
@@ -561,6 +561,8 @@ const I18N = {
     header_reset_title: "Resetta profilo e ricomincia",
     header_reset_label: "Reset",
     offline_banner: "📡 Sei offline — la classificazione AI e le foto delle città non sono disponibili finché non torni online. I tuoi acquisti, indirizzi e dashboard restano comunque consultabili.",
+    prohibited_risk_warn: "⚠️ Attenzione: questo articolo potrebbe non essere spedibile.",
+    prohibited_banner: "🚫 Non spediamo merci vietate: armi, droghe, contraffatti, materiali pericolosi e ciò che il Paese di destinazione non ammette (es. carne e latticini verso USA o Canada). Se hai dubbi, chiedi prima di acquistare.",
     guest_mode_banner: "🛟 Stai usando la versione di continuità di Touch&amp;Go. I tuoi acquisti sono al sicuro e verranno sincronizzati automaticamente.",
     sync_pending_item_singular: "sincronizzazione",
     sync_pending_item_plural: "sincronizzazioni",
@@ -859,6 +861,8 @@ const I18N = {
     header_reset_title: "Reset profile and start over",
     header_reset_label: "Reset",
     offline_banner: "📡 You're offline — AI classification and city photos aren't available until you're back online. Your purchases, addresses and dashboard are still available.",
+    prohibited_risk_warn: "⚠️ Heads up: this item may not be shippable.",
+    prohibited_banner: "🚫 We don't ship prohibited goods: weapons, drugs, counterfeits, hazardous materials and anything the destination country doesn't allow (e.g. meat and dairy to the US or Canada). If in doubt, ask before you buy.",
     guest_mode_banner: "🛟 You're using Touch&amp;Go's continuity space. Your purchases are safe and will sync automatically.",
     sync_pending_item_singular: "sync",
     sync_pending_item_plural: "syncs",
@@ -1556,6 +1560,22 @@ function getRecentTrail() {
 // state.guestMode è true, cioè solo quando /.netlify/functions/guest-status
 // risponde guestMode:true — cosa che succede solo sul deploy con la
 // variabile d'ambiente GUEST_MODE=true, mai su produzione.
+// Avviso fisso sulle merci vietate (nessun pulsante per chiuderlo).
+function ProhibitedGoodsBanner() {
+  return el("div", "prohibited-banner", t("prohibited_banner"));
+}
+
+// Avviso predittivo dall'AI di classificazione: solo informativo, mai un
+// blocco automatico (come per l'anti-frode, la decisione resta allo staff).
+function ProhibitedRiskNotice(result) {
+  const risk = result && result.prohibited_risk;
+  if (risk !== "possibile" && risk !== "probabile") return null;
+  const reason = (state.lang === "en" ? result.prohibited_reason_en : result.prohibited_reason_it) || "";
+  const box = el("div", "prohibited-banner");
+  box.textContent = t("prohibited_risk_warn") + (reason ? " " + reason : "");
+  return box;
+}
+
 function GuestModeBanner() {
   return el("div", "guest-mode-banner", t("guest_mode_banner"));
 }
@@ -1745,6 +1765,7 @@ function AssistantChatModal() {
   closeBtn.addEventListener("click", closeAssistantChat);
   header.appendChild(closeBtn);
   modal.appendChild(header);
+  modal.appendChild(ProhibitedGoodsBanner());
 
   const modeRow = el("div", "assistant-chat-mode-row");
   modeRow.innerHTML = `
@@ -1857,6 +1878,7 @@ function SupportRequestModal() {
   closeBtn.addEventListener("click", closeSupportModal);
   header.appendChild(closeBtn);
   modal.appendChild(header);
+  modal.appendChild(ProhibitedGoodsBanner());
 
   // Stato di conferma: il messaggio appena inviato dal turista è testo
   // libero, quindi va SEMPRE da escapeHtml() prima di finire in innerHTML
@@ -2626,6 +2648,7 @@ async function runPartnerGenerateClassification(promise) {
 
 function PartnerGenerateShipmentScreen() {
   const wrap = el("div", "section");
+  wrap.appendChild(ProhibitedGoodsBanner());
 
   const back = el("div", "back", "← Torna all'area partner");
   back.addEventListener("click", () => {
@@ -3857,6 +3880,7 @@ function HomeScreen() {
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("home"));
   wrap.appendChild(TrustRow());
+  wrap.appendChild(ProhibitedGoodsBanner());
 
   const reviewBanner = ReviewInviteBanner();
   if (reviewBanner) wrap.appendChild(reviewBanner);
@@ -4382,6 +4406,9 @@ function ResultScreen() {
   const wrap = el("div");
   wrap.appendChild(AssistantAvatar("result"));
   wrap.appendChild(AssistantAvatar("options"));
+  wrap.appendChild(ProhibitedGoodsBanner());
+  const riskNotice = ProhibitedRiskNotice(r);
+  if (riskNotice) wrap.appendChild(riskNotice);
 
   const topbar = el("div", "topbar");
   const back = el("button", "back", "←");
@@ -6121,6 +6148,7 @@ function ConcludeScreen() {
   });
   wrap.appendChild(back);
 
+  wrap.appendChild(ProhibitedGoodsBanner());
   wrap.appendChild(el("div", "step-lbl", "Concludi il soggiorno"));
   wrap.appendChild(
     el(
