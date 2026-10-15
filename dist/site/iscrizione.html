@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0F0F0F" />
+<title>Iscriviti — Touch&amp;Go</title>
+<meta name="description" content="Iscriviti per ricevere informazioni gratuite su Touch&Go: l'app per i turisti, la suite per tutti." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0F0F0F;--paper:#FAF8F4;--cream:#F4EFE6;--gold:#C9A96E;--gold-soft:#E8D5B0;--gold-deep:#8B6914;--clay:#7A5C0A;--muted:#6B655A;--line:#EAE4D8;--display:'Cormorant Garamond',serif;--body:'Montserrat',system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden;max-width:100%}
+body{margin:0;font-family:var(--body);background:var(--ink);color:var(--cream);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:var(--gold)}
+.wrap{max-width:520px;margin:0 auto;padding:0 20px}
+nav{padding:18px 0}
+.brand{font-family:var(--display);font-size:22px;color:var(--cream);text-decoration:none}
+.brand em{font-style:italic;color:var(--gold)}
+.eyebrow{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:600;margin:36px 0 12px}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(34px,9vw,46px);line-height:1.08;margin:0 0 14px;text-wrap:balance}
+.lead{color:var(--gold-soft);font-size:15px;margin:0 0 26px}
+ul.who{list-style:none;padding:0;margin:0 0 28px;display:flex;flex-wrap:wrap;gap:8px}
+ul.who li{border:1px solid #3a331f;color:var(--gold-soft);font-size:12.5px;padding:5px 12px;border-radius:999px}
+form{background:#161616;border:1px solid #2c2616;border-radius:8px;padding:22px 20px}
+label{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
+input[type=email],select{width:100%;font:inherit;font-size:16px;padding:12px 14px;border-radius:6px;border:1px solid #4a4028;background:#0F0F0F;color:var(--cream);margin-bottom:16px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#cfc8b8;margin:4px 0 18px;font-weight:400}
+.consent input{margin-top:3px;width:18px;height:18px;flex:none;accent-color:var(--gold)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+button{width:100%;font:inherit;font-weight:700;font-size:15px;padding:14px;border:0;border-radius:6px;background:var(--gold);color:var(--ink);cursor:pointer}
+button[disabled]{opacity:.6;cursor:wait}
+.msg{margin-top:14px;font-size:13.5px;min-height:20px}
+.msg.err{color:#ff9d8a}
+.done{display:none;text-align:center;padding:30px 10px}
+.done h2{font-family:var(--display);font-size:30px;margin:0 0 8px;color:var(--cream)}
+.small{font-size:11.5px;color:#8A8577;margin:18px 0 40px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><a class="brand" href="index.html">Touch<em>&amp;</em>Go</a></nav>
+
+  <div class="eyebrow">Touch&amp;Go · Catania</div>
+  <h1>Un'app per i turisti. Una suite per tutti.</h1>
+  <p class="lead">Lascia la tua email: ti scriviamo per spiegarti come funziona e per avvisarti quando apriamo. È gratuito e puoi cancellarti quando vuoi.</p>
+  <ul class="who"><li>Turisti</li><li>Negozianti</li><li>Agenzie di viaggio</li><li>Tour operator</li></ul>
+
+  <form id="f" novalidate>
+    <label for="email">La tua email</label>
+    <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="nome@esempio.it" required maxlength="254" />
+
+    <label for="profile">Chi sei? <span style="font-weight:400;color:#8A8577">(facoltativo)</span></label>
+    <select id="profile" name="profile">
+      <option value="">Preferisco non dirlo</option>
+      <option value="turista">Turista</option>
+      <option value="negoziante">Negoziante</option>
+      <option value="agenzia">Agenzia di viaggio</option>
+      <option value="tour-operator">Tour operator</option>
+      <option value="altro">Altro</option>
+    </select>
+
+    <div class="hp" aria-hidden="true"><label>Non compilare <input id="website" name="website" tabindex="-1" autocomplete="off" /></label></div>
+
+    <label class="consent" for="consent">
+      <input id="consent" name="consent" type="checkbox" required />
+      <span>Acconsento a ricevere da Touch&amp;Go email con informazioni sul servizio. Ho letto l'<a href="privacy.html#iscrizioni" target="_blank" rel="noopener">informativa sulla privacy</a>. Posso revocare il consenso in qualsiasi momento scrivendo a privacy@touchandgo.it.</span>
+    </label>
+
+    <button id="btn" type="submit">Iscriviti</button>
+    <div id="msg" class="msg" role="status" aria-live="polite"></div>
+  </form>
+
+  <div id="done" class="done" role="status">
+    <h2>Grazie, sei dentro.</h2>
+    <p>Abbiamo registrato la tua iscrizione. Ti scriveremo presto.</p>
+    <p><a href="index.html">Scopri Touch&amp;Go →</a></p>
+  </div>
+
+  <p class="small">Touch&amp;Go è un prototipo pre-seed: non vendiamo né cediamo la tua email, e la usiamo solo per inviarti informazioni su Touch&amp;Go.</p>
+</div>
+<script>
+(function(){
+  var f=document.getElementById('f'),msg=document.getElementById('msg'),btn=document.getElementById('btn');
+  var src=(new URLSearchParams(location.search).get('src')||'video');
+  if(['video','sito','altro'].indexOf(src)<0)src='altro';
+  f.addEventListener('submit',function(e){
+    e.preventDefault();
+    msg.className='msg';msg.textContent='';
+    var email=document.getElementById('email').value.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){msg.className='msg err';msg.textContent='Controlla l\'email: sembra incompleta.';return;}
+    if(!document.getElementById('consent').checked){msg.className='msg err';msg.textContent='Per iscriverti serve spuntare il consenso.';return;}
+    btn.disabled=true;
+    fetch('/.netlify/functions/lead-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      email:email,consent:true,profile:document.getElementById('profile').value||undefined,
+      source:src,website:document.getElementById('website').value})})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {ok:r.ok,j:j};});})
+    .then(function(x){
+      if(x.ok){f.style.display='none';document.getElementById('done').style.display='block';}
+      else{msg.className='msg err';msg.textContent=(x.j&&x.j.error)||'Qualcosa non ha funzionato, riprova.';btn.disabled=false;}
+    })
+    .catch(function(){msg.className='msg err';msg.textContent='Connessione assente: riprova tra poco.';btn.disabled=false;});
+  });
+})();
+</script>
+</body>
+</html>
