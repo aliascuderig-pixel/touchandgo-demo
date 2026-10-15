@@ -343,3 +343,56 @@ test("un acquisto turista self-service (percorso home, modalità turista) non ha
   assert.equal(savedPurchases.length, 1);
   assert.equal(savedPurchases[0].generatedByPartnerCode, undefined, "un acquisto turista self-service non deve mai avere questo campo");
 });
+
+
+test("Genera spedizione: il bagaglio di andata manda shipmentKind, luggageDirection e luogo di soggiorno; lo storico mostra il tipo", async (t) => {
+  const savedPurchases = [];
+  const { window, document } = bootPartnerApp(t, {
+    fetchMock: makeFetchMock({ partnerPlan: "agenzie", onSavePurchase: (item) => savedPurchases.push(item) }),
+  });
+  await loginAsPartner(document, "AGENZIA1");
+  document.getElementById("partner-generate-entry-btn").click();
+
+  const kind = document.getElementById("partner-generate-kind");
+  assert.ok(kind, "deve esserci la scelta 'Cosa spedisci?'");
+  assert.equal(kind.value, "acquisto", "default: acquisto, come prima");
+  kind.value = "bagaglio";
+  kind.dispatchEvent(new window.Event("change"));
+  const dir = document.getElementById("partner-generate-direction");
+  assert.notEqual(dir.style.display, "none", "scegliendo bagaglio compare la direzione");
+  dir.value = "andata";
+  dir.dispatchEvent(new window.Event("change"));
+
+  await uploadFakePhoto(window, document);
+  document.getElementById("partner-generate-client-name").value = "Anna Smith";
+  document.getElementById("partner-generate-dest-country").value = "Unione Europea";
+  document.getElementById("partner-generate-stay").value = "Hotel Centrale, Catania";
+  document.getElementById("partner-generate-submit-btn").click();
+  await wait(50);
+
+  assert.equal(savedPurchases.length, 1);
+  const item = savedPurchases[0];
+  assert.equal(item.shipmentKind, "bagaglio");
+  assert.equal(item.luggageDirection, "andata");
+  assert.equal(item.stayLabel, "Hotel Centrale, Catania");
+  assert.equal(item.generatedByPartnerCode, "AGENZIA1");
+  assert.equal(item.partnerCode, undefined);
+  assert.match(document.body.textContent, /Bagaglio — andata/);
+});
+
+test("Genera spedizione: il bagaglio di ritorno non manda stayLabel; l'acquisto (default) non manda campi bagaglio oltre a shipmentKind", async (t) => {
+  const savedPurchases = [];
+  const { window, document } = bootPartnerApp(t, {
+    fetchMock: makeFetchMock({ partnerPlan: "hotel", onSavePurchase: (item) => savedPurchases.push(item) }),
+  });
+  await loginAsPartner(document, "HOTEL1");
+  document.getElementById("partner-generate-entry-btn").click();
+  await uploadFakePhoto(window, document);
+  document.getElementById("partner-generate-client-name").value = "Bob";
+  document.getElementById("partner-generate-dest-country").value = "Unione Europea";
+  document.getElementById("partner-generate-submit-btn").click();
+  await wait(50);
+  assert.equal(savedPurchases[0].shipmentKind, "acquisto");
+  assert.equal(savedPurchases[0].luggageDirection, undefined);
+  assert.equal(savedPurchases[0].stayLabel, undefined);
+});
