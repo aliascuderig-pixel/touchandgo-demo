@@ -1611,6 +1611,10 @@ Agenzie di viaggio, tour operator e hotel sono nella rete di partner **sia** per
 
 Il bagaglio (andata o ritorno) non ha un listino proprio: `submitPartnerGenerate` in `dist/assets/app.js` usa lo stesso `priceQuotes` e la stessa fascia (`pricingTierForPartnerPlan`) degli acquisti. Test in `partner-generate-shipment.test.js`: acquisto, andata e ritorno con lo stesso oggetto, destinazione e piano danno lo stesso `price` e `pricingTier`. Restano senza esenzione IVA export (il bagaglio non è una vendita), come già indicato. Nel gestionale il prezzo resta inserito a mano per entrambi i tipi (vedi il suo MANUALE.md).
 
+### Bagaglio: nessuna esenzione IVA export sui documenti (15 ottobre 2026)
+
+La fattura proforma di `DocumentsScreen` mostra, per `shipmentKind: "bagaglio"` (andata e ritorno), «Non applicabile (bagaglio personale, non una vendita)» al posto di «Art. 8 DPR 633/72» (chiave `docs_vat_not_applicable`, italiano e inglese). Acquisti e record senza il campo restano invariati. Coerente con l'assistente (il bagaglio non è una vendita). Test: `dist/assets/__tests__/documents-vat-bagaglio.test.js`. Da far verificare a un consulente fiscale la dicitura da usare sul documento.
+
 ### Dogana dell'andata: stesse regole (15 ottobre 2026)
 
 Nessuna modifica al comportamento: `submitPartnerGeneratedShipment` tratta andata, ritorno e acquisto con lo stesso flusso (classificazione AI, avvisi, documenti, tariffa). Cambia solo la documentazione: l'andata non è più elencata tra i punti "da decidere". La verifica legale con un esperto doganale resta consigliata prima di promuovere il servizio all'estero.
