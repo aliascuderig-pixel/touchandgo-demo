@@ -17,6 +17,7 @@
 const crypto = require("node:crypto");
 const { getStore } = require("@netlify/blobs");
 const { guestScopedStoreName } = require("../lib/guest-mode");
+const { mailEnabled, welcomeMail, sendMail } = require("../lib/lead-mail");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -100,7 +101,7 @@ exports.handler = async (event) => {
     // e il record originale — con la data del primo consenso — resta.
     const existing = await leads.get(id, { type: "json" });
     if (!existing) {
-      await leads.setJSON(id, {
+      const lead = {
         id,
         email,
         profile: body.profile || null,
@@ -109,7 +110,22 @@ exports.handler = async (event) => {
         consentVersion: CONSENT_VERSION,
         status: "new",
         createdAt: new Date().toISOString(),
-      });
+      };
+      await leads.setJSON(id, lead);
+
+      // Email di benvenuto: solo alla prima iscrizione, solo se l'invio è
+      // configurato. Un errore di invio NON fa fallire l'iscrizione (già
+      // salvata): si registra solo l'esito nel record.
+      if (mailEnabled()) {
+        try {
+          if (await sendMail({ to: email, ...welcomeMail(id) })) {
+            lead.welcomeSentAt = new Date().toISOString();
+            await leads.setJSON(id, lead);
+          }
+        } catch (mailErr) {
+          // ignorato di proposito: vedi commento sopra
+        }
+      }
     }
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true }) };
