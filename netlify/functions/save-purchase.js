@@ -239,6 +239,37 @@ function sanitizeStructuredDestination(item) {
   }
 }
 
+// Tipo di spedizione (ottobre 2026): "acquisto" (default, tutto ciò che
+// esisteva prima) oppure "bagaglio" — il bagaglio personale del turista
+// spedito da/verso il luogo di soggiorno, tipico servizio di agenzie di
+// viaggio, tour operator e hotel (vedi MANUALE.md, "Spedizione bagagli
+// andata e ritorno"). Per il bagaglio `luggageDirection` è obbligatoria:
+// "ritorno" = dal luogo di soggiorno a casa del turista; "andata" = da casa
+// del turista al luogo di soggiorno in Italia (`stayLabel`, facoltativo).
+// Il tipo lo decide il client ma qui viene normalizzato: un valore non
+// ammesso è rifiutato; per un acquisto i campi bagaglio sono sempre tolti,
+// così un record non può contenere combinazioni incoerenti. Restituisce
+// false se i dati non sono validi.
+const SHIPMENT_KINDS = ["acquisto", "bagaglio"];
+const LUGGAGE_DIRECTIONS = ["andata", "ritorno"];
+const STAY_LABEL_MAX_LENGTH = 120;
+function sanitizeShipmentKind(item) {
+  if (item.shipmentKind === undefined || item.shipmentKind === null) item.shipmentKind = "acquisto";
+  if (!SHIPMENT_KINDS.includes(item.shipmentKind)) return false;
+  if (item.shipmentKind === "acquisto") {
+    delete item.luggageDirection;
+    delete item.stayLabel;
+    return true;
+  }
+  if (!LUGGAGE_DIRECTIONS.includes(item.luggageDirection)) return false;
+  if (item.stayLabel !== undefined && item.stayLabel !== null) {
+    if (typeof item.stayLabel !== "string") return false;
+    item.stayLabel = item.stayLabel.trim().slice(0, STAY_LABEL_MAX_LENGTH);
+  }
+  if (item.luggageDirection === "ritorno") delete item.stayLabel;
+  return true;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
@@ -249,6 +280,9 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Dati spedizione non validi" }) };
     }
     sanitizeStructuredDestination(item);
+    if (!sanitizeShipmentKind(item)) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Tipo di spedizione non valido" }) };
+    }
 
     const withinLimit = await checkRateLimit(`save-purchase:${getClientIp(event)}`);
     if (!withinLimit) {

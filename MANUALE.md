@@ -1588,3 +1588,21 @@ Alla **prima** iscrizione da `iscrizione.html`, `lead-signup.js` invia una email
 - Firma non valida o segreto non configurato: 400, nessuna modifica.
 - Test: `netlify/functions/__tests__/lead-mail.test.js`.
 
+## Spedizione bagagli andata e ritorno (15 ottobre 2026)
+
+Agenzie di viaggio, tour operator e hotel sono nella rete di partner **sia** per estendere la spedizione agli acquisti fatti in vacanza **sia** per spedire le valigie del cliente da e per il luogo di soggiorno. Fino a oggi il codice trattava solo acquisti; questa sezione aggiunge il bagaglio come **tipo di spedizione**.
+
+- **Dove**: in «Genera spedizione» dell'area partner (`PartnerGenerateShipmentScreen`), nuovo passo «Cosa spedisci?»: «Un acquisto fatto in negozio» (default, comportamento di prima) oppure «Il bagaglio del cliente (valigie)», con direzione **ritorno** (dal luogo di soggiorno a casa del cliente) o **andata** (da casa del cliente al luogo di soggiorno in Italia; campo facoltativo «Luogo di soggiorno in Italia», max 120 caratteri).
+- **Campi sull'item** (`save-purchase.js`, `sanitizeShipmentKind()`): `shipmentKind` (`"acquisto"` | `"bagaglio"`, default `"acquisto"` anche per i record storici senza il campo), `luggageDirection` (`"andata"` | `"ritorno"`, obbligatoria per il bagaglio) e `stayLabel` (solo per l'andata). Tipo o direzione non ammessi → 400; per un acquisto i campi bagaglio vengono tolti, per il ritorno `stayLabel` viene tolto.
+- **Prezzo**: invariato. Stesse tariffe a fasce di peso, stessa zona di tariffazione scelta con l'indirizzo, che è **sempre quello di casa del cliente** (consegna per il ritorno, ritiro per l'andata). Il bagaglio passa dalla classificazione AI come qualunque oggetto (foto della valigia).
+- **Il bagaglio non è una vendita**: non c'è esenzione IVA export (art. 8 DPR 633/72) e le comunicazioni sull'esenzione non vanno mostrate per i bagagli.
+- **Storico «Spedizioni generate»** e scheda di conferma mostrano il tipo («Acquisto», «Bagaglio — andata», «Bagaglio — ritorno»).
+- **Assistente AI** (`assistant.js`): sia la modalità turista sia quella «spiega la suite» sanno che le valigie si spediscono tramite agenzie, tour operator e hotel partner.
+- **Sito e guida**: la sezione agenzie/tour operator di `index.html` e la descrizione del gestionale in `guida.html` citano ora i bagagli.
+- **Da decidere / non coperto**: (1) l'**andata** è un'importazione verso l'Italia: la documentazione doganale per beni personali in ingresso non è gestita dall'app e va verificata (con i corrieri e un esperto) prima di promettere il servizio al pubblico; (2) ritiro presso l'hotel e consegna del bagaglio sono flussi reali dei corrieri, oggi **simulati** come tutte le spedizioni; (3) nessuna tariffa dedicata per i bagagli: se si vorrà un prezzo diverso, va deciso e aggiunto; (4) il turista non può ancora ordinare il bagaglio da solo dall'app, solo tramite un partner.
+- Test: `netlify/functions/__tests__/save-purchase.shipment-kind.test.js`, `dist/assets/__tests__/partner-generate-shipment.test.js` (due test nuovi in fondo).
+
+
+### Guida e mappa funzionale: gestionale, codice abbonato e flusso «Un bagaglio» (15 ottobre 2026)
+
+`dist/site/guida.html` aggiornata: scheda «Gestionale B2B» e riga del gestionale (da PC, anche per il turista abbonato con il codice `ABB-`), nota sulla spedizione dei bagagli andata/ritorno, scheda dispositivo e nodo della mappa «Gestionale» (ora collegato anche all'archivio `subscribers`, usato solo per l'accesso), descrizione del nodo `subscribers`, e un nuovo percorso evidenziabile **«Un bagaglio»** nella mappa interattiva. Il limite mensile del piano abbonato (5) è provvisorio. Il controllo settimanale dei link della guida non cambia. La copia statica della mappa è nel file datato su Drive «Mappa della suite Touch&Go 2026-10-15».

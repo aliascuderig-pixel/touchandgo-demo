@@ -1375,6 +1375,10 @@ const state = {
   partnerGenerateSaving: false,
   partnerGenerateSaved: null,
   partnerGenerateSaveError: null,
+  // Tipo di spedizione generata (ottobre 2026): "acquisto" | "bagaglio" e,
+  // per il bagaglio, la direzione "ritorno" | "andata" — vedi MANUALE.md.
+  partnerGenerateKind: "acquisto",
+  partnerGenerateDirection: "ritorno",
   partnerShipments: [],
   partnerShipmentsLoading: false,
   partnerShipmentsError: null,
@@ -2288,6 +2292,8 @@ function PartnerGenerateEntryCard(description) {
     state.partnerGenerateError = null;
     state.partnerGenerateSaved = null;
     state.partnerGenerateSaveError = null;
+    state.partnerGenerateKind = "acquisto";
+    state.partnerGenerateDirection = "ritorno";
     state.partnerView = "generate";
     render();
   });
@@ -2504,6 +2510,8 @@ function PartnerLoginAndHistory() {
     state.partnerGenerateSaving = false;
     state.partnerGenerateSaved = null;
     state.partnerGenerateSaveError = null;
+    state.partnerGenerateKind = "acquisto";
+    state.partnerGenerateDirection = "ritorno";
     state.partnerShipments = [];
     state.partnerShipmentsLoading = false;
     state.partnerShipmentsError = null;
@@ -2646,6 +2654,14 @@ async function runPartnerGenerateClassification(promise) {
   render();
 }
 
+// Etichetta leggibile del tipo di spedizione di un item (area partner e
+// storico "Spedizioni generate"): "Acquisto" per tutto ciò che non è un
+// bagaglio (inclusi gli item storici, senza il campo).
+function shipmentKindLabel(it) {
+  if (!it || it.shipmentKind !== "bagaglio") return "Acquisto";
+  return it.luggageDirection === "andata" ? "Bagaglio — andata" : "Bagaglio — ritorno";
+}
+
 function PartnerGenerateShipmentScreen() {
   const wrap = el("div", "section");
   wrap.appendChild(ProhibitedGoodsBanner());
@@ -2670,6 +2686,7 @@ function PartnerGenerateShipmentScreen() {
     const doneCard = el("div", "info-card");
     doneCard.innerHTML = `<div class="info-line">✅ Spedizione generata: <b>${escapeHtml(state.partnerGenerateSaved.id)}</b></div>
       <div class="info-row"><span>Cliente</span><b>${escapeHtml(state.partnerGenerateSaved.touristName)}</b></div>
+      <div class="info-row"><span>Tipo</span><b>${escapeHtml(shipmentKindLabel(state.partnerGenerateSaved))}</b></div>
       <div class="info-row"><span>Tier di prezzo applicato</span><b>${escapeHtml(state.partnerGenerateSaved.pricingTier)}</b></div>
       <div class="info-row total"><span>Totale</span><b>€${state.partnerGenerateSaved.price.toFixed(2)}</b></div>`;
     wrap.appendChild(doneCard);
@@ -2685,6 +2702,37 @@ function PartnerGenerateShipmentScreen() {
     wrap.appendChild(newBtn);
     return wrap;
   }
+
+  // Passo 0: cosa si spedisce. Un acquisto fatto in negozio (come sempre) o
+  // il bagaglio personale del cliente, da/verso il luogo di soggiorno —
+  // servizio tipico di agenzie, tour operator e hotel. Per il bagaglio:
+  // "ritorno" = dal luogo di soggiorno a casa del cliente; "andata" = da
+  // casa del cliente al luogo di soggiorno in Italia. La zona di tariffazione
+  // è sempre quella del paese di casa del cliente (stesse tariffe a fasce).
+  const kindBlock = el("div", "dest-field-block");
+  kindBlock.innerHTML = `<div class="dest-lbl">Cosa spedisci?</div>
+    <select class="addr-input" id="partner-generate-kind">
+      <option value="acquisto">Un acquisto fatto in negozio</option>
+      <option value="bagaglio">Il bagaglio del cliente (valigie)</option>
+    </select>
+    <select class="addr-input" id="partner-generate-direction" style="display:none">
+      <option value="ritorno">Ritorno: dal luogo di soggiorno a casa del cliente</option>
+      <option value="andata">Andata: da casa del cliente al luogo di soggiorno</option>
+    </select>`;
+  wrap.appendChild(kindBlock);
+  const kindSel = kindBlock.querySelector("#partner-generate-kind");
+  const dirSel = kindBlock.querySelector("#partner-generate-direction");
+  kindSel.value = state.partnerGenerateKind;
+  dirSel.value = state.partnerGenerateDirection;
+  dirSel.style.display = state.partnerGenerateKind === "bagaglio" ? "" : "none";
+  kindSel.addEventListener("change", () => {
+    state.partnerGenerateKind = kindSel.value === "bagaglio" ? "bagaglio" : "acquisto";
+    render();
+  });
+  dirSel.addEventListener("change", () => {
+    state.partnerGenerateDirection = dirSel.value === "andata" ? "andata" : "ritorno";
+    render();
+  });
 
   // Passo 1: foto -> classificazione AI (input file nativo, già
   // compatibile desktop — nessun mirino fotocamera custom qui, quella
@@ -2734,6 +2782,20 @@ function PartnerGenerateShipmentScreen() {
     wrap.appendChild(clientField);
     addVoiceButton(clientField.querySelector("#partner-generate-client-name"));
     wrap.appendChild(AddressFormFields("partner-generate-dest"));
+    if (state.partnerGenerateKind === "bagaglio") {
+      const isAndata = state.partnerGenerateDirection === "andata";
+      const stayBlock = el("div", "dest-field-block");
+      stayBlock.innerHTML = `<div class="identify-intro">${
+        isAndata
+          ? "Andata: l'indirizzo qui sopra è quello di casa del cliente (da dove ritiriamo). Indica sotto dove alloggia in Italia."
+          : "Ritorno: l'indirizzo qui sopra è quello di casa del cliente (dove consegniamo)."
+      }</div>${
+        isAndata
+          ? `<input class="addr-input" id="partner-generate-stay" placeholder="Luogo di soggiorno in Italia (hotel, struttura)" maxlength="120" />`
+          : ""
+      }`;
+      wrap.appendChild(stayBlock);
+    }
 
     if (state.partnerGenerateSaveError) {
       wrap.appendChild(el("div", "alert", `⚠️ ${escapeHtml(state.partnerGenerateSaveError)}`));
@@ -2763,6 +2825,7 @@ async function submitPartnerGeneratedShipment() {
   const clientName = (document.getElementById("partner-generate-client-name").value || "").trim();
   const clientEmail = (document.getElementById("partner-generate-client-email").value || "").trim();
   const dest = readAddressForm("partner-generate-dest");
+  const stayEl = document.getElementById("partner-generate-stay");
   if (!clientName) {
     state.partnerGenerateSaveError = "Inserisci il nome del cliente finale.";
     render();
@@ -2808,6 +2871,15 @@ async function submitPartnerGeneratedShipment() {
     // spedizione per conto del cliente — mai item.partnerCode (riservato al
     // meccanismo di commissione sconti, vedi commento sopra la funzione).
     generatedByPartnerCode: state.partnerLoggedCode,
+    shipmentKind: state.partnerGenerateKind === "bagaglio" ? "bagaglio" : "acquisto",
+    ...(state.partnerGenerateKind === "bagaglio"
+      ? {
+          luggageDirection: state.partnerGenerateDirection === "andata" ? "andata" : "ritorno",
+          ...(state.partnerGenerateDirection === "andata" && stayEl && stayEl.value.trim()
+            ? { stayLabel: stayEl.value.trim().slice(0, 120) }
+            : {}),
+        }
+      : {}),
     status: "in sospeso",
     date: new Date().toISOString(),
     photo,
@@ -2898,7 +2970,7 @@ function PartnerGeneratedShipmentsScreen() {
       const row = el("div", "history-item");
       row.innerHTML = `
         <div class="history-top"><span class="history-name">${escapeHtml(it.objectName || "—")}</span><span class="history-status ${historyStatusClass(it.status)}">${escapeHtml(it.status || "—")}</span></div>
-        <div class="history-meta">Cliente: <b>${escapeHtml(it.touristName || "—")}</b> · Tier: ${escapeHtml(it.pricingTier || "—")} · €${(it.price || 0).toFixed(2)}</div>
+        <div class="history-meta">${escapeHtml(shipmentKindLabel(it))} · Cliente: <b>${escapeHtml(it.touristName || "—")}</b> · Tier: ${escapeHtml(it.pricingTier || "—")} · €${(it.price || 0).toFixed(2)}</div>
         <div class="history-meta">ID ${escapeHtml(it.id)} · ${dateStr}</div>`;
       list.appendChild(row);
     });
