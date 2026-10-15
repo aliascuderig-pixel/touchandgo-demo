@@ -1569,10 +1569,22 @@ Il test end-to-end settimanale (`weekly-e2e-test.js`) ha un nuovo passo indipend
 Il pulsante «Iscriviti» del video promozionale (versione suite, 40 s) porta a `dist/site/iscrizione.html` (URL `/site/iscrizione.html`; il parametro `?src=video|sito|altro` registra da dove arriva l'iscritto, default `video`).
 
 - **Cosa chiede**: email, profilo facoltativo (turista, negoziante, agenzia, tour operator, altro) e un consenso esplicito non pre-spuntato, con link all'informativa (`privacy.html#iscrizioni`, nuova sezione 9).
-- **Funzione `lead-signup.js`** (solo POST): valida l'email, richiede `consent === true`, scarta in silenzio (200 senza salvare) le richieste col campo trappola `website` compilato, rate limit 20 richieste/60 min per IP (copia per-file come le altre function). Non invia email.
+- **Funzione `lead-signup.js`** (solo POST): valida l'email, richiede `consent === true`, scarta in silenzio (200 senza salvare) le richieste col campo trappola `website` compilato, rate limit 20 richieste/60 min per IP (copia per-file come le altre function). Invia l'email di benvenuto solo se configurata (vedi sotto).
 - **Dati**: store Blobs `leads` (via `guestScopedStoreName()`); chiave = hash dell'email normalizzata (minuscola), quindi nessun duplicato e il record del primo consenso resta intatto. Record: `{id, email, profile, source, consent, consentVersion, status:"new", createdAt}`. `consentVersion` (costante `CONSENT_VERSION`) va incrementata se cambia il testo del consenso in `iscrizione.html`.
 - **Risposta**: identica per email nuova o già presente, per non rivelare chi è iscritto.
 - **CRM**: la lettura e la tab «Iscrizioni» vivono nel repository privato `touchandgo-internal` (da fare in una PR separata, stesso store `leads`; `status` parte da `new`; l'email va escapata al rendering). Finché non c'è, le iscrizioni si leggono dallo store.
 - **Revoca**: scrivendo a privacy@touchandgo.it si cancella il record dallo store.
-- **Da fare prima di pubblicare il video**: revisione legale dell'informativa (il prototipo è pre-seed) e decisione su come inviare davvero le email (oggi nessun invio).
+- **Da fare prima di pubblicare il video**: revisione legale dell'informativa (il prototipo è pre-seed).
 - Test: `netlify/functions/__tests__/lead-signup.test.js`.
+
+## Email di benvenuto e disiscrizione degli iscritti (15 ottobre 2026)
+
+Alla **prima** iscrizione da `iscrizione.html`, `lead-signup.js` invia una email di benvenuto (testo in `netlify/lib/lead-mail.js`, `welcomeMail()`), poi segna `welcomeSentAt` nel record. Una seconda iscrizione con la stessa email non rimanda nulla.
+
+- **Servizio di invio**: Resend, chiamato con `fetch` (nessuna dipendenza npm nuova). Per cambiare servizio basta riscrivere `sendMail()`.
+- **Variabili d'ambiente su Netlify** (solo nomi, mai i valori): `RESEND_API_KEY`, `LEAD_MAIL_FROM` (mittente verificato), `LEAD_UNSUB_SECRET` (stringa casuale lunga, firma i link). Facoltativa: `LEAD_SITE_URL` (default: `URL` di Netlify). **Se manca una delle tre l'invio è spento**: l'iscrizione si salva comunque.
+- **Un errore di invio non fa fallire l'iscrizione**: la persona è già salvata; `welcomeSentAt` resta vuoto.
+- **Disiscrizione**: ogni email ha un link firmato (HMAC dell'id con `LEAD_UNSUB_SECRET`) verso `lead-unsubscribe.js`, più gli header `List-Unsubscribe` e `List-Unsubscribe-Post` (un clic da Gmail/Apple). Il GET mostra solo una pagina di conferma (le anteprime dei programmi di posta non disiscrivono nessuno); il POST imposta `status: "unsubscribed"` e `unsubscribedAt`. Il record non si cancella. Il CRM mostra già lo stato «Disiscritta».
+- Firma non valida o segreto non configurato: 400, nessuna modifica.
+- Test: `netlify/functions/__tests__/lead-mail.test.js`.
+
