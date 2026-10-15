@@ -829,6 +829,7 @@ const I18N = {
     docs_row_goods_desc: "Descrizione merce",
     docs_row_declared_value: "Valore dichiarato",
     docs_row_vat_exempt: "Esenzione IVA",
+    docs_vat_not_applicable: "Non applicabile (bagaglio personale, non una vendita)",
     docs_row_shipping_cost: "Costo spedizione",
     docs_signature_lbl: "Firma",
     docs_signature_yes: "✓ Firma rilevata sul documento di riconoscimento caricato in fase di registrazione da {name} — usata per firmare digitalmente questa fattura.",
@@ -1128,6 +1129,7 @@ const I18N = {
     docs_row_goods_desc: "Goods description",
     docs_row_declared_value: "Declared value",
     docs_row_vat_exempt: "VAT exemption",
+    docs_vat_not_applicable: "Not applicable (personal luggage, not a sale)",
     docs_row_shipping_cost: "Shipping cost",
     docs_signature_lbl: "Signature",
     docs_signature_yes: "✓ Signature detected on the ID document uploaded at registration by {name} — used to digitally sign this invoice.",
@@ -5884,7 +5886,7 @@ function DocumentsScreen() {
     <div class="doc-row"><span>${t("docs_row_buyer")}</span><b>${escapeHtml(item.touristName || "—")}</b></div>
     <div class="doc-row"><span>${t("docs_row_goods_desc")}</span><b>${escapeHtml(item.objectName)}</b></div>
     <div class="doc-row"><span>${t("docs_row_declared_value")}</span><b>€${(item.itemValue || 0).toFixed(2)}</b></div>
-    <div class="doc-row"><span>${t("docs_row_vat_exempt")}</span><b>Art. 8 DPR 633/72</b></div>
+    <div class="doc-row"><span>${t("docs_row_vat_exempt")}</span><b>${item.shipmentKind === "bagaglio" ? t("docs_vat_not_applicable") : "Art. 8 DPR 633/72"}</b></div>
     <div class="doc-row"><span>${t("docs_row_shipping_cost")}</span><b>€${item.price}</b></div>`;
   wrap.appendChild(invoice);
 
