@@ -396,3 +396,41 @@ test("Genera spedizione: il bagaglio di ritorno non manda stayLabel; l'acquisto 
   assert.equal(savedPurchases[0].luggageDirection, undefined);
   assert.equal(savedPurchases[0].stayLabel, undefined);
 });
+
+// Tariffa dei bagagli = tariffa degli acquisti (15 ottobre 2026, richiesta di
+// Giuseppe): nessuna tariffa dedicata. Stesso oggetto, stessa destinazione e
+// stesso piano partner => stesso prezzo e stessa fascia (pricingTier) per
+// acquisto, bagaglio di andata e bagaglio di ritorno.
+test("Genera spedizione: bagaglio (andata e ritorno) e acquisto hanno lo STESSO prezzo e la stessa fascia", async (t) => {
+  async function run(kindValue, direction) {
+    const saved = [];
+    const { window, document } = bootPartnerApp(t, {
+      fetchMock: makeFetchMock({ partnerPlan: "agenzie", onSavePurchase: (item) => saved.push(item) }),
+    });
+    await loginAsPartner(document, "AGENZIA1");
+    document.getElementById("partner-generate-entry-btn").click();
+    if (kindValue === "bagaglio") {
+      const kind = document.getElementById("partner-generate-kind");
+      kind.value = "bagaglio";
+      kind.dispatchEvent(new window.Event("change"));
+      const dir = document.getElementById("partner-generate-direction");
+      dir.value = direction;
+      dir.dispatchEvent(new window.Event("change"));
+    }
+    await uploadFakePhoto(window, document);
+    document.getElementById("partner-generate-client-name").value = "Cliente";
+    document.getElementById("partner-generate-dest-country").value = "Unione Europea";
+    document.getElementById("partner-generate-submit-btn").click();
+    await wait(50);
+    assert.equal(saved.length, 1);
+    return saved[0];
+  }
+  const acquisto = await run("acquisto");
+  const andata = await run("bagaglio", "andata");
+  const ritorno = await run("bagaglio", "ritorno");
+  assert.ok(acquisto.price > 0, "il prezzo deve essere calcolato");
+  assert.equal(andata.price, acquisto.price);
+  assert.equal(ritorno.price, acquisto.price);
+  assert.equal(andata.pricingTier, acquisto.pricingTier);
+  assert.equal(ritorno.pricingTier, acquisto.pricingTier);
+});
