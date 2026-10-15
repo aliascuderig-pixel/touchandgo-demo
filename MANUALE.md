@@ -1563,3 +1563,16 @@ Il test end-to-end settimanale (`weekly-e2e-test.js`) ha un nuovo passo indipend
 - Gli aggiornamenti di un acquisto esistente (stato, ritiro, ecc.) non toccano il campo.
 - Test: `netlify/functions/__tests__/save-purchase.schema-version.test.js`.
 
+
+## Pagina di iscrizione per il video promozionale (15 ottobre 2026)
+
+Il pulsante «Iscriviti» del video promozionale (versione suite, 40 s) porta a `dist/site/iscrizione.html` (URL `/site/iscrizione.html`; il parametro `?src=video|sito|altro` registra da dove arriva l'iscritto, default `video`).
+
+- **Cosa chiede**: email, profilo facoltativo (turista, negoziante, agenzia, tour operator, altro) e un consenso esplicito non pre-spuntato, con link all'informativa (`privacy.html#iscrizioni`, nuova sezione 9).
+- **Funzione `lead-signup.js`** (solo POST): valida l'email, richiede `consent === true`, scarta in silenzio (200 senza salvare) le richieste col campo trappola `website` compilato, rate limit 20 richieste/60 min per IP (copia per-file come le altre function). Non invia email.
+- **Dati**: store Blobs `leads` (via `guestScopedStoreName()`); chiave = hash dell'email normalizzata (minuscola), quindi nessun duplicato e il record del primo consenso resta intatto. Record: `{id, email, profile, source, consent, consentVersion, status:"new", createdAt}`. `consentVersion` (costante `CONSENT_VERSION`) va incrementata se cambia il testo del consenso in `iscrizione.html`.
+- **Risposta**: identica per email nuova o già presente, per non rivelare chi è iscritto.
+- **CRM**: la lettura e la tab «Iscrizioni» vivono nel repository privato `touchandgo-internal` (da fare in una PR separata, stesso store `leads`; `status` parte da `new`; l'email va escapata al rendering). Finché non c'è, le iscrizioni si leggono dallo store.
+- **Revoca**: scrivendo a privacy@touchandgo.it si cancella il record dallo store.
+- **Da fare prima di pubblicare il video**: revisione legale dell'informativa (il prototipo è pre-seed) e decisione su come inviare davvero le email (oggi nessun invio).
+- Test: `netlify/functions/__tests__/lead-signup.test.js`.
