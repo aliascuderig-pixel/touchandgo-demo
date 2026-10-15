@@ -1602,3 +1602,7 @@ Agenzie di viaggio, tour operator e hotel sono nella rete di partner **sia** per
 - **Da decidere / non coperto**: (1) l'**andata** è un'importazione verso l'Italia: la documentazione doganale per beni personali in ingresso non è gestita dall'app e va verificata (con i corrieri e un esperto) prima di promettere il servizio al pubblico; (2) ritiro presso l'hotel e consegna del bagaglio sono flussi reali dei corrieri, oggi **simulati** come tutte le spedizioni; (3) nessuna tariffa dedicata per i bagagli: se si vorrà un prezzo diverso, va deciso e aggiunto; (4) il turista non può ancora ordinare il bagaglio da solo dall'app, solo tramite un partner.
 - Test: `netlify/functions/__tests__/save-purchase.shipment-kind.test.js`, `dist/assets/__tests__/partner-generate-shipment.test.js` (due test nuovi in fondo).
 
+
+### Guida e mappa funzionale: gestionale, codice abbonato e flusso «Un bagaglio» (15 ottobre 2026)
+
+`dist/site/guida.html` aggiornata: scheda «Gestionale B2B» e riga del gestionale (da PC, anche per il turista abbonato con il codice `ABB-`), nota sulla spedizione dei bagagli andata/ritorno, scheda dispositivo e nodo della mappa «Gestionale» (ora collegato anche all'archivio `subscribers`, usato solo per l'accesso), descrizione del nodo `subscribers`, e un nuovo percorso evidenziabile **«Un bagaglio»** nella mappa interattiva. Il limite mensile del piano abbonato (5) è provvisorio. Il controllo settimanale dei link della guida non cambia. La copia statica della mappa è nel file datato su Drive «Mappa della suite Touch&Go 2026-10-15».
