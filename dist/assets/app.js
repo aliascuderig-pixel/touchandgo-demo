@@ -4507,9 +4507,9 @@ function ResultScreen() {
   const p = state.price;
   const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
   const wrap = el("div");
-  wrap.appendChild(AssistantAvatar("result"));
-  wrap.appendChild(AssistantAvatar("options"));
-  wrap.appendChild(ProhibitedGoodsBanner());
+  // Restyle A: in cima restano solo l'avviso di rischio SPECIFICO di questo
+  // oggetto e il risultato; agente e banner generico merci vietate vengono
+  // subito dopo la scheda (vedi più sotto).
   const riskNotice = ProhibitedRiskNotice(r);
   if (riskNotice) wrap.appendChild(riskNotice);
 
@@ -4560,6 +4560,9 @@ function ResultScreen() {
     <div class="hs-desc" id="res-desc"></div>`;
   card.appendChild(hs);
   wrap.appendChild(card);
+  wrap.appendChild(AssistantAvatar("result"));
+  wrap.appendChild(AssistantAvatar("options"));
+  wrap.appendChild(ProhibitedGoodsBanner());
 
   const dutyEstimateSection = DutyEstimateSection();
   if (dutyEstimateSection) wrap.appendChild(dutyEstimateSection);

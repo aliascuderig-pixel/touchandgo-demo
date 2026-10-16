@@ -39,3 +39,24 @@ test("home: il campo 'descrivilo' è vuoto, senza testo d'esempio, ma con aria-l
   assert.equal(input.placeholder, "");
   assert.ok(input.getAttribute("aria-label"));
 });
+
+test("risultato: la scheda con peso e codice doganale viene prima di agente e banner merci vietate", (t) => {
+  const dom = new JSDOM(`<!doctype html><html><body><div id="app"></div></body></html>`, { url: "https://touchandgo.test/", runScripts: "outside-only", pretendToBeVisual: true });
+  t.after(() => dom.window.close());
+  dom.window.fetch = () => Promise.reject(new Error("off"));
+  dom.window.localStorage.setItem("tg_lang", "it");
+  dom.window.localStorage.setItem("tg_onboarded", "1");
+  const ctx = dom.getInternalVMContext();
+  vm.runInContext(SRC, ctx, { filename: "app.js" });
+  vm.runInContext(`Object.assign(state, {mode:"turista", screen:"result", pickupPoint:"Catania",
+    result:{object_it:"Vaso", weight_kg:1.2, length_cm:20, width_cm:10, height_cm:10, hs_code:"6913.10", confidence:"alta", value_eur:50},
+    price:{grandTotal:20, eta:"3-5 giorni", quotes:{full:20, breakeven:10, shipping:15, eta:"3-5 giorni"}}});`, ctx);
+  dom.window.render();
+  const d = dom.window.document;
+  const card = d.querySelector(".result-card");
+  const banner = d.querySelector(".prohibited-banner, .assistant-avatar, .avatar-row") ;
+  assert.ok(card, "scheda risultato presente");
+  const first = d.querySelector("#app").firstElementChild;
+  assert.ok(d.querySelector(".topbar") && card.compareDocumentPosition(d.querySelector(".topbar")) & dom.window.Node.DOCUMENT_POSITION_PRECEDING, "la topbar precede la scheda");
+  if (banner) assert.ok(card.compareDocumentPosition(banner) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, "agente/banner dopo la scheda");
+});
