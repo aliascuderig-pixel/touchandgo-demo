@@ -601,7 +601,7 @@ const I18N = {
     support_confirm_close_btn: "Chiudi",
 
     // ---- CoverScreen ----
-    cover_eyebrow: "UTILITY APP PER IL TURISTA",
+    cover_eyebrow: "Utility app per i turisti",
     cover_headline: "I servizi del tuo viaggio in Italia, a portata di mano.",
     cover_point_1: "Fotografa un acquisto: dogana, peso e costo in pochi secondi.",
     cover_point_2: "Dogana, documenti e spedizione gestiti da noi, con corrieri selezionati.",
@@ -906,7 +906,7 @@ const I18N = {
     support_confirm_close_btn: "Close",
 
     // ---- CoverScreen ----
-    cover_eyebrow: "A UTILITY APP FOR TRAVELLERS",
+    cover_eyebrow: "Utility app for tourists",
     cover_headline: "Everything you need in Italy, within reach.",
     cover_point_1: "Photograph a purchase: customs, weight and cost in seconds.",
     cover_point_2: "Customs, documents and shipping handled by us, with selected couriers.",
@@ -3934,8 +3934,8 @@ function CoverScreen() {
   const wrap = el("div", "cover-screen no-photo");
   wrap.innerHTML = `
     <div class="cover-intro">
-      <div class="cover-eyebrow">${t("cover_eyebrow")}</div>
       <div class="cover-brand">Touch<b>&amp;</b>Go</div>
+      <div class="cover-eyebrow">${t("cover_eyebrow")}</div>
       <h1 class="cover-headline">${t("cover_headline")}</h1>
       <ul class="cover-points">
         <li>${t("cover_point_1")}</li>

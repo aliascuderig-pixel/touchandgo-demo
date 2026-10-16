@@ -24,10 +24,11 @@ function boot(t, lang, patch) {
 test("cover IT: presentazione dell'app, nessuna città né foto", (t) => {
   const d = boot(t, "it", { screen: "cover", pickupPoint: "Catania", locationPhoto: "https://x/catania.jpg" });
   const txt = d.querySelector(".cover-screen").textContent;
-  assert.match(txt, /UTILITY APP PER IL TURISTA/);
+  assert.match(txt, /Utility app per i turisti/);
   assert.match(txt, /a portata di mano/);
   assert.match(txt, /Non siamo un corriere/);
   assert.equal(d.querySelectorAll(".cover-points li").length, 3);
+  assert.equal(d.querySelector(".cover-brand").nextElementSibling.className, "cover-eyebrow", "la scritta sta subito sotto il marchio");
   assert.doesNotMatch(txt, /Catania/);
   assert.equal(d.querySelector(".cover-caption"), null);
   assert.equal(d.querySelector(".cover-bg-photo"), null);
