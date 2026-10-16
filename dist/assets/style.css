@@ -877,3 +877,16 @@ button{font-family:inherit;cursor:pointer}
 .cover-points li{font-family:var(--body);font-size:14px;line-height:1.5;color:var(--ivory);padding-left:18px;position:relative}
 .cover-points li::before{content:"";position:absolute;left:0;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--gold)}
 .cover-note{font-family:var(--body);font-size:13px;line-height:1.5;color:var(--muted-on-ink);border-top:1px solid var(--ink-border);padding-top:14px}
+
+/* ---------- Bagaglio del turista ---------- */
+.luggage-card{display:flex;flex-direction:column;gap:4px;width:calc(100% - 40px);margin:12px 20px 0;min-height:56px;text-align:left;border:1.5px solid var(--gold);border-radius:14px;background:transparent;color:var(--text);padding:12px 16px;cursor:pointer;font-family:inherit}
+.luggage-card b{font-size:14px}
+.luggage-card span{font-size:12px;color:var(--muted)}
+.luggage-title{font-family:var(--display);font-weight:600;font-size:26px;line-height:1.15;margin:4px 0 16px}
+.luggage-toggle{display:flex;border:1.5px solid var(--gold);border-radius:999px;padding:3px;margin-bottom:16px}
+.luggage-toggle button{flex:1;min-height:44px;border:0;border-radius:999px;background:transparent;color:var(--text);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.luggage-toggle button.on{background:var(--gold);color:var(--ink)}
+.luggage-form{display:flex;flex-direction:column;gap:14px;margin-bottom:14px}
+.luggage-form .dest-input{box-sizing:border-box;width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:12px;padding:10px 14px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--text);text-align:left}
+.luggage-form .dest-lbl{display:block;margin-bottom:6px}
+.luggage-title{margin-top:10px}
