@@ -856,3 +856,24 @@ button{font-family:inherit;cursor:pointer}
 .vf-shutter:active::after{background:var(--gold-hot)}
 
 .prohibited-banner{background:var(--warn-bg,#fff4e0);color:var(--warn,#8a5300);border:1px solid currentColor;border-radius:10px;font-size:11px;font-weight:600;padding:10px 14px;margin:10px 16px;line-height:1.5}
+
+/* ---------- Header: un solo menu invece di quattro pulsanti ---------- */
+.header{position:relative}
+.header-menu-btn{box-sizing:border-box;width:44px;height:44px;border-radius:22px;border:1px solid var(--ink-border);background:transparent;color:var(--ivory);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.header-menu{display:none;position:absolute;right:20px;top:100%;z-index:50;min-width:230px;background:var(--ink);border:1px solid var(--ink-border);border-radius:14px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.45);flex-direction:column;gap:4px}
+.header-menu.open{display:flex}
+.header-menu>a,.header-menu>button{box-sizing:border-box;min-height:44px;height:auto;display:flex;align-items:center;justify-content:flex-start;width:100%;border:0;border-radius:10px;background:transparent;color:var(--ivory);font-family:var(--body);font-size:13px;font-weight:500;padding:0 14px;text-decoration:none;cursor:pointer;white-space:normal}
+.header-menu>.header-assistant-btn{background:var(--gold-soft);color:var(--ink);font-weight:600}
+.header-menu>.header-reset{color:var(--muted-on-ink);border-top:1px solid var(--ink-border);border-radius:0 0 10px 10px;margin-top:4px}
+
+/* ---------- Cover: presentazione dell'app ---------- */
+.cover-screen{justify-content:space-between}
+.cover-intro{position:relative;z-index:1;padding:56px 28px 0;display:flex;flex-direction:column;gap:18px}
+.cover-eyebrow{font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.2em;color:var(--gold)}
+.cover-brand{font-family:var(--display);font-weight:600;font-size:52px;line-height:1;color:var(--gold-soft)}
+.cover-brand b{color:var(--ivory);font-weight:600}
+.cover-headline{margin:0;font-family:var(--display);font-weight:500;font-size:30px;line-height:1.15;color:var(--ivory)}
+.cover-points{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+.cover-points li{font-family:var(--body);font-size:14px;line-height:1.5;color:var(--ivory);padding-left:18px;position:relative}
+.cover-points li::before{content:"";position:absolute;left:0;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.cover-note{font-family:var(--body);font-size:13px;line-height:1.5;color:var(--muted-on-ink);border-top:1px solid var(--ink-border);padding-top:14px}

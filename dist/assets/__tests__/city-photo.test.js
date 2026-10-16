@@ -115,7 +115,8 @@ test("loadLocation(): propaga photoUrl/credit della function in state.locationPh
 });
 
 // ---------------------------------------------------------------------
-// 2) CoverScreen(): foto reale, nessuna stilizzazione residua.
+// 2) Nessuna stilizzazione residua. (La Cover non mostra più la foto della
+//    città: vedi cover-presentation.test.js.)
 // ---------------------------------------------------------------------
 
 test("il filtro 'schizzo architettonico' non esiste più: nessun elemento #sketchFilter iniettato all'avvio", (t) => {
@@ -128,34 +129,9 @@ test("injectSketchFilter non è più una funzione globale (rimossa, non solo res
   assert.equal(typeof window.injectSketchFilter, "undefined");
 });
 
-test("CoverScreen con una foto: classe has-photo, sfondo impostato, nessun filter inline residuo", (t) => {
-  const { document, context } = bootApp(t);
-  setState(context, { locationPhoto: "https://upload.wikimedia.org/catania.jpg", pickupPoint: "Catania", screen: "cover" });
-  callGlobal(context, "render()");
-
-  const cover = document.querySelector(".cover-screen");
-  assert.ok(cover.classList.contains("has-photo"));
-  const bg = document.querySelector(".cover-bg-photo");
-  assert.ok(bg, "il layer di sfondo deve esistere quando una foto è disponibile");
-  assert.match(bg.style.backgroundImage, /catania\.jpg/);
-  assert.equal(bg.style.filter, "", "nessun filtro deve più essere applicato inline sulla foto");
-});
-
 // ---------------------------------------------------------------------
 // 3) Fallback onesto.
 // ---------------------------------------------------------------------
-
-test("città sconosciuta / nessuna foto trovata: CoverScreen ricade su .no-photo, mai un'immagine rotta", (t) => {
-  const { document, context } = bootApp(t);
-  setState(context, { locationPhoto: null, pickupPoint: "Borgo Sconosciuto", screen: "cover" });
-  callGlobal(context, "render()");
-
-  const cover = document.querySelector(".cover-screen");
-  assert.ok(cover.classList.contains("no-photo"));
-  assert.equal(cover.classList.contains("has-photo"), false);
-  assert.equal(document.querySelector(".cover-bg-photo"), null, "nessun layer di sfondo senza una foto reale");
-  assert.equal(document.querySelector(".cover-photo-credit"), null, "nessun credito senza una foto");
-});
 
 test("cityPhoto(): la chiamata di rete fallisce (timeout/errore) -> { photoUrl:null, credit:null }, mai un'eccezione propagata", async (t) => {
   const { context } = bootApp(t, {
@@ -177,50 +153,3 @@ test("cityPhoto(): risposta non-200 dalla function -> fallback onesto, non un'ec
 // 4) Credito discreto: mostrato solo quando presente, con escaping.
 // ---------------------------------------------------------------------
 
-test("credito mostrato quando presente: testo, link, e non intercetta il tap sull'intera Cover", (t) => {
-  const { document, context } = bootApp(t);
-  setState(context, {
-    locationPhoto: "https://upload.wikimedia.org/catania.jpg",
-    locationPhotoCredit: { text: "Mario Rossi — CC BY-SA 4.0", url: "https://commons.wikimedia.org/wiki/File:Catania.jpg" },
-    pickupPoint: "Catania",
-    screen: "cover",
-  });
-  callGlobal(context, "render()");
-
-  const credit = document.querySelector(".cover-photo-credit");
-  assert.ok(credit, "il credito deve comparire quando presente");
-  assert.match(credit.textContent, /Mario Rossi — CC BY-SA 4\.0/);
-  assert.equal(credit.getAttribute("href"), "https://commons.wikimedia.org/wiki/File:Catania.jpg");
-  assert.equal(credit.getAttribute("target"), "_blank");
-  assert.equal(credit.getAttribute("rel"), "noopener noreferrer");
-});
-
-test("nessun credito quando la function non ne restituisce uno (es. licenza di pubblico dominio)", (t) => {
-  const { document, context } = bootApp(t);
-  setState(context, {
-    locationPhoto: "https://upload.wikimedia.org/catania.jpg",
-    locationPhotoCredit: null,
-    pickupPoint: "Catania",
-    screen: "cover",
-  });
-  callGlobal(context, "render()");
-  assert.equal(document.querySelector(".cover-photo-credit"), null);
-});
-
-test("escapeHtml sul testo del credito: un payload malevolo nel nome autore non crea mai un elemento reale", (t) => {
-  const { document, window, context } = bootApp(t);
-  const evil = `<img src=x onerror="window.__xssFired=true">`;
-  setState(context, {
-    locationPhoto: "https://upload.wikimedia.org/catania.jpg",
-    locationPhotoCredit: { text: evil, url: "https://commons.wikimedia.org/wiki/File:Catania.jpg" },
-    pickupPoint: "Catania",
-    screen: "cover",
-  });
-  callGlobal(context, "render()");
-
-  const credit = document.querySelector(".cover-photo-credit");
-  assert.ok(credit, "il credito deve comunque comparire, con il testo malevolo neutralizzato");
-  assert.equal(credit.querySelectorAll("img").length, 0, "nessun elemento <img> reale deve comparire nel DOM");
-  assert.equal(window.__xssFired, undefined);
-  assert.match(credit.textContent, /img src=x onerror=/, "il testo letterale (escapato) resta visibile, solo non eseguibile");
-});

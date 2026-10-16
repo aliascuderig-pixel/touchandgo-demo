@@ -1618,3 +1618,12 @@ La fattura proforma di `DocumentsScreen` mostra, per `shipmentKind: "bagaglio"` 
 ### Dogana dell'andata: stesse regole (15 ottobre 2026)
 
 Nessuna modifica al comportamento: `submitPartnerGeneratedShipment` tratta andata, ritorno e acquisto con lo stesso flusso (classificazione AI, avvisi, documenti, tariffa). Cambia solo la documentazione: l'andata non è più elencata tra i punti "da decidere". La verifica legale con un esperto doganale resta consigliata prima di promuovere il servizio all'estero.
+
+## Restyle app, direzione A "Oro notturno" — primo passo (16/10/2026)
+
+Scelta la direzione A (identità scura con oro, struttura ripulita). Prima parte realizzata:
+
+- **Header con un solo menu** (`Header()` in `dist/assets/app.js`): nell'header restano marchio, selettore lingua IT/EN e un pulsante **Menu** (44 px, `#header-menu-btn`, `aria-expanded`). Dentro il menu a tendina (`#header-menu`): "Chiedi all'agente Touch&Go", "Contatta assistenza", "Sito", "Reset" (gli id dei pulsanti sono invariati). Si chiude con un tap fuori, su una voce o con Esc. Sulla **cover** non c'è il menu: restano lingua e Reset. In modalità Partner il menu non contiene le voci solo-turista.
+- **Cover = presentazione dell'app** (`CoverScreen()`): niente più città/foto del punto di ritiro. Mostra: "UTILITY APP PER IL TURISTA", marchio, "I servizi del tuo viaggio in Italia, a portata di mano.", tre punti (fotografa un acquisto; dogana, documenti e spedizione gestiti da noi con corrieri selezionati; bagagli andata e ritorno) e la nota "Non siamo un corriere: siamo il tuo partner per l'export." Testi IT/EN in `I18N` (`cover_*`). `city-photo.js` resta nel codice ma la cover non lo usa più.
+- **Test**: `header-menu.test.js` (4), `cover-presentation.test.js` (2); rimossi da `city-photo.test.js` i 5 test sulla foto in cover. Suite 569/569.
+- **Da fare** (stesso restyle): home con la fotocamera in primo piano e banner raccolti, scheda risultato con codice doganale/peso/dimensioni, tracking a tappe, schermata bagaglio.

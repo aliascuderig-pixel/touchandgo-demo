@@ -557,6 +557,7 @@ function classifyText(label) {
 const I18N = {
   it: {
     // ---- Header / chrome globale (sempre visibile) ----
+    header_menu_label: "Menu",
     header_site_link: "🌐 Sito",
     header_reset_title: "Resetta profilo e ricomincia",
     header_reset_label: "Reset",
@@ -600,8 +601,12 @@ const I18N = {
     support_confirm_close_btn: "Chiudi",
 
     // ---- CoverScreen ----
-    cover_pickup_detected: "📍 Punto di ritiro rilevato",
-    cover_photo_credit_prefix: "Foto:",
+    cover_eyebrow: "UTILITY APP PER IL TURISTA",
+    cover_headline: "I servizi del tuo viaggio in Italia, a portata di mano.",
+    cover_point_1: "Fotografa un acquisto: dogana, peso e costo in pochi secondi.",
+    cover_point_2: "Dogana, documenti e spedizione gestiti da noi, con corrieri selezionati.",
+    cover_point_3: "Anche i bagagli, andata e ritorno.",
+    cover_note: "Non siamo un corriere: siamo il tuo partner per l'export.",
     cover_tap: "Tocca per iniziare →",
 
     // ---- HomeScreen ----
@@ -858,6 +863,7 @@ const I18N = {
   },
   en: {
     // ---- Header / global chrome (always visible) ----
+    header_menu_label: "Menu",
     header_site_link: "🌐 Site",
     header_reset_title: "Reset profile and start over",
     header_reset_label: "Reset",
@@ -900,8 +906,12 @@ const I18N = {
     support_confirm_close_btn: "Close",
 
     // ---- CoverScreen ----
-    cover_pickup_detected: "📍 Pickup point detected",
-    cover_photo_credit_prefix: "Photo:",
+    cover_eyebrow: "A UTILITY APP FOR TRAVELLERS",
+    cover_headline: "Everything you need in Italy, within reach.",
+    cover_point_1: "Photograph a purchase: customs, weight and cost in seconds.",
+    cover_point_2: "Customs, documents and shipping handled by us, with selected couriers.",
+    cover_point_3: "Luggage too, outbound and return.",
+    cover_note: "We are not a courier: we are your export partner.",
     cover_tap: "Tap to start →",
 
     // ---- HomeScreen ----
@@ -1669,6 +1679,8 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+let headerMenuCloser = () => {};
+let headerMenuBound = false;
 function Header() {
   const wrap = el("div");
   const header = el("div", "header");
@@ -1691,12 +1703,34 @@ function Header() {
         <button class="lang-btn ${state.lang === "it" ? "on" : ""}" data-lang="it" aria-label="Italiano">IT</button>
         <button class="lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>
       </div>
-      ${state.mode === "turista" && !isLandingScreen ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
-      ${state.mode === "turista" && !isLandingScreen ? `<button class="header-support-btn" id="header-support-btn" type="button">${t("header_support_btn")}</button>` : ""}
-      ${!isLandingScreen ? `<a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">${t("header_site_link")}</a>` : ""}
-      <button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
-    </div>`;
+      ${isLandingScreen ? `<button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>` : `<button class="header-menu-btn" id="header-menu-btn" type="button" aria-label="${t("header_menu_label")}" aria-expanded="false" aria-controls="header-menu"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>`}
+    </div>
+    ${isLandingScreen ? "" : `<div class="header-menu" id="header-menu" role="menu">
+      ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button" role="menuitem">${t("header_assistant_btn")}</button>` : ""}
+      ${state.mode === "turista" ? `<button class="header-support-btn" id="header-support-btn" type="button" role="menuitem">${t("header_support_btn")}</button>` : ""}
+      <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener" role="menuitem">${t("header_site_link")}</a>
+      <button class="header-reset" id="header-reset" type="button" role="menuitem" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
+    </div>`}`;
   wrap.appendChild(header);
+  // Menu a tendina: un solo pulsante nell'header invece di quattro controlli
+  // affiancati. Stato solo nel DOM (classe .open), nessun re-render.
+  const menuBtn = header.querySelector("#header-menu-btn");
+  const menuPanel = header.querySelector("#header-menu");
+  if (menuBtn && menuPanel) {
+    const setMenu = (open) => {
+      menuPanel.classList.toggle("open", open);
+      menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    menuBtn.addEventListener("click", (e) => { e.stopPropagation(); setMenu(!menuPanel.classList.contains("open")); });
+    menuPanel.addEventListener("click", () => setMenu(false));
+    // un solo listener globale, che chiude il menu dell'ultimo header disegnato
+    headerMenuCloser = () => setMenu(false);
+    if (!headerMenuBound) {
+      headerMenuBound = true;
+      document.addEventListener("click", () => headerMenuCloser());
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") headerMenuCloser(); });
+    }
+  }
   header.querySelector("#header-reset").addEventListener("click", resetEverything);
   header.querySelectorAll("[data-lang]").forEach((b) =>
     b.addEventListener("click", () => setLang(b.dataset.lang))
@@ -3894,36 +3928,22 @@ function OnboardingScreen() {
 }
 
 function CoverScreen() {
-  const wrap = el("div", "cover-screen");
-  if (state.locationPhoto) {
-    wrap.classList.add("has-photo");
-    // Layer di sfondo separato dal testo: la foto reale della città
-    // (Wikimedia Commons, via city-photo.js) è mostrata fotorealistica,
-    // senza alcuna stilizzazione — Giuseppe la vuole riconoscibile, non
-    // un disegno stilizzato (vedi MANUALE.md). Resta comunque un div
-    // separato dalla didascalia sopra, per lo stesso motivo di sempre:
-    // un domani un effetto visivo diverso potrebbe tornare ad applicarsi
-    // solo qui, senza toccare il testo.
-    const bgPhoto = el("div", "cover-bg-photo");
-    bgPhoto.style.backgroundImage = `url('${state.locationPhoto}')`;
-    wrap.appendChild(bgPhoto);
-  } else {
-    wrap.classList.add("no-photo");
-  }
-  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${escapeHtml(state.pickupPoint)}</span>`));
-  // Credito discreto — SOLO quando city-photo.js ha determinato che la
-  // licenza reale del file lo richiede (mai per foto di pubblico
-  // dominio/CC0, mai quando non c'è alcuna foto). stopPropagation: il
-  // link apre l'attribuzione in una nuova scheda, senza far scattare
-  // anche il tap "vai a Home" dell'intera Cover.
-  if (state.locationPhoto && state.locationPhotoCredit) {
-    const credit = el("a", "cover-photo-credit", `${escapeHtml(t("cover_photo_credit_prefix"))} ${escapeHtml(state.locationPhotoCredit.text)}`);
-    credit.href = state.locationPhotoCredit.url;
-    credit.target = "_blank";
-    credit.rel = "noopener noreferrer";
-    credit.addEventListener("click", (e) => e.stopPropagation());
-    wrap.appendChild(credit);
-  }
+  // Presentazione dell'app (stessi messaggi dello spot): cosa è Touch&Go,
+  // cosa fa, cosa NON è (non un corriere). Niente più città/foto del punto
+  // di ritiro: il turista la vede nel percorso, non serve nella prima schermata.
+  const wrap = el("div", "cover-screen no-photo");
+  wrap.innerHTML = `
+    <div class="cover-intro">
+      <div class="cover-eyebrow">${t("cover_eyebrow")}</div>
+      <div class="cover-brand">Touch<b>&amp;</b>Go</div>
+      <h1 class="cover-headline">${t("cover_headline")}</h1>
+      <ul class="cover-points">
+        <li>${t("cover_point_1")}</li>
+        <li>${t("cover_point_2")}</li>
+        <li>${t("cover_point_3")}</li>
+      </ul>
+      <div class="cover-note">${t("cover_note")}</div>
+    </div>`;
   wrap.appendChild(el("div", "cover-tap", t("cover_tap")));
   wrap.addEventListener("click", () => {
     state.screen = "home";
