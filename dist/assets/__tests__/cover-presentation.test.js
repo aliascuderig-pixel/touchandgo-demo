@@ -26,7 +26,7 @@ test("cover IT: presentazione dell'app, nessuna città né foto", (t) => {
   const txt = d.querySelector(".cover-screen").textContent;
   assert.match(txt, /Utility app per i turisti/);
   assert.match(txt, /a portata di mano/);
-  assert.match(txt, /Non siamo un corriere/);
+  assert.match(txt, /Compri in Italia, lo ritrovi a casa tua/);
   assert.equal(d.querySelectorAll(".cover-points li").length, 3);
   assert.equal(d.querySelector(".cover-brand").nextElementSibling.className, "cover-eyebrow", "la scritta sta subito sotto il marchio");
   assert.doesNotMatch(txt, /Catania/);
@@ -37,7 +37,7 @@ test("cover IT: presentazione dell'app, nessuna città né foto", (t) => {
 
 test("cover EN tradotta; il tap porta alla home", (t) => {
   const d = boot(t, "en", { screen: "cover", pickupPoint: "Catania" });
-  assert.match(d.querySelector(".cover-screen").textContent, /We are not a courier/);
+  assert.match(d.querySelector(".cover-screen").textContent, /Buy in Italy, find it at your door/);
   d.querySelector(".cover-screen").click();
   assert.equal(d.querySelector(".cover-screen"), null);
 });

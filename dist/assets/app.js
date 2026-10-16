@@ -604,9 +604,9 @@ const I18N = {
     cover_eyebrow: "Utility app per i turisti",
     cover_headline: "I servizi del tuo viaggio in Italia, a portata di mano.",
     cover_point_1: "Fotografa un acquisto: dogana, peso e costo in pochi secondi.",
-    cover_point_2: "Dogana, documenti e spedizione gestiti da noi, con partner selezionati.",
+    cover_point_2: "Dogana, documenti e spedizione: li gestiamo noi, con partner selezionati.",
     cover_point_3: "Anche i bagagli, andata e ritorno.",
-    cover_note: "Non siamo un corriere: siamo il tuo partner per l'export.",
+    cover_note: "Compri in Italia, lo ritrovi a casa tua.",
     cover_tap: "Tocca per iniziare →",
 
     // ---- HomeScreen ----
@@ -909,9 +909,9 @@ const I18N = {
     cover_eyebrow: "Utility app for tourists",
     cover_headline: "Everything you need in Italy, within reach.",
     cover_point_1: "Photograph a purchase: customs, weight and cost in seconds.",
-    cover_point_2: "Customs, documents and shipping handled by us, with selected partners.",
+    cover_point_2: "Customs, documents and shipping: we handle them, with selected partners.",
     cover_point_3: "Luggage too, outbound and return.",
-    cover_note: "We are not a courier: we are your export partner.",
+    cover_note: "Buy in Italy, find it at your door.",
     cover_tap: "Tap to start →",
 
     // ---- HomeScreen ----
