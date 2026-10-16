@@ -3972,12 +3972,17 @@ function apertureIconMarkup() {
 
 function HomeScreen() {
   const wrap = el("div");
-  wrap.appendChild(AssistantAvatar("home"));
-  wrap.appendChild(TrustRow());
-  wrap.appendChild(ProhibitedGoodsBanner());
+  // Restyle A: l'azione principale (fotografa l'acquisto) sta in alto; i
+  // banner informativi (agente, fiducia, merci vietate, recensione, posizione)
+  // finiscono DOPO, in `info`. Restano in cima solo gli avvisi che richiedono
+  // un'azione: sincronizzazione in sospeso, oggetti da concludere, errori.
+  const info = el("div", "home-info");
+  info.appendChild(AssistantAvatar("home"));
+  info.appendChild(TrustRow());
+  info.appendChild(ProhibitedGoodsBanner());
 
   const reviewBanner = ReviewInviteBanner();
-  if (reviewBanner) wrap.appendChild(reviewBanner);
+  if (reviewBanner) info.appendChild(reviewBanner);
 
   const syncBanner = PendingSyncBanner();
   if (syncBanner) wrap.appendChild(syncBanner);
@@ -3993,7 +3998,7 @@ function HomeScreen() {
       render();
     });
     loc.querySelector(".loc-avatar").addEventListener("click", () => loadLocation());
-    wrap.appendChild(loc);
+    info.appendChild(loc);
   }
 
   if (state.pendingItems.length > 0) {
@@ -4115,6 +4120,7 @@ function HomeScreen() {
   }
 
   wrap.appendChild(section);
+  wrap.appendChild(info);
 
   return wrap;
 }
