@@ -4069,7 +4069,10 @@ function HomeScreen() {
   const describeLbl = el("div", "tg-lbl", t("home_describe_lbl"));
   const input = el("input");
   input.type = "text";
-  input.placeholder = t("home_describe_placeholder");
+  // Campo lasciato vuoto di proposito (nessun testo d'esempio): il testo
+  // d'esempio finiva sotto i pulsanti microfono/invio. L'etichetta sopra lo descrive.
+  input.placeholder = "";
+  input.setAttribute("aria-label", t("home_describe_lbl"));
   const goBtn = el("button", null, "→");
   goBtn.addEventListener("click", () => {
     if (input.value.trim()) handleDescribe(input.value.trim());

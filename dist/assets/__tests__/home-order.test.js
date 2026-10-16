@@ -24,3 +24,18 @@ test("home: la capture-card viene prima di fiducia, merci vietate e promemoria p
   assert.ok(cap.compareDocumentPosition(info) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, "i banner informativi stanno dopo la fotocamera");
   assert.ok(info.querySelector(".location-reminder"), "il promemoria posizione è nel blocco informativo");
 });
+
+test("home: il campo 'descrivilo' è vuoto, senza testo d'esempio, ma con aria-label", (t) => {
+  const dom = new JSDOM(`<!doctype html><html><body><div id="app"></div></body></html>`, { url: "https://touchandgo.test/", runScripts: "outside-only", pretendToBeVisual: true });
+  t.after(() => dom.window.close());
+  dom.window.fetch = () => Promise.reject(new Error("off"));
+  dom.window.localStorage.setItem("tg_lang", "it");
+  dom.window.localStorage.setItem("tg_onboarded", "1");
+  const ctx = dom.getInternalVMContext();
+  vm.runInContext(SRC, ctx, { filename: "app.js" });
+  vm.runInContext(`Object.assign(state, {mode:"turista", screen:"home"});`, ctx);
+  dom.window.render();
+  const input = dom.window.document.querySelector(".section .describe-box input");
+  assert.equal(input.placeholder, "");
+  assert.ok(input.getAttribute("aria-label"));
+});
