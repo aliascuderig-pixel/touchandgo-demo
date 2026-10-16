@@ -557,6 +557,7 @@ function classifyText(label) {
 const I18N = {
   it: {
     // ---- Header / chrome globale (sempre visibile) ----
+    header_menu_label: "Menu",
     header_site_link: "🌐 Sito",
     header_reset_title: "Resetta profilo e ricomincia",
     header_reset_label: "Reset",
@@ -600,8 +601,29 @@ const I18N = {
     support_confirm_close_btn: "Chiudi",
 
     // ---- CoverScreen ----
-    cover_pickup_detected: "📍 Punto di ritiro rilevato",
-    cover_photo_credit_prefix: "Foto:",
+    home_luggage_title: "Spedisci i tuoi bagagli",
+    home_luggage_sub: "Andata e ritorno · stessa tariffa degli acquisti",
+    luggage_back: "← Indietro",
+    luggage_dest_note: "Il prezzo segue la stessa tariffa degli acquisti, in base al peso e alla destinazione.",
+    luggage_dest_go_btn: "Calcola il prezzo →",
+    luggage_lbl: "BAGAGLIO",
+    luggage_title: "Viaggia leggero, le valigie le portiamo noi",
+    luggage_dir_outbound: "Andata",
+    luggage_dir_return: "Ritorno",
+    luggage_stay_lbl: "Dove alloggi (hotel o indirizzo)",
+    luggage_bags_lbl: "Numero di bagagli",
+    luggage_weight_lbl: "Peso totale (kg)",
+    luggage_note: "Bagaglio personale: non è una vendita, quindi non c'è rimborso IVA. Per l'andata vale la stessa dogana degli acquisti.",
+    luggage_go_btn: "Continua",
+    luggage_invalid: "Controlla peso (1–60 kg) e numero di bagagli (1–10).",
+    luggage_obj_outbound: "Bagaglio — andata",
+    luggage_obj_return: "Bagaglio — ritorno",
+    cover_eyebrow: "Utility app per i turisti",
+    cover_headline: "I servizi del tuo viaggio in Italia, a portata di mano.",
+    cover_point_1: "Fotografa un acquisto: dogana, peso e costo in pochi secondi.",
+    cover_point_2: "Dogana, documenti e spedizione: li gestiamo noi, con partner selezionati.",
+    cover_point_3: "Anche i bagagli, andata e ritorno.",
+    cover_note: "Compri in Italia, lo ritrovi a casa tua.",
     cover_tap: "Tocca per iniziare →",
 
     // ---- HomeScreen ----
@@ -858,6 +880,7 @@ const I18N = {
   },
   en: {
     // ---- Header / global chrome (always visible) ----
+    header_menu_label: "Menu",
     header_site_link: "🌐 Site",
     header_reset_title: "Reset profile and start over",
     header_reset_label: "Reset",
@@ -900,8 +923,29 @@ const I18N = {
     support_confirm_close_btn: "Close",
 
     // ---- CoverScreen ----
-    cover_pickup_detected: "📍 Pickup point detected",
-    cover_photo_credit_prefix: "Photo:",
+    home_luggage_title: "Ship your luggage",
+    home_luggage_sub: "Outbound and return · same rate as purchases",
+    luggage_back: "← Back",
+    luggage_dest_note: "The price follows the same rate as purchases, based on weight and destination.",
+    luggage_dest_go_btn: "Calculate price →",
+    luggage_lbl: "LUGGAGE",
+    luggage_title: "Travel light, we carry the bags",
+    luggage_dir_outbound: "Outbound",
+    luggage_dir_return: "Return",
+    luggage_stay_lbl: "Where you are staying (hotel or address)",
+    luggage_bags_lbl: "Number of bags",
+    luggage_weight_lbl: "Total weight (kg)",
+    luggage_note: "Personal luggage: not a sale, so there is no VAT refund. Outbound uses the same customs rules as purchases.",
+    luggage_go_btn: "Continue",
+    luggage_invalid: "Check weight (1–60 kg) and number of bags (1–10).",
+    luggage_obj_outbound: "Luggage — outbound",
+    luggage_obj_return: "Luggage — return",
+    cover_eyebrow: "Utility app for tourists",
+    cover_headline: "Everything you need in Italy, within reach.",
+    cover_point_1: "Photograph a purchase: customs, weight and cost in seconds.",
+    cover_point_2: "Customs, documents and shipping: we handle them, with selected partners.",
+    cover_point_3: "Luggage too, outbound and return.",
+    cover_note: "Buy in Italy, find it at your door.",
     cover_tap: "Tap to start →",
 
     // ---- HomeScreen ----
@@ -1260,6 +1304,9 @@ function setLang(lang) {
 
 const state = {
   lang: detectInitialLang(),
+  // Bagaglio del turista (andata/ritorno): bozza compilata in LuggageScreen,
+  // null per un normale acquisto. Vedi MANUALE.md, 'Bagaglio nell'app del turista'.
+  luggageDraft: null,
   mode: "turista",
   screen: "cover",
   error: null,
@@ -1617,6 +1664,7 @@ function render() {
   else if (state.screen === "choose-address") app.appendChild(ChooseAddressScreen());
   else if (state.screen === "analyzing") app.appendChild(AnalyzingScreen());
   else if (state.screen === "offline-classify") app.appendChild(OfflineClassifyScreen());
+  else if (state.screen === "luggage") app.appendChild(LuggageScreen());
   else if (state.screen === "classify-limit") app.appendChild(ClassifyLimitScreen());
   else if (state.screen === "result") app.appendChild(ResultScreen());
   else if (state.screen === "queued") app.appendChild(QueuedScreen());
@@ -1669,6 +1717,8 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+let headerMenuCloser = () => {};
+let headerMenuBound = false;
 function Header() {
   const wrap = el("div");
   const header = el("div", "header");
@@ -1691,12 +1741,34 @@ function Header() {
         <button class="lang-btn ${state.lang === "it" ? "on" : ""}" data-lang="it" aria-label="Italiano">IT</button>
         <button class="lang-btn ${state.lang === "en" ? "on" : ""}" data-lang="en" aria-label="English">EN</button>
       </div>
-      ${state.mode === "turista" && !isLandingScreen ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button">${t("header_assistant_btn")}</button>` : ""}
-      ${state.mode === "turista" && !isLandingScreen ? `<button class="header-support-btn" id="header-support-btn" type="button">${t("header_support_btn")}</button>` : ""}
-      ${!isLandingScreen ? `<a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener">${t("header_site_link")}</a>` : ""}
-      <button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
-    </div>`;
+      ${isLandingScreen ? `<button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>` : `<button class="header-menu-btn" id="header-menu-btn" type="button" aria-label="${t("header_menu_label")}" aria-expanded="false" aria-controls="header-menu"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>`}
+    </div>
+    ${isLandingScreen ? "" : `<div class="header-menu" id="header-menu" role="menu">
+      ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button" role="menuitem">${t("header_assistant_btn")}</button>` : ""}
+      ${state.mode === "turista" ? `<button class="header-support-btn" id="header-support-btn" type="button" role="menuitem">${t("header_support_btn")}</button>` : ""}
+      <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener" role="menuitem">${t("header_site_link")}</a>
+      <button class="header-reset" id="header-reset" type="button" role="menuitem" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
+    </div>`}`;
   wrap.appendChild(header);
+  // Menu a tendina: un solo pulsante nell'header invece di quattro controlli
+  // affiancati. Stato solo nel DOM (classe .open), nessun re-render.
+  const menuBtn = header.querySelector("#header-menu-btn");
+  const menuPanel = header.querySelector("#header-menu");
+  if (menuBtn && menuPanel) {
+    const setMenu = (open) => {
+      menuPanel.classList.toggle("open", open);
+      menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    menuBtn.addEventListener("click", (e) => { e.stopPropagation(); setMenu(!menuPanel.classList.contains("open")); });
+    menuPanel.addEventListener("click", () => setMenu(false));
+    // un solo listener globale, che chiude il menu dell'ultimo header disegnato
+    headerMenuCloser = () => setMenu(false);
+    if (!headerMenuBound) {
+      headerMenuBound = true;
+      document.addEventListener("click", () => headerMenuCloser());
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") headerMenuCloser(); });
+    }
+  }
   header.querySelector("#header-reset").addEventListener("click", resetEverything);
   header.querySelectorAll("[data-lang]").forEach((b) =>
     b.addEventListener("click", () => setLang(b.dataset.lang))
@@ -3894,36 +3966,22 @@ function OnboardingScreen() {
 }
 
 function CoverScreen() {
-  const wrap = el("div", "cover-screen");
-  if (state.locationPhoto) {
-    wrap.classList.add("has-photo");
-    // Layer di sfondo separato dal testo: la foto reale della città
-    // (Wikimedia Commons, via city-photo.js) è mostrata fotorealistica,
-    // senza alcuna stilizzazione — Giuseppe la vuole riconoscibile, non
-    // un disegno stilizzato (vedi MANUALE.md). Resta comunque un div
-    // separato dalla didascalia sopra, per lo stesso motivo di sempre:
-    // un domani un effetto visivo diverso potrebbe tornare ad applicarsi
-    // solo qui, senza toccare il testo.
-    const bgPhoto = el("div", "cover-bg-photo");
-    bgPhoto.style.backgroundImage = `url('${state.locationPhoto}')`;
-    wrap.appendChild(bgPhoto);
-  } else {
-    wrap.classList.add("no-photo");
-  }
-  wrap.appendChild(el("div", "cover-caption", `${t("cover_pickup_detected")}<br><span>${escapeHtml(state.pickupPoint)}</span>`));
-  // Credito discreto — SOLO quando city-photo.js ha determinato che la
-  // licenza reale del file lo richiede (mai per foto di pubblico
-  // dominio/CC0, mai quando non c'è alcuna foto). stopPropagation: il
-  // link apre l'attribuzione in una nuova scheda, senza far scattare
-  // anche il tap "vai a Home" dell'intera Cover.
-  if (state.locationPhoto && state.locationPhotoCredit) {
-    const credit = el("a", "cover-photo-credit", `${escapeHtml(t("cover_photo_credit_prefix"))} ${escapeHtml(state.locationPhotoCredit.text)}`);
-    credit.href = state.locationPhotoCredit.url;
-    credit.target = "_blank";
-    credit.rel = "noopener noreferrer";
-    credit.addEventListener("click", (e) => e.stopPropagation());
-    wrap.appendChild(credit);
-  }
+  // Presentazione dell'app (stessi messaggi dello spot): cosa è Touch&Go,
+  // cosa fa, cosa NON è (non un corriere). Niente più città/foto del punto
+  // di ritiro: il turista la vede nel percorso, non serve nella prima schermata.
+  const wrap = el("div", "cover-screen no-photo");
+  wrap.innerHTML = `
+    <div class="cover-intro">
+      <div class="cover-brand">Touch<b>&amp;</b>Go</div>
+      <div class="cover-eyebrow">${t("cover_eyebrow")}</div>
+      <h1 class="cover-headline">${t("cover_headline")}</h1>
+      <ul class="cover-points">
+        <li>${t("cover_point_1")}</li>
+        <li>${t("cover_point_2")}</li>
+        <li>${t("cover_point_3")}</li>
+      </ul>
+      <div class="cover-note">${t("cover_note")}</div>
+    </div>`;
   wrap.appendChild(el("div", "cover-tap", t("cover_tap")));
   wrap.addEventListener("click", () => {
     state.screen = "home";
@@ -3950,14 +4008,129 @@ function apertureIconMarkup() {
   return `<svg class="aperture-icon" viewBox="0 0 100 100" aria-hidden="true">${blades}</svg>`;
 }
 
+// ---------------- Bagaglio del turista (andata / ritorno) ----------------
+// Stessa tariffa degli acquisti (priceFor/priceQuotes), stessa dogana per
+// l'andata, nessuna esenzione IVA (bagaglio personale, non una vendita).
+const LUGGAGE_BAG_DIMS = { length_cm: 70, width_cm: 45, height_cm: 30 };
+function buildLuggageResult(draft) {
+  const bags = Math.max(1, Math.min(10, draft.bags || 1));
+  const label = draft.direction === "andata" ? t("luggage_obj_outbound") : t("luggage_obj_return");
+  return {
+    object_it: label,
+    object_en: label,
+    hs_code: "—",
+    hs_description_it: "Bagaglio personale: non è una vendita, nessuna esenzione IVA.",
+    hs_description_en: "Personal luggage: not a sale, no VAT exemption.",
+    category: "Bagaglio",
+    material: null,
+    weight_kg: draft.weightKg,
+    length_cm: LUGGAGE_BAG_DIMS.length_cm,
+    width_cm: LUGGAGE_BAG_DIMS.width_cm,
+    height_cm: LUGGAGE_BAG_DIMS.height_cm * bags,
+    value_eur: 0,
+    fragile: false,
+    made_in_italy: false,
+    confidence: "alta",
+    shipping_note_it: "",
+    shipping_note_en: "",
+  };
+}
+function confirmLuggageResult() {
+  const result = buildLuggageResult(state.luggageDraft);
+  state.result = result;
+  state.resultIsProvisional = false;
+  state.price = priceFor(result.weight_kg, currentDestinationName(), result);
+  state.priceConfirmedForThisResult = false;
+  state.priceConfirmedAsBreakeven = false;
+  state.showPartnerDiscountInput = false;
+  state.partnerDiscountCodeInput = "";
+  state.partnerDiscountChecking = false;
+  state.partnerDiscountApplied = false;
+  state.partnerDiscountCode = null;
+  state.partnerDiscountAmount = 0;
+  state.partnerDiscountError = null;
+  recordTrailEntry("action", `Bagaglio ${state.luggageDraft.direction}`);
+  state.screen = "result";
+  render();
+}
+
+function LuggageScreen() {
+  const wrap = el("div", "section");
+  const back = el("div", "back", t("luggage_back"));
+  back.addEventListener("click", () => {
+    state.luggageDraft = null;
+    state.pendingInput = null;
+    state.screen = "home";
+    render();
+  });
+  wrap.appendChild(back);
+  const draft = state.luggageDraft || { direction: "andata", stay: "", bags: 1, weightKg: 20 };
+  wrap.appendChild(el("div", "step-lbl", t("luggage_lbl")));
+  wrap.appendChild(el("h2", "luggage-title", t("luggage_title")));
+  const toggle = el("div", "luggage-toggle");
+  toggle.innerHTML = `
+    <button type="button" data-dir="andata" class="${draft.direction === "andata" ? "on" : ""}">${t("luggage_dir_outbound")}</button>
+    <button type="button" data-dir="ritorno" class="${draft.direction === "ritorno" ? "on" : ""}">${t("luggage_dir_return")}</button>`;
+  wrap.appendChild(toggle);
+  const form = el("div", "luggage-form");
+  form.innerHTML = `
+    <div id="luggage-stay-row"><label class="dest-lbl" for="luggage-stay">${t("luggage_stay_lbl")}</label>
+      <input class="dest-input" id="luggage-stay" maxlength="120" value="${escapeHtml(draft.stay || "")}" /></div>
+    <div><label class="dest-lbl" for="luggage-bags">${t("luggage_bags_lbl")}</label>
+      <input class="dest-input" id="luggage-bags" type="number" min="1" max="10" value="${draft.bags}" /></div>
+    <div><label class="dest-lbl" for="luggage-weight">${t("luggage_weight_lbl")}</label>
+      <input class="dest-input" id="luggage-weight" type="number" min="1" max="60" step="0.5" value="${draft.weightKg}" /></div>`;
+  wrap.appendChild(form);
+  let direction = draft.direction;
+  const syncStay = () => { form.querySelector("#luggage-stay-row").style.display = direction === "andata" ? "" : "none"; };
+  syncStay();
+  toggle.querySelectorAll("[data-dir]").forEach((b) =>
+    b.addEventListener("click", () => {
+      direction = b.dataset.dir;
+      toggle.querySelectorAll("[data-dir]").forEach((x) => x.classList.toggle("on", x === b));
+      syncStay();
+    })
+  );
+  wrap.appendChild(el("div", "home-foot", t("luggage_note")));
+  const go = el("button", "btn-primary", t("luggage_go_btn"));
+  go.id = "luggage-go-btn";
+  go.addEventListener("click", () => {
+    const weightKg = parseFloat(form.querySelector("#luggage-weight").value);
+    const bags = parseInt(form.querySelector("#luggage-bags").value, 10);
+    if (!(weightKg >= 1 && weightKg <= 60) || !(bags >= 1 && bags <= 10)) {
+      state.error = t("luggage_invalid");
+      render();
+      return;
+    }
+    state.error = null;
+    state.luggageDraft = {
+      direction,
+      stay: direction === "andata" ? form.querySelector("#luggage-stay").value.trim().slice(0, 120) : "",
+      bags,
+      weightKg,
+    };
+    state.pendingInput = { type: "text", label: direction === "andata" ? t("luggage_obj_outbound") : t("luggage_obj_return") };
+    state.screen = "destination";
+    render();
+  });
+  wrap.appendChild(go);
+  return wrap;
+}
+
+
 function HomeScreen() {
   const wrap = el("div");
-  wrap.appendChild(AssistantAvatar("home"));
-  wrap.appendChild(TrustRow());
-  wrap.appendChild(ProhibitedGoodsBanner());
+  // Restyle A: l'azione principale (fotografa l'acquisto) sta in alto; i
+  // banner informativi (agente, fiducia, merci vietate, recensione, posizione)
+  // finiscono DOPO, in `info`. Restano in cima solo gli avvisi che richiedono
+  // un'azione: sincronizzazione in sospeso, oggetti da concludere, errori.
+  const info = el("div", "home-info");
+  info.appendChild(AssistantAvatar("home"));
+  info.appendChild(TrustRow());
+  info.appendChild(ProhibitedGoodsBanner());
 
   const reviewBanner = ReviewInviteBanner();
-  if (reviewBanner) wrap.appendChild(reviewBanner);
+  if (reviewBanner) info.appendChild(reviewBanner);
 
   const syncBanner = PendingSyncBanner();
   if (syncBanner) wrap.appendChild(syncBanner);
@@ -3973,7 +4146,7 @@ function HomeScreen() {
       render();
     });
     loc.querySelector(".loc-avatar").addEventListener("click", () => loadLocation());
-    wrap.appendChild(loc);
+    info.appendChild(loc);
   }
 
   if (state.pendingItems.length > 0) {
@@ -4040,11 +4213,24 @@ function HomeScreen() {
   galleryCard.addEventListener("click", () => galleryInput.click());
   section.appendChild(galleryCard);
 
+  const luggageCard = el("button", "luggage-card");
+  luggageCard.type = "button";
+  luggageCard.id = "home-luggage-btn";
+  luggageCard.innerHTML = `<b>${t("home_luggage_title")}</b><span>${t("home_luggage_sub")}</span>`;
+  luggageCard.addEventListener("click", () => {
+    state.screen = "luggage";
+    render();
+  });
+  section.appendChild(luggageCard);
+
   const describeBox = el("div", "describe-box");
   const describeLbl = el("div", "tg-lbl", t("home_describe_lbl"));
   const input = el("input");
   input.type = "text";
-  input.placeholder = t("home_describe_placeholder");
+  // Campo lasciato vuoto di proposito (nessun testo d'esempio): il testo
+  // d'esempio finiva sotto i pulsanti microfono/invio. L'etichetta sopra lo descrive.
+  input.placeholder = "";
+  input.setAttribute("aria-label", t("home_describe_lbl"));
   const goBtn = el("button", null, "→");
   goBtn.addEventListener("click", () => {
     if (input.value.trim()) handleDescribe(input.value.trim());
@@ -4095,6 +4281,7 @@ function HomeScreen() {
   }
 
   wrap.appendChild(section);
+  wrap.appendChild(info);
 
   return wrap;
 }
@@ -4102,8 +4289,13 @@ function HomeScreen() {
 function DestinationScreen() {
   const wrap = el("div", "section");
   wrap.appendChild(AssistantAvatar("destination"));
-  const back = el("div", "back", t("dest_back"));
+  const back = el("div", "back", state.luggageDraft ? t("luggage_back") : t("dest_back"));
   back.addEventListener("click", () => {
+    if (state.luggageDraft) {
+      state.screen = "luggage";
+      render();
+      return;
+    }
     state.screen = "home";
     state.pendingInput = null;
     render();
@@ -4127,12 +4319,18 @@ function DestinationScreen() {
   wrap.appendChild(PickupField());
   wrap.appendChild(DestinationField());
 
-  const note = el("div", "home-foot", t("dest_note"));
+  const note = el("div", "home-foot", state.luggageDraft ? t("luggage_dest_note") : t("dest_note"));
   wrap.appendChild(note);
 
-  const goBtn = el("button", "btn-primary", t("dest_go_btn"));
+  const goBtn = el("button", "btn-primary", state.luggageDraft ? t("luggage_dest_go_btn") : t("dest_go_btn"));
   goBtn.addEventListener("click", () => {
     if (!state.pendingInput) return;
+    // Bagaglio: nessuna classificazione AI, il risultato si costruisce dai
+    // dati inseriti (peso, borse) e il prezzo segue la STESSA tariffa degli acquisti.
+    if (state.luggageDraft) {
+      confirmLuggageResult();
+      return;
+    }
     // Percorso offline (settembre 2026, vedi MANUALE.md, "Percorso
     // offline") — prima di questa modifica un turista offline restava
     // bloccato qui con un errore, senza poter proseguire affatto. Ora
@@ -4478,9 +4676,9 @@ function ResultScreen() {
   const p = state.price;
   const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
   const wrap = el("div");
-  wrap.appendChild(AssistantAvatar("result"));
-  wrap.appendChild(AssistantAvatar("options"));
-  wrap.appendChild(ProhibitedGoodsBanner());
+  // Restyle A: in cima restano solo l'avviso di rischio SPECIFICO di questo
+  // oggetto e il risultato; agente e banner generico merci vietate vengono
+  // subito dopo la scheda (vedi più sotto).
   const riskNotice = ProhibitedRiskNotice(r);
   if (riskNotice) wrap.appendChild(riskNotice);
 
@@ -4531,6 +4729,9 @@ function ResultScreen() {
     <div class="hs-desc" id="res-desc"></div>`;
   card.appendChild(hs);
   wrap.appendChild(card);
+  wrap.appendChild(AssistantAvatar("result"));
+  wrap.appendChild(AssistantAvatar("options"));
+  wrap.appendChild(ProhibitedGoodsBanner());
 
   const dutyEstimateSection = DutyEstimateSection();
   if (dutyEstimateSection) wrap.appendChild(dutyEstimateSection);
@@ -7138,6 +7339,13 @@ function ChooseAddressScreen() {
         partnerDiscountCode: state.partnerDiscountApplied ? state.partnerDiscountCode : null,
         partnerDiscountAmount: state.partnerDiscountApplied ? state.partnerDiscountAmount : null,
         status: "in sospeso",
+        ...(state.luggageDraft
+          ? {
+              shipmentKind: "bagaglio",
+              luggageDirection: state.luggageDraft.direction,
+              ...(state.luggageDraft.direction === "andata" && state.luggageDraft.stay ? { stayLabel: state.luggageDraft.stay } : {}),
+            }
+          : {}),
         date: new Date().toISOString(),
         photo,
         textDescription,
@@ -7172,6 +7380,7 @@ function ChooseAddressScreen() {
         // "offline"; null per un acquisto classificato online come sempre.
         provisionalReason: state.resultIsProvisional ? (state.limitManualPath ? "quota" : "offline") : null,
       };
+      state.luggageDraft = null;
       state.pendingItems.push(item);
       state.purchaseHistory.push(item);
       savePending();
@@ -7827,6 +8036,7 @@ function handleFile(file) {
 // pronto (es. lo scatto del mirino fotocamera custom in openCameraViewfinder,
 // che produce direttamente un data URL via canvas invece che un File).
 function handleImageDataUrl(dataUrl, mediaType) {
+  state.luggageDraft = null;
   recordTrailEntry("action", "Foto caricata/scattata");
   state.pendingInput = { type: "image", base64: dataUrl.split(",")[1], mediaType, dataUrl };
   state.screen = "destination";
@@ -8005,6 +8215,7 @@ function openCameraViewfinder(onCapture, fallbackInput) {
 }
 
 function handleDescribe(label) {
+  state.luggageDraft = null;
   state.pendingInput = { type: "text", label };
   state.screen = "destination";
   render();

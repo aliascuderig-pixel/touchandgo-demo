@@ -1618,3 +1618,28 @@ La fattura proforma di `DocumentsScreen` mostra, per `shipmentKind: "bagaglio"` 
 ### Dogana dell'andata: stesse regole (15 ottobre 2026)
 
 Nessuna modifica al comportamento: `submitPartnerGeneratedShipment` tratta andata, ritorno e acquisto con lo stesso flusso (classificazione AI, avvisi, documenti, tariffa). Cambia solo la documentazione: l'andata non è più elencata tra i punti "da decidere". La verifica legale con un esperto doganale resta consigliata prima di promuovere il servizio all'estero.
+
+## Restyle app, direzione A "Oro notturno" — primo passo (16/10/2026)
+
+Scelta la direzione A (identità scura con oro, struttura ripulita). Prima parte realizzata:
+
+- **Header con un solo menu** (`Header()` in `dist/assets/app.js`): nell'header restano marchio, selettore lingua IT/EN e un pulsante **Menu** (44 px, `#header-menu-btn`, `aria-expanded`). Dentro il menu a tendina (`#header-menu`): "Chiedi all'agente Touch&Go", "Contatta assistenza", "Sito", "Reset" (gli id dei pulsanti sono invariati). Si chiude con un tap fuori, su una voce o con Esc. Sulla **cover** non c'è il menu: restano lingua e Reset. In modalità Partner il menu non contiene le voci solo-turista.
+- **Cover = presentazione dell'app** (`CoverScreen()`): niente più città/foto del punto di ritiro. Mostra: marchio con subito sotto "Utility app per i turisti", "I servizi del tuo viaggio in Italia, a portata di mano.", tre punti (fotografa un acquisto; dogana, documenti e spedizione gestiti da noi con partner selezionati; bagagli andata e ritorno) e la nota "Compri in Italia, lo ritrovi a casa tua." (formula C scelta da Giuseppe, uguale a quella del video) Testi IT/EN in `I18N` (`cover_*`). `city-photo.js` resta nel codice ma la cover non lo usa più.
+- **Test**: `header-menu.test.js` (4), `cover-presentation.test.js` (2); rimossi da `city-photo.test.js` i 5 test sulla foto in cover. Suite 569/569.
+- **Da fare** (stesso restyle): home con la fotocamera in primo piano e banner raccolti, scheda risultato con codice doganale/peso/dimensioni, tracking a tappe, schermata bagaglio.
+- **Home (restyle A, passo 2)**: in `HomeScreen()` la fotocamera ("Fotografa l'acquisto", galleria, descrizione) è ora in cima. I banner informativi (agente, fiducia, merci vietate, recensione, promemoria posizione) sono raccolti in `.home-info` e vengono dopo. Restano sopra solo gli avvisi che richiedono un'azione: sincronizzazione in sospeso, oggetti da concludere ed errori. Test: `home-order.test.js`.
+- **Campo "Non puoi fotografarlo? Descrivilo"**: lasciato **vuoto**, senza testo d'esempio (il testo finiva sotto i pulsanti microfono e invio). L'etichetta sopra lo descrive e il campo ha `aria-label`. Test in `home-order.test.js`.
+- **Risultato (restyle A, passo 3)**: in `ResultScreen()` la scheda con peso, dimensioni e codice doganale viene subito dopo la barra in alto; l'agente e il banner generico sulle merci vietate vengono dopo la scheda. L'avviso di rischio specifico dell'oggetto resta in cima. Il **tracking a tappe** esiste già (`StatusTimeline()`, 4 stati con Touch&Go come soggetto): nessuna modifica. La **schermata bagaglio per il turista** della proposta non è realizzata: oggi il bagaglio andata/ritorno è per partner e abbonati (da PC, gestionale), serve una decisione di prodotto.
+
+## Bagaglio nell'app del turista (16/10/2026)
+
+Il turista può spedire i propri bagagli **andata e ritorno** direttamente dall'app, non solo partner e abbonati da PC.
+
+- **Ingresso**: pulsante "Spedisci i tuoi bagagli" in `HomeScreen()` (`#home-luggage-btn`) → `LuggageScreen()` (`state.screen === "luggage"`).
+- **Dati chiesti**: Andata/Ritorno; per l'andata "dove alloggi" (facoltativo, max 120 caratteri, `stayLabel`); numero di bagagli (1–10); peso totale (1–60 kg). Valori fuori range bloccano con un messaggio.
+- **Percorso**: la bozza sta in `state.luggageDraft`; poi la schermata destinazione (stessa degli acquisti, con testi dedicati) e il risultato. **Nessuna classificazione AI**: `confirmLuggageResult()` costruisce il risultato con `buildLuggageResult()` (codice doganale "—", categoria "Bagaglio", misure 70×45×30 cm per bagaglio).
+- **Tariffa**: la **stessa degli acquisti** — `priceFor(peso, destinazione, risultato)`, nessuna tabella separata (test: stesso prezzo a parità di peso e destinazione). Dogana per l'andata: stesse regole.
+- **IVA**: nessuna esenzione, bagaglio personale e non vendita; i documenti mostrano "Non applicabile" (già gestito in `DocumentsScreen()`).
+- **Salvataggio**: l'oggetto creato include `shipmentKind: "bagaglio"`, `luggageDirection` e, solo per l'andata, `stayLabel`; vengono validati dalla function `save-purchase.js` come per i partner. La bozza si azzera dopo il salvataggio e quando parte un normale acquisto (`handleDescribe`/`handleImageDataUrl`).
+- **Test**: `tourist-luggage.test.js` (5). Suite 577/577.
+- **Da verificare**: peso/misure dei bagagli sono dichiarati dal turista (non stimati): il corriere reale potrà richiedere una verifica.
