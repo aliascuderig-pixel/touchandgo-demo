@@ -55,7 +55,7 @@ test("scelto il piano compare «Vai al riepilogo» e il riepilogo elenca le scel
   d.querySelector(".result-actions .btn-primary").click();
   assert.equal(call("state.screen"), "step-summary");
   const rows = [...d.querySelectorAll(".step-row")].map((r) => r.dataset.row);
-  assert.deepEqual(rows, ["obj", "pickup", "dest", "plan", "discount", "total"]);
+  assert.deepEqual(rows, ["obj", "pickup", "dest", "plan", "discount"]);
   assert.match(d.querySelector('[data-row="plan"]').textContent, /Tariffa piena/);
   assert.match(d.querySelector('[data-row="pickup"]').textContent, /Catania/);
 });
@@ -92,4 +92,54 @@ test("da Riepilogo si va alla scelta dell'indirizzo e «indietro» torna al riep
   assert.equal(call("state.screen"), "choose-address");
   d.querySelector(".back").click();
   assert.equal(call("state.screen"), "step-summary");
+});
+
+// Prezzo chiaro: la somma delle voci mostrate è SEMPRE il totale mostrato.
+const eur = (txt) => parseFloat(txt.replace(/[^0-9.,−-]/g, "").replace("−", "-").replace(",", "."));
+function sumMatches(pb) {
+  const rows = [...pb.querySelectorAll(".pb-row b")].map((b) => {
+    const neg = b.textContent.includes("−");
+    const parts = b.textContent.replace("−", "").trim().split(/\s+/);
+    const val = eur(parts[parts.length - 1]);
+    return neg ? -val : val;
+  });
+  const total = eur(pb.querySelector(".pb-total b").textContent);
+  return { sum: Math.round(rows.reduce((a, b) => a + b, 0) * 100) / 100, total };
+}
+
+test("Prezzo e piano: in ogni riquadro Spedizione + Commissione = Totale", (t) => {
+  const { d } = boot(t, { guided: true, patch: `state.screen="plan";` });
+  const boxes = [...d.querySelectorAll(".price-option .pb")];
+  assert.equal(boxes.length, 2);
+  for (const b of boxes) {
+    const { sum, total } = sumMatches(b);
+    assert.equal(sum, total);
+  }
+  const [full, sub] = boxes.map((b) => sumMatches(b).total);
+  assert.equal(Math.round((full - sub) * 100) / 100, 20, "l'abbonamento fa risparmiare la differenza tra le commissioni (39 − 19)");
+});
+
+test("Riepilogo: il dettaglio prezzo somma al totale e c'è la spiegazione «Come si calcola»", (t) => {
+  const { d } = boot(t, { guided: true, patch: `state.screen="plan";` });
+  assert.ok(d.querySelector(".pb-explain"));
+  d.querySelector(".price-option .btn-secondary").click();
+  d.querySelector(".result-actions .btn-primary").click();
+  const { sum, total } = sumMatches(d.querySelector(".step-pb .pb"));
+  assert.equal(sum, total);
+  assert.ok(total > 0);
+});
+
+test("Conclusione con più oggetti: totale = somma voci e spiega perché differisce dalla somma delle stime", (t) => {
+  const { d, call } = boot(t, {
+    guided: true,
+    patch: `state.addresses=[{id:"a1",label:"Casa",country:"Unione Europea",street:"Rue 1",city:"Parigi",zip:"75001"}];
+      state.pendingItems=[1,2].map(i=>({id:"i"+i,objectName:"Oggetto "+i,pickupPoint:"Catania",hsCode:"6913",addressId:"a1",addressLabel:"Casa",price:45,weightKg:1,pricingTier:"pieno",dims:{length_cm:10,width_cm:10,height_cm:10}}));
+      state.screen="conclude";`,
+  });
+  const pb = d.querySelector(".pay-summary .pay-group .pb");
+  assert.ok(pb);
+  const { sum, total } = sumMatches(pb);
+  assert.equal(sum, total);
+  assert.match(d.querySelector(".pay-why").textContent, /Perché non/);
+  assert.match(d.querySelector(".btn-primary").textContent, new RegExp(String(total).replace(".", "\\.")));
 });

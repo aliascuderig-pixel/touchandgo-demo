@@ -1872,3 +1872,14 @@ Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (c
 - **Destinazione, indirizzo, conclusione:** margini e angoli uguali ovunque, campi su due righe (etichetta sopra, valore sotto, niente testo troncato), bersagli di tocco da almeno 52px, nessun doppio margine dentro `.section`.
 - **Risultato / Prezzo / Riepilogo:** stessi margini e angoli della Home.
 - Se in futuro si aggiunge una schermata, usare `.section` (margine 16px) e le classi esistenti: non reintrodurre margini fissi di 20px.
+
+## Prezzo chiaro (17 ottobre 2026)
+
+Prima ogni schermata scriveva il prezzo a modo suo (solo il totale, oppure «Fee + spedizione» in una frase) e a fine soggiorno il totale cambiava senza spiegazione. Ora c'è **una sola tabella**, uguale ovunque: **Spedizione + Commissione Touch&Go − Sconto = Totale**.
+
+- **Codice:** in `dist/assets/app.js`, `planBreakdown(q, piano, sconto)` calcola le voci e il totale come SOMMA delle voci; `PriceBreakdown(voci)` le disegna; `PriceExplain` è il riquadro «Come si calcola il prezzo?». Il totale mostrato è sempre quello salvato in `state.price.grandTotal`.
+- **Dove compare:** Prezzo e piano (un riquadro per ogni piano: prezzo pieno, abbonamento, promo), Riepilogo, Conclusione (una tabella per destinazione).
+- **Conclusione con più oggetti:** il totale è ricalcolato sul gruppo (spedizione una sola volta sul peso totale, una sola commissione). Se differisce dalla somma delle stime singole, compare il riquadro «Perché non €X?» con le stime sommate.
+- **Peso fatturabile:** il maggiore tra peso reale e volumetrico (L×P×H ÷ 5000); `priceQuotes()` ora restituisce anche `billableKg`.
+- **Invariato:** tariffe, commissioni (€39 / €19 / €0 con codice invito), margine sul corriere e ricalcolo lato server in `create-checkout-session.js`.
+- **Test:** 3 nuovi in `guided-steps.test.js` (la somma delle voci è sempre il totale).

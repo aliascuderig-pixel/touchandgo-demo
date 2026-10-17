@@ -199,6 +199,7 @@ function priceQuotes(weightKg, destinationName, dims) {
   return {
     shipping,
     eta,
+    billableKg: round(Math.max(Math.max(0.3, parseFloat(weightKg) || 1), volumetricWeight(dims))),
     full: round(shipping + FULL_FEE),
     subscribed: round(shipping + SUBSCRIBED_FEE),
     breakeven: round(shipping),
@@ -4942,12 +4943,14 @@ function StepSummaryScreen() {
     }
     list.appendChild(line);
   });
-  const total = el("div", "step-row step-total");
-  total.dataset.row = "total";
-  total.appendChild(el("div", "step-row-lbl", "Totale stimato"));
-  total.appendChild(el("div", "step-row-val", `€${Number(state.price.grandTotal).toFixed(2)}`));
-  list.appendChild(total);
   wrap.appendChild(list);
+  // Dettaglio del prezzo: stesse voci e stessa somma di «Prezzo e piano».
+  const rq = state.price.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
+  const bd = planBreakdown(rq, chosenPlan(), state.partnerDiscountApplied ? state.partnerDiscountAmount : 0);
+  const bdBox = el("div", "step-pb");
+  bdBox.appendChild(PriceBreakdown(bd, { discountCode: state.partnerDiscountCode }));
+  wrap.appendChild(bdBox);
+
   wrap.appendChild(el("div", "info-line step-pad", `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`));
 
   const actions = el("div", "result-actions");
@@ -5002,125 +5005,152 @@ function EditDestScreen() {
   return wrap;
 }
 
+// ---------------------------------------------------------------------
+// Prezzo chiaro (17 ottobre 2026). UNA sola fonte per il dettaglio del prezzo:
+// planBreakdown() calcola le voci e il totale come SOMMA delle voci, e
+// PriceBreakdown() le disegna sempre nello stesso modo (Spedizione + Commissione
+// − Sconto = Totale) in Prezzo e piano, Riepilogo e Conclusione. Così la somma
+// che si vede è sempre quella che si paga.
+function tx(it, en) {
+  return state.lang === "en" ? en : it;
+}
+function euro(n) {
+  return `€${(Math.round((Number(n) || 0) * 100) / 100).toFixed(2)}`;
+}
+// Voci del prezzo per un piano: "full" | "subscribed" | "breakeven".
+function planBreakdown(q, plan, discount) {
+  const fee = plan === "breakeven" ? 0 : plan === "subscribed" ? SUBSCRIBED_FEE : FULL_FEE;
+  const disc = Math.max(0, Number(discount) || 0);
+  const total = Math.max(0, Math.round((q.shipping + fee - disc) * 100) / 100);
+  return { shipping: q.shipping, fee, feeFull: FULL_FEE, discount: disc, total, billableKg: q.billableKg };
+}
+// Piano attualmente scelto dal cliente (dopo la conferma).
+function chosenPlan() {
+  if (state.priceConfirmedAsBreakeven) return "breakeven";
+  return state.isSubscribed ? "subscribed" : "full";
+}
+// Disegna le voci: ogni riga è un importo, il totale è la loro somma.
+function PriceBreakdown(b, opts = {}) {
+  const dest = opts.destination || currentDestinationName();
+  const kg = b.billableKg != null ? `${b.billableKg} kg ${tx("fatturabili", "billable")}` : "";
+  const box = el("div", "pb");
+  const row = (lbl, sub, val, cls) =>
+    `<div class="pb-row ${cls || ""}"><div class="pb-lbl"><span>${lbl}</span>${sub ? `<small>${sub}</small>` : ""}</div><b>${val}</b></div>`;
+  const feeVal = b.fee === 0 && b.feeFull ? `<s>${euro(b.feeFull)}</s> ${euro(0)}` : euro(b.fee);
+  box.innerHTML =
+    row(tx("Spedizione", "Shipping"), escapeHtml(`${tx("verso", "to")} ${destinationDisplayName(dest) || dest}${kg ? " · " + kg : ""}`), euro(b.shipping)) +
+    row(tx("Commissione Touch&amp;Go", "Touch&amp;Go fee"), tx("una sola per spedizione", "one per shipment"), feeVal, b.fee === 0 ? "waived" : "") +
+    (b.discount > 0
+      ? row(tx("Sconto codice", "Code discount"), opts.discountCode ? escapeHtml(opts.discountCode) : "", `−${euro(b.discount)}`, "minus")
+      : "") +
+    `<div class="pb-total"><span>${tx("Totale", "Total")}</span><b id="${opts.totalId || ""}">${euro(b.total)}</b></div>`;
+  return box;
+}
+// «Come si calcola?»: spiega i numeri con i valori reali di questo acquisto.
+function PriceExplain(r, q) {
+  const d = el("details", "pb-explain");
+  const dest = currentDestinationName();
+  d.appendChild(el("summary", null, tx("Come si calcola il prezzo?", "How is the price calculated?")));
+  const vol = volumetricWeight(r);
+  d.appendChild(
+    el(
+      "div",
+      "pb-explain-body",
+      `<p><b>${tx("Spedizione", "Shipping")}.</b> ${tx(
+        `Tariffa del corriere per la zona di destinazione (${escapeHtml(destinationDisplayName(dest) || dest)}), calcolata sul <i>peso fatturabile</i>: il maggiore tra il peso reale (${r.weight_kg ?? "—"} kg) e quello volumetrico (L×P×H ÷ 5000${vol ? " = " + vol.toFixed(1) + " kg" : ""}). Qui: ${q.billableKg} kg.`,
+        `Courier rate for the destination zone, based on the <i>billable weight</i>: the greater of actual weight and volumetric weight. Here: ${q.billableKg} kg.`
+      )}</p>
+       <p><b>${tx("Commissione Touch&amp;Go", "Touch&amp;Go fee")}.</b> ${tx(
+         `€${FULL_FEE} a spedizione; €${SUBSCRIBED_FEE} con l'abbonamento; €0 con un codice invito valido (una sola volta).`,
+         `€${FULL_FEE} per shipment; €${SUBSCRIBED_FEE} with a subscription; €0 with a valid invite code (once).`
+       )}</p>
+       <p><b>${tx("Più acquisti", "Several purchases")}.</b> ${tx(
+         "Questa è la stima per un solo oggetto. A fine soggiorno gli acquisti verso la stessa destinazione viaggiano insieme: la spedizione si ricalcola una sola volta sul peso totale e paghi una sola commissione.",
+         "This is the estimate for one item. At the end of your stay, purchases to the same destination travel together: shipping is recalculated once on the total weight, with a single fee."
+       )}</p>`
+    )
+  );
+  return d;
+}
+
 // Blocco prezzo/piano (promo, piano pieno o abbonato, preventivo, codice
 // sconto, nota di stima): identico nel flusso classico (dentro il Risultato)
 // e in quello guidato (schermata «Prezzo e piano»).
 function appendPricing(wrap, r, q) {
-  const p = state.price;
-  let priceCard;
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
   const isFirstEverShipment = state.purchaseHistory.length === 0;
   const firstTimeFree = !onBreakeven && !state.isSubscribed && isFirstEverShipment;
 
-  if (onBreakeven && !state.priceConfirmedForThisResult) {
+  const setPrice = (plan, subscribe) => {
+    if (subscribe) activateSubscription();
+    state.price = { grandTotal: planBreakdown(q, plan).total, eta: q.eta, quotes: q };
+    state.priceConfirmedForThisResult = true;
+    state.priceConfirmedAsBreakeven = plan === "breakeven";
+    render();
+  };
+
+  if ((onBreakeven || firstTimeFree) && !state.priceConfirmedForThisResult) {
     const promo = el("div", "promo-card-inline");
-    promo.innerHTML = `
-      <div class="promo-badge">${t("result_promo_badge_breakeven", { code: escapeHtml(state.promoCode) })}</div>
-      <div class="promo-headline-inline">${t("result_promo_headline_breakeven")}</div>
-      <div class="promo-price-row">
-        <span class="promo-price-new">€${q.breakeven.toFixed(2)}</span>
-        <span class="promo-price-old">€${q.full.toFixed(2)}</span>
-      </div>
-      <div class="info-row waived"><span>${t("result_fee_service")}</span><b>€0</b></div>
-      <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
-      <div class="promo-note-inline">${t("result_promo_note_breakeven")}</div>`;
+    const badge = onBreakeven
+      ? t("result_promo_badge_breakeven", { code: escapeHtml(state.promoCode) })
+      : t("result_promo_badge_firsttime");
+    const headline = onBreakeven ? t("result_promo_headline_breakeven") : t("result_promo_headline_firsttime");
+    const note = onBreakeven ? t("result_promo_note_breakeven") : t("result_promo_note_firsttime");
+    promo.innerHTML = `<div class="promo-badge">${badge}</div><div class="promo-headline-inline">${headline}</div>`;
+    promo.appendChild(PriceBreakdown(planBreakdown(q, "breakeven")));
+    promo.appendChild(el("div", "promo-note-inline", note));
     const promoBtn = el("button", "btn-primary", t("result_promo_btn_activate"));
-    promoBtn.addEventListener("click", () => {
-      state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
-      state.priceConfirmedForThisResult = true;
-      state.priceConfirmedAsBreakeven = true;
-      render();
-    });
-    promo.appendChild(promoBtn);
-    wrap.appendChild(promo);
-  } else if (firstTimeFree && !state.priceConfirmedForThisResult) {
-    const promo = el("div", "promo-card-inline");
-    promo.innerHTML = `
-      <div class="promo-badge">${t("result_promo_badge_firsttime")}</div>
-      <div class="promo-headline-inline">${t("result_promo_headline_firsttime")}</div>
-      <div class="promo-price-row">
-        <span class="promo-price-new">€${q.breakeven.toFixed(2)}</span>
-        <span class="promo-price-old">€${q.full.toFixed(2)}</span>
-      </div>
-      <div class="info-row waived"><span>${t("result_fee_service")}</span><b>€0</b></div>
-      <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
-      <div class="promo-note-inline">${t("result_promo_note_firsttime")}</div>`;
-    const promoBtn = el("button", "btn-primary", t("result_promo_btn_activate"));
-    promoBtn.addEventListener("click", () => {
-      state.price = { grandTotal: q.breakeven, eta: q.eta, quotes: q };
-      state.priceConfirmedForThisResult = true;
-      state.priceConfirmedAsBreakeven = true;
-      render();
-    });
+    promoBtn.addEventListener("click", () => setPrice("breakeven"));
     promo.appendChild(promoBtn);
     wrap.appendChild(promo);
   } else if (!state.isSubscribed && !state.priceConfirmedForThisResult) {
     const dual = el("div", "price-dual");
     dual.innerHTML = `<div class="tg-lbl" style="margin-bottom:10px">${t("result_dual_choose")}</div>`;
+
     const optFull = el("div", "price-option");
-    optFull.innerHTML = `
-      <div class="price-option-lbl">${t("result_price_full_lbl")}</div>
-      <div class="price-option-total">€${q.full.toFixed(2)}</div>
-      <div class="price-option-note">${t("result_price_full_note", { fee: FULL_FEE, shipping: q.shipping.toFixed(2) })}</div>`;
+    optFull.innerHTML = `<div class="price-option-lbl">${t("result_price_full_lbl")}</div>`;
+    optFull.appendChild(PriceBreakdown(planBreakdown(q, "full")));
     const fullBtn = el("button", "btn-secondary", t("result_price_full_btn"));
-    fullBtn.addEventListener("click", () => {
-      state.price = { grandTotal: q.full, eta: q.eta, quotes: q };
-      state.priceConfirmedForThisResult = true;
-      render();
-    });
+    fullBtn.addEventListener("click", () => setPrice("full"));
     optFull.appendChild(fullBtn);
     dual.appendChild(optFull);
 
     const optSub = el("div", "price-option highlight");
-    optSub.innerHTML = `
-      <div class="price-option-lbl">${t("result_price_sub_lbl")}</div>
-      <div class="price-option-total">€${q.subscribed.toFixed(2)}</div>
-      <div class="price-option-note">${t("result_price_sub_note", { fee: SUBSCRIBED_FEE, shipping: q.shipping.toFixed(2) })}</div>`;
+    optSub.innerHTML = `<div class="price-option-lbl">${t("result_price_sub_lbl")}</div>`;
+    optSub.appendChild(PriceBreakdown(planBreakdown(q, "subscribed")));
+    optSub.appendChild(el("div", "price-option-note", tx(`Risparmi ${euro(FULL_FEE - SUBSCRIBED_FEE)} su questa e sulle prossime spedizioni.`, `You save ${euro(FULL_FEE - SUBSCRIBED_FEE)} on this and future shipments.`)));
     const subBtn = el("button", "btn-primary", t("result_price_sub_btn"));
-    subBtn.addEventListener("click", () => {
-      activateSubscription();
-      state.price = { grandTotal: q.subscribed, eta: q.eta, quotes: q };
-      state.priceConfirmedForThisResult = true;
-      render();
-    });
+    subBtn.addEventListener("click", () => setPrice("subscribed", true));
     optSub.appendChild(subBtn);
     dual.appendChild(optSub);
     wrap.appendChild(dual);
   } else {
-    const fee = state.priceConfirmedAsBreakeven ? 0 : state.isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+    const plan = chosenPlan();
     const discount = state.partnerDiscountApplied ? state.partnerDiscountAmount : 0;
+    const b = planBreakdown(q, plan, discount);
     const quoteSuffix = state.priceConfirmedAsBreakeven
       ? t("result_quote_suffix_breakeven")
       : state.isSubscribed
       ? t("result_quote_suffix_subscribed")
       : "";
-    priceCard = el("div", "price-card");
-    priceCard.innerHTML = `
-      <div class="tg-lbl" style="margin-bottom:10px">${t("result_quote_title")} ${quoteSuffix}</div>
-      <div class="info-row"><span>${t("result_fee_service")}</span><b>€${fee}</b></div>
-      ${discount > 0 ? `<div class="info-row"><span>${t("result_discount_lbl", { code: escapeHtml(state.partnerDiscountCode) })}</span><b>-€${discount.toFixed(2)}</b></div>` : ""}
-      <div class="info-row"><span>${t("result_shipping_intl")}</span><b>€${q.shipping.toFixed(2)}</b></div>
-      <div class="info-row total"><span>${t("result_total_lbl")}</span><b id="res-total">€0</b></div>
-      <div class="info-line" style="margin-top:8px">${t("result_delivery_note", { eta: localizeEta(q.eta) })}</div>`;
+    const priceCard = el("div", "price-card");
+    priceCard.innerHTML = `<div class="tg-lbl" style="margin-bottom:10px">${t("result_quote_title")} ${quoteSuffix}</div>`;
+    priceCard.appendChild(PriceBreakdown(b, { totalId: "res-total", discountCode: state.partnerDiscountCode }));
+    priceCard.appendChild(el("div", "info-line", t("result_delivery_note", { eta: localizeEta(q.eta) })));
     wrap.appendChild(priceCard);
-    if (fee > 0) {
-      wrap.appendChild(PartnerDiscountField(fee));
-    }
+    // Il totale mostrato è sempre la somma delle voci: lo allineiamo al prezzo salvato.
+    if (state.price) state.price.grandTotal = b.total;
+    if (b.fee > 0) wrap.appendChild(PartnerDiscountField(b.fee));
   }
+  wrap.appendChild(PriceExplain(r, q));
 
   // Il prezzo qui è sempre e solo una STIMA per la spedizione di questo
   // singolo oggetto — nessun addebito reale avviene in questo punto del
-  // flusso, qualunque sia il ramo di prezzo mostrato sopra (dual pricing,
-  // breakeven, prima spedizione gratuita). Il calcolo definitivo
-  // (consolidato se il turista aggiunge altri oggetti verso la stessa
-  // destinazione — vedi consolidatedGroupPrice()) e il pagamento reale
-  // (Stripe Checkout) sono SOLO in ConcludeScreen — vedi il commento lì
-  // sopra confirmBtn e MANUALE.md, sezione "Pagamento reale con Stripe
-  // Checkout".
+  // flusso. Il calcolo definitivo (consolidato) e il pagamento reale
+  // (Stripe Checkout) sono SOLO in ConcludeScreen — vedi MANUALE.md.
   const estimateNote = el("div", "info-line step-pad");
   estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
   wrap.appendChild(estimateNote);
-
 }
 
 function ResultScreen() {
@@ -6838,16 +6868,42 @@ function ConcludeScreen() {
   );
   wrap.appendChild(summary);
 
-  const paymentSummary = el("div", "price-card");
-  paymentSummary.innerHTML = `
-    <div class="tg-lbl" style="margin-bottom:10px">Totale da confermare e pagare ora</div>
-    ${Object.entries(groupPricing)
-      .map(
-        ([dest, g]) =>
-          `<div class="info-row"><span>${escapeHtml(dest)} (${g.weightKg} kg fatturabili)</span><b>€${g.total.toFixed(2)}</b></div>`
+  // Conclusione: per ogni destinazione le STESSE voci del preventivo
+  // (Spedizione + Commissione − Sconto = Totale), ricalcolate sul gruppo.
+  const paymentSummary = el("div", "price-card pay-summary");
+  paymentSummary.appendChild(el("div", "tg-lbl", tx("Totale da confermare e pagare ora", "Total to confirm and pay now")));
+  Object.entries(groupPricing).forEach(([dest, g]) => {
+    const items = itemsByDest[dest] || [];
+    const grp = el("div", "pay-group");
+    grp.appendChild(
+      el("div", "pay-group-head", `<b>${escapeHtml(destinationDisplayName(dest) || dest)}</b> · ${items.length} ${tx(items.length === 1 ? "oggetto" : "oggetti", items.length === 1 ? "item" : "items")}`)
+    );
+    grp.appendChild(
+      PriceBreakdown(
+        { shipping: g.shipping, fee: g.fee, feeFull: FULL_FEE, discount: g.partnerDiscount, total: g.total, billableKg: g.weightKg },
+        { destination: g.destinationCountry || dest }
       )
-      .join("")}
-    <div class="info-row total"><span>Totale complessivo</span><b>€${grandTotal.toFixed(2)}</b></div>`;
+    );
+    if (items.length > 1) {
+      const est = Math.round(items.reduce((sum, it) => sum + (Number(it.price) || 0), 0) * 100) / 100;
+      grp.appendChild(
+        el(
+          "div",
+          "pay-why",
+          tx(
+            `Perché non ${euro(est)}? Le stime singole (${items.map((it) => euro(it.price)).join(" + ")} = ${euro(est)}) contavano una commissione e un trasporto per ogni oggetto. Spedendo tutto insieme la spedizione è calcolata una volta sul peso totale e la commissione è una sola.`,
+            `Why not ${euro(est)}? The single estimates counted one fee and one shipment per item. Shipping everything together, shipping is calculated once on the total weight and there is a single fee.`
+          )
+        )
+      );
+    }
+    paymentSummary.appendChild(grp);
+  });
+  if (groups > 1) {
+    paymentSummary.appendChild(
+      el("div", "pb-total pay-grand", `<span>${tx("Totale complessivo", "Grand total")}</span><b>${euro(grandTotal)}</b>`)
+    );
+  }
   wrap.appendChild(paymentSummary);
 
   wrap.appendChild(AirlineBaggageCompareSection(groupPricing));
