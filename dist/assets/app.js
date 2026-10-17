@@ -1484,6 +1484,7 @@ const state = {
   subscriberCodeLoading: false,
   subscriberEmailSent: false,
   priceConfirmedForThisResult: false,
+  returnToSummary: false,
   priceConfirmedAsBreakeven: false,
   idDocument: null,
   signatureDetected: false,
@@ -1583,6 +1584,9 @@ let supportTrail = loadTrail();
 // il trail (staff assistenza): non introduce nuove schermate, riusa i
 // valori già esistenti come chiave.
 const TRAIL_SCREEN_LABELS = {
+  plan: "Prezzo e piano",
+  "step-summary": "Riepilogo scelte",
+  "edit-dest": "Modifica ritiro e destinazione",
   cover: "Copertina",
   onboarding: "Onboarding",
   "biometric-lock": "Blocco biometrico",
@@ -1701,6 +1705,9 @@ function render() {
   else if (state.screen === "luggage") app.appendChild(LuggageScreen());
   else if (state.screen === "classify-limit") app.appendChild(ClassifyLimitScreen());
   else if (state.screen === "result") app.appendChild(ResultScreen());
+  else if (state.screen === "plan") app.appendChild(PlanScreen());
+  else if (state.screen === "step-summary") app.appendChild(StepSummaryScreen());
+  else if (state.screen === "edit-dest") app.appendChild(EditDestScreen());
   else if (state.screen === "queued") app.appendChild(QueuedScreen());
   else if (state.screen === "conclude") app.appendChild(ConcludeScreen());
   else if (state.screen === "shipped") app.appendChild(ShippedScreen());
@@ -1715,6 +1722,10 @@ function render() {
   refreshPinBar();
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
+  }
+  if (state.screen === "plan" && state.price) {
+    const tot = document.getElementById("res-total");
+    if (tot) tot.textContent = `€${state.price.grandTotal}`;
   }
   // Overlay sopra la schermata corrente, non una navigazione — l'utente
   // non perde il contesto (es. può farsi una domanda da ResultScreen e
@@ -4799,82 +4810,196 @@ function OfflineClassifyScreen() {
   return wrap;
 }
 
-function ResultScreen() {
-  const r = state.result;
-  const p = state.price;
-  const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
-  const wrap = el("div");
-  // Restyle A: in cima restano solo l'avviso di rischio SPECIFICO di questo
-  // oggetto e il risultato; agente e banner generico merci vietate vengono
-  // subito dopo la scheda (vedi più sotto).
-  const riskNotice = ProhibitedRiskNotice(r);
-  if (riskNotice) wrap.appendChild(riskNotice);
+// ---------------- Flusso a step guidati (ottobre 2026) ----------------
+// Interruttore spento di default. Si accende con ?passi=1 nell'indirizzo
+// (si spegne con ?passi=0) e resta in localStorage "tg_guided_flow".
+function guidedFlowOn() {
+  try {
+    const q = new URLSearchParams((typeof location !== "undefined" && location.search) || "").get("passi");
+    if (q === "1") localStorage.setItem("tg_guided_flow", "1");
+    else if (q === "0") localStorage.removeItem("tg_guided_flow");
+    return localStorage.getItem("tg_guided_flow") === "1";
+  } catch (e) {
+    return false;
+  }
+}
 
+// ---------------- Step guidati: Prezzo e piano, Riepilogo, Modifica ----------------
+// Attivi solo con guidedFlowOn(). Il riepilogo è l'ultima pagina prima di
+// scegliere l'indirizzo e di concludere: elenca le scelte del cliente, ognuna
+// con «Modifica». Nulla viene salvato o pagato prima di questo punto.
+// Barra dei passi (flusso guidato): n = passo corrente su 5.
+function StepProgress(n) {
+  const names = ["Foto", "Destinazione", "Risultato", "Prezzo", "Riepilogo"];
+  const bar = el("div", "step-progress");
+  bar.setAttribute("role", "progressbar");
+  bar.setAttribute("aria-valuemin", "1");
+  bar.setAttribute("aria-valuemax", "5");
+  bar.setAttribute("aria-valuenow", String(n));
+  bar.setAttribute("aria-label", `Passo ${n} di 5: ${names[n - 1]}`);
+  names.forEach((nm, i) => {
+    const seg = el("span", "step-seg" + (i + 1 < n ? " done" : i + 1 === n ? " now" : ""));
+    bar.appendChild(seg);
+  });
+  const cap = el("div", "step-progress-cap", `Passo ${n} di 5 · ${names[n - 1]}`);
+  const box = el("div", "step-progress-box");
+  box.appendChild(bar);
+  box.appendChild(cap);
+  return box;
+}
+
+function PlanScreen() {
+  const r = state.result;
+  const q = state.price.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
+  const wrap = el("div");
   const topbar = el("div", "topbar");
   const back = el("button", "back", "←");
   back.addEventListener("click", () => {
-    state.screen = "home";
-    state.pendingInput = null;
+    state.screen = state.returnToSummary ? "step-summary" : "result";
     render();
   });
   topbar.appendChild(back);
-  topbar.appendChild(el("h2", null, t("result_step3_lbl")));
+  topbar.appendChild(el("h2", null, "Prezzo e piano"));
   wrap.appendChild(topbar);
-
-  // Vincolo non negoziabile (vedi MANUALE.md, "Percorso offline"): un
-  // prezzo/risultato provvisorio non deve MAI essere scambiato per uno
-  // reale in nessun punto dell'interfaccia — etichetta sempre visibile,
-  // in cima, prima di qualunque altro dettaglio del risultato.
-  if (state.resultIsProvisional) {
-    wrap.appendChild(el("div", "alert offline-provisional-banner", `📡 <b>${t("result_provisional_badge")}</b> — ${t(state.limitManualPath ? "result_provisional_note_limit" : "result_provisional_note")}`));
+  wrap.appendChild(StepProgress(4));
+  appendPricing(wrap, r, q);
+  if (state.priceConfirmedForThisResult) {
+    const go = el("button", "btn-primary", "Vai al riepilogo →");
+    go.addEventListener("click", () => {
+      state.returnToSummary = false;
+      state.screen = "step-summary";
+      render();
+    });
+    const actions = el("div", "result-actions");
+    actions.appendChild(go);
+    wrap.appendChild(actions);
   }
+  return wrap;
+}
 
-  const card = el("div", "result-card");
-  const top = el("div", "result-top");
-  top.innerHTML = `
-    <span class="confidence">${escapeHtml(t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) }))}</span>
-    <div class="result-title" id="res-title"></div>
-    <div class="result-sub" id="res-sub"></div>`;
-  card.appendChild(top);
+function stepPlanLabel() {
+  if (state.priceConfirmedAsBreakeven) return "Promo: nessuna commissione di servizio";
+  if (state.isSubscribed) return "Abbonato";
+  return "Tariffa piena";
+}
 
-  const grid = el("div", "result-grid");
-  const pkg = packagedDimensions(r);
-  const objDims = r.length_cm && r.width_cm && r.height_cm ? formatDims(r.length_cm, r.width_cm, r.height_cm) : "—";
-  grid.innerHTML = `
-    <div><div class="result-lbl">${t("result_lbl_weight")}</div><div class="result-val">${r.weight_kg ?? "—"} kg</div></div>
-    <div><div class="result-lbl">${t("result_lbl_obj_dims")}</div><div class="result-val">${objDims}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_pkg_dims")}</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${escapeHtml(state.pickupPoint)}</div></div>
-    <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
-      getSelectedAddress() ? escapeHtml(formatAddress(getSelectedAddress())) : destinationDisplayName(state.guestDestinationCountry) || "—"
-    }</div></div>`;
-  card.appendChild(grid);
+function StepSummaryScreen() {
+  const r = state.result;
+  const wrap = el("div");
+  const topbar = el("div", "topbar");
+  const back = el("button", "back", "←");
+  back.addEventListener("click", () => {
+    state.screen = "plan";
+    render();
+  });
+  topbar.appendChild(back);
+  topbar.appendChild(el("h2", null, "Riepilogo"));
+  wrap.appendChild(topbar);
+  wrap.appendChild(StepProgress(5));
+  wrap.appendChild(el("div", "identify-intro step-pad", "Ricontrolla le tue scelte. Puoi cambiarle prima di andare avanti: finché non confermi non viene salvato né pagato nulla."));
 
-  const hs = el("div", "hs-block");
-  hs.innerHTML = `
-    <div class="hs-left"><div class="hs-lbl">${t("result_lbl_hs_code")}</div><div class="hs-code" id="res-hscode"></div></div>
-    <div class="hs-desc" id="res-desc"></div>`;
-  card.appendChild(hs);
-  wrap.appendChild(card);
-  wrap.appendChild(AssistantAvatar("result"));
-  wrap.appendChild(AssistantAvatar("options"));
-  wrap.appendChild(ProhibitedGoodsBanner());
+  const dest = getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—";
+  const discount = state.partnerDiscountApplied
+    ? `${state.partnerDiscountCode} (-€${state.partnerDiscountAmount.toFixed(2)})`
+    : "Nessuno";
+  const rows = [
+    { key: "obj", lbl: "Oggetto", val: `${localizeObjectName(r)} · ${r.weight_kg ?? "—"} kg`, edit: null },
+    { key: "pickup", lbl: "Ritiro da", val: state.pickupPoint || "—", edit: "edit-dest" },
+    { key: "dest", lbl: "Destinazione", val: dest, edit: "edit-dest" },
+    { key: "plan", lbl: "Piano", val: stepPlanLabel(), edit: "plan" },
+    { key: "discount", lbl: "Codice sconto", val: discount, edit: "plan" },
+  ];
+  const list = el("div", "step-summary");
+  rows.forEach((row) => {
+    const line = el("div", "step-row");
+    line.dataset.row = row.key;
+    line.appendChild(el("div", "step-row-lbl", escapeHtml(row.lbl)));
+    line.appendChild(el("div", "step-row-val", escapeHtml(String(row.val))));
+    if (row.edit) {
+      const b = el("button", "step-row-edit", "Modifica");
+      b.addEventListener("click", () => {
+        state.returnToSummary = true;
+        if (row.edit === "plan") {
+          // Il piano si sceglie di nuovo; il codice sconto si ripropone da capo.
+          state.priceConfirmedForThisResult = false;
+          state.priceConfirmedAsBreakeven = false;
+          state.price = priceFor(r.weight_kg, currentDestinationName(), r);
+          state.partnerDiscountApplied = false;
+          state.partnerDiscountCode = null;
+          state.partnerDiscountAmount = 0;
+        }
+        state.screen = row.edit;
+        render();
+      });
+      line.appendChild(b);
+    }
+    list.appendChild(line);
+  });
+  const total = el("div", "step-row step-total");
+  total.dataset.row = "total";
+  total.appendChild(el("div", "step-row-lbl", "Totale stimato"));
+  total.appendChild(el("div", "step-row-val", `€${Number(state.price.grandTotal).toFixed(2)}`));
+  list.appendChild(total);
+  wrap.appendChild(list);
+  wrap.appendChild(el("div", "info-line step-pad", `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`));
 
-  const dutyEstimateSection = DutyEstimateSection();
-  if (dutyEstimateSection) wrap.appendChild(dutyEstimateSection);
+  const actions = el("div", "result-actions");
+  const ok = el("button", "btn-primary", t("result_qr_btn"));
+  ok.addEventListener("click", () => {
+    state.returnToSummary = false;
+    state.screen = "choose-address";
+    render();
+  });
+  actions.appendChild(ok);
+  const restart = el("button", "btn-secondary", t("result_restart_btn"));
+  restart.addEventListener("click", () => {
+    state.returnToSummary = false;
+    state.screen = "home";
+    state.error = null;
+    state.pendingInput = null;
+    render();
+  });
+  actions.appendChild(restart);
+  wrap.appendChild(actions);
+  return wrap;
+}
 
-  const shippingNote = localizeShippingNote(r);
-  if (shippingNote) {
-    const tip = el("div", "tip", `💡 ${escapeHtml(shippingNote)}`);
-    wrap.appendChild(tip);
-  }
+// Modifica di ritiro e destinazione dal riepilogo: NON rilancia la
+// classificazione (peso e codice doganale restano); ricalcola solo il prezzo,
+// quindi il piano va riconfermato.
+function EditDestScreen() {
+  const wrap = el("div", "section");
+  const back = el("div", "back", "← Torna al riepilogo");
+  back.addEventListener("click", () => {
+    state.screen = "step-summary";
+    render();
+  });
+  wrap.appendChild(back);
+  wrap.appendChild(el("div", "step-lbl", "Ritiro e destinazione"));
+  wrap.appendChild(PickupField());
+  wrap.appendChild(DestinationField());
+  const save = el("button", "btn-primary", "Salva e ricalcola");
+  save.addEventListener("click", () => {
+    const r = state.result;
+    state.price = priceFor(r.weight_kg, currentDestinationName(), r);
+    state.priceConfirmedForThisResult = false;
+    state.priceConfirmedAsBreakeven = false;
+    state.partnerDiscountApplied = false;
+    state.partnerDiscountCode = null;
+    state.partnerDiscountAmount = 0;
+    state.returnToSummary = true;
+    state.screen = "plan";
+    render();
+  });
+  wrap.appendChild(save);
+  return wrap;
+}
 
-  if (r.value_eur > 500 || r.confidence === "bassa") {
-    const secure = el("div", "secure-note", t("result_secure_note"));
-    wrap.appendChild(secure);
-  }
-
+// Blocco prezzo/piano (promo, piano pieno o abbonato, preventivo, codice
+// sconto, nota di stima): identico nel flusso classico (dentro il Risultato)
+// e in quello guidato (schermata «Prezzo e piano»).
+function appendPricing(wrap, r, q) {
+  const p = state.price;
   let priceCard;
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
   const isFirstEverShipment = state.purchaseHistory.length === 0;
@@ -4985,9 +5110,107 @@ function ResultScreen() {
   // (Stripe Checkout) sono SOLO in ConcludeScreen — vedi il commento lì
   // sopra confirmBtn e MANUALE.md, sezione "Pagamento reale con Stripe
   // Checkout".
-  const estimateNote = el("div", "info-line");
+  const estimateNote = el("div", "info-line step-pad");
   estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
   wrap.appendChild(estimateNote);
+
+}
+
+function ResultScreen() {
+  const r = state.result;
+  const p = state.price;
+  const q = p.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
+  const wrap = el("div");
+  // Restyle A: in cima restano solo l'avviso di rischio SPECIFICO di questo
+  // oggetto e il risultato; agente e banner generico merci vietate vengono
+  // subito dopo la scheda (vedi più sotto).
+  const riskNotice = ProhibitedRiskNotice(r);
+  if (riskNotice) wrap.appendChild(riskNotice);
+
+  const topbar = el("div", "topbar");
+  const back = el("button", "back", "←");
+  back.addEventListener("click", () => {
+    state.screen = "home";
+    state.pendingInput = null;
+    render();
+  });
+  topbar.appendChild(back);
+  topbar.appendChild(el("h2", null, guidedFlowOn() ? "Risultato" : t("result_step3_lbl")));
+  wrap.appendChild(topbar);
+  if (guidedFlowOn()) wrap.appendChild(StepProgress(3));
+
+  // Vincolo non negoziabile (vedi MANUALE.md, "Percorso offline"): un
+  // prezzo/risultato provvisorio non deve MAI essere scambiato per uno
+  // reale in nessun punto dell'interfaccia — etichetta sempre visibile,
+  // in cima, prima di qualunque altro dettaglio del risultato.
+  if (state.resultIsProvisional) {
+    wrap.appendChild(el("div", "alert offline-provisional-banner", `📡 <b>${t("result_provisional_badge")}</b> — ${t(state.limitManualPath ? "result_provisional_note_limit" : "result_provisional_note")}`));
+  }
+
+  const card = el("div", "result-card");
+  const top = el("div", "result-top");
+  top.innerHTML = `
+    <span class="confidence">${escapeHtml(t("result_identified", { confidence: t("confidence_" + (r.confidence || "alta")) }))}</span>
+    <div class="result-title" id="res-title"></div>
+    <div class="result-sub" id="res-sub"></div>`;
+  card.appendChild(top);
+
+  const grid = el("div", "result-grid");
+  const pkg = packagedDimensions(r);
+  const objDims = r.length_cm && r.width_cm && r.height_cm ? formatDims(r.length_cm, r.width_cm, r.height_cm) : "—";
+  grid.innerHTML = `
+    <div><div class="result-lbl">${t("result_lbl_weight")}</div><div class="result-val">${r.weight_kg ?? "—"} kg</div></div>
+    <div><div class="result-lbl">${t("result_lbl_obj_dims")}</div><div class="result-val">${objDims}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_pkg_dims")}</div><div class="result-val">${pkg ? formatDims(pkg.l, pkg.w, pkg.h) : "—"}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_fragile")}</div><div class="result-val ${r.fragile ? "warn" : ""}">${r.fragile ? t("result_fragile_yes") : t("result_fragile_no")}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_pickup_from")}</div><div class="result-val">${escapeHtml(state.pickupPoint)}</div></div>
+    <div><div class="result-lbl">${t("result_lbl_destination")}</div><div class="result-val">${
+      getSelectedAddress() ? escapeHtml(formatAddress(getSelectedAddress())) : destinationDisplayName(state.guestDestinationCountry) || "—"
+    }</div></div>`;
+  card.appendChild(grid);
+
+  const hs = el("div", "hs-block");
+  hs.innerHTML = `
+    <div class="hs-left"><div class="hs-lbl">${t("result_lbl_hs_code")}</div><div class="hs-code" id="res-hscode"></div></div>
+    <div class="hs-desc" id="res-desc"></div>`;
+  card.appendChild(hs);
+  wrap.appendChild(card);
+  // Flusso guidato: avvisi e dettagli stanno in un solo riquadro «Da sapere»,
+  // chiuso di default; il flusso classico li mostra in fila come prima.
+  const guided = guidedFlowOn();
+  const extras = guided ? el("details", "step-more") : wrap;
+  if (guided) extras.appendChild(el("summary", null, "Da sapere"));
+  extras.appendChild(AssistantAvatar("result"));
+  extras.appendChild(AssistantAvatar("options"));
+  extras.appendChild(ProhibitedGoodsBanner());
+
+  const dutyEstimateSection = DutyEstimateSection();
+  if (dutyEstimateSection) extras.appendChild(dutyEstimateSection);
+
+  const shippingNote = localizeShippingNote(r);
+  if (shippingNote) {
+    const tip = el("div", "tip", `💡 ${escapeHtml(shippingNote)}`);
+    extras.appendChild(tip);
+  }
+
+  if (r.value_eur > 500 || r.confidence === "bassa") {
+    const secure = el("div", "secure-note", t("result_secure_note"));
+    extras.appendChild(secure);
+  }
+  if (guided) wrap.appendChild(extras);
+
+  if (guided) {
+    const next = el("button", "btn-primary", "Continua: prezzo e piano →");
+    next.addEventListener("click", () => {
+      state.screen = "plan";
+      render();
+    });
+    const actionsG = el("div", "result-actions");
+    actionsG.appendChild(next);
+    wrap.appendChild(actionsG);
+    return wrap;
+  }
+  appendPricing(wrap, r, q);
 
   const actions = el("div", "result-actions");
   const bookBtn = el("button", "btn-primary", t("result_qr_btn"));
@@ -7357,9 +7580,9 @@ function AddAddressScreen() {
 
 function ChooseAddressScreen() {
   const wrap = el("div", "section");
-  const back = el("div", "back", "← Torna al risultato");
+  const back = el("div", "back", guidedFlowOn() ? "← Torna al riepilogo" : "← Torna al risultato");
   back.addEventListener("click", () => {
-    state.screen = "result";
+    state.screen = guidedFlowOn() ? "step-summary" : "result";
     render();
   });
   wrap.appendChild(back);

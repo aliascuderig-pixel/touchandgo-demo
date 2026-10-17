@@ -1852,3 +1852,14 @@ Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi 
 - `.github/workflows/test.yml` — a ogni pull request e a ogni modifica di `main` GitHub esegue `npm ci` e `npm test` (Node 22) su un computer pulito; se un test fallisce la pull request mostra la X rossa. Esegue anche `npm audit --omit=dev --audit-level=high` come **solo avviso**: segnala dipendenze con vulnerabilità gravi ma non blocca nulla. Non usa segreti. Costo: minuti di calcolo del piano GitHub (qualche minuto per esecuzione).
 - `.github/dependabot.yml` — ogni lunedì Dependabot controlla le dipendenze npm e apre al massimo 5 pull request raggruppate per aggiornamenti minori e di sicurezza; una volta al mese controlla le azioni di GitHub. Non unisce mai nulla da solo: serve il «mergia».
 Limite noto: le funzioni Netlify non vengono eseguite online, i test girano sul codice.
+
+## Flusso a step guidati (17 ottobre 2026)
+
+Modalità opzionale dell'app del turista, **spenta di default**: chi non la attiva vede il flusso di sempre.
+
+- **Come si accende:** aprendo l'app con `?passi=1` nell'indirizzo (resta salvata nel browser, chiave `tg_guided_flow`); `?passi=0` la spegne. Funzione `guidedFlowOn()` in `dist/assets/app.js`.
+- **Passi:** 1 Foto → 2 Ritiro e destinazione → 3 **Risultato** (solo scheda dell'oggetto; avvisi, merci vietate, dazi e assistente stanno in un riquadro «Da sapere» chiuso) → 4 **Prezzo e piano** (schermata `plan`: piano pieno o abbonato, promo, codice sconto; «Vai al riepilogo» compare solo dopo la scelta) → 5 **Riepilogo** (schermata `step-summary`) → scelta indirizzo e conclusione come prima.
+- **Riepilogo:** elenca oggetto, ritiro, destinazione, piano, codice sconto e totale stimato. «Modifica» su ritiro/destinazione apre `edit-dest` (NON rilancia la classificazione: peso e codice doganale restano; il prezzo si ricalcola e il piano va riconfermato); «Modifica» su piano/sconto riapre la scelta del piano e azzera il codice sconto. Dopo ogni modifica si torna al riepilogo (`state.returnToSummary`).
+- **Aspetto:** barra dei 5 passi in alto (segmenti oro, «Passo N di 5»), riquadro «Da sapere» e righe del riepilogo con angoli netti e etichette in mono come la scheda risultato, «Modifica» in oro, totale su fondo inchiostro. Stili in fondo a `dist/assets/style.css` (sezione «Step guidati»).
+- **Cosa non cambia:** calcolo dei prezzi (`appendPricing` è lo stesso codice del flusso classico, estratto da `ResultScreen`), consolidamento dei gruppi, pagamento Stripe in `ConcludeScreen`, percorso offline. Fino al riepilogo non viene salvato né pagato nulla.
+- **Test:** `dist/assets/__tests__/guided-steps.test.js` (8).
