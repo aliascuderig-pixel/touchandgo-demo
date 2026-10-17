@@ -5235,7 +5235,10 @@ function appendPricing(wrap, r, q) {
   q = withSurcharge(q);
   const onBreakeven = state.promoValid && !state.promoRedeemedThisOrder;
   const isFirstEverShipment = state.purchaseHistory.length === 0;
-  const firstTimeFree = !onBreakeven && !state.isSubscribed && isFirstEverShipment;
+  // Dal modello del 17/10/2026 anche la prima spedizione («la prova») è a tariffa
+  // piena, come le successive: niente tariffa al pavimento per il primo ordine.
+  // Resta solo il codice invito valido (onBreakeven).
+  const firstTimeFree = false && isFirstEverShipment;
 
   const setPrice = (plan, subscriptionPlanId) => {
     if (plan === "subscribed" && subscriptionPlanId) activateSubscription(subscriptionPlanId);

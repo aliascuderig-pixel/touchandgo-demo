@@ -95,3 +95,9 @@ test("tornare a cambiare piano prima del pagamento annulla l'abbonamento non add
   assert.equal(call("state.isSubscribed"), false);
   assert.equal(call("state.subscriptionToCharge"), null);
 });
+
+test("la PRIMA spedizione (prova) è a tariffa piena come le altre: nessuna card promo al pavimento", (t) => {
+  const { d } = boot(t, `state.purchaseHistory = []; state.screen = "plan"; state.priceConfirmedForThisResult = false;`);
+  assert.equal(d.querySelector(".promo-card-inline"), null);
+  assert.equal(d.querySelectorAll(".price-option").length, 2);
+});
