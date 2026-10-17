@@ -165,9 +165,9 @@
   var CSS = [
     ':host{all:initial}',
     '*{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
-    '.fab{position:fixed;left:16px;bottom:16px;z-index:2147483000;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(18,18,18,.92);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.35);padding:0}',
+    '.fab{position:fixed;left:16px;bottom:var(--tg-fab-bottom,16px);z-index:2147483000;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(18,18,18,.92);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.35);padding:0}',
     '.fab:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2px}',
-    '.panel{position:fixed;left:16px;bottom:68px;z-index:2147483000;width:min(300px,calc(100vw - 32px));background:rgba(18,18,18,.96);color:#f2f2f2;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:14px 14px 12px;box-shadow:0 8px 28px rgba(0,0,0,.45)}',
+    '.panel{position:fixed;left:16px;bottom:calc(var(--tg-fab-bottom,16px) + 52px);z-index:2147483000;width:min(300px,calc(100vw - 32px));background:rgba(18,18,18,.96);color:#f2f2f2;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:14px 14px 12px;box-shadow:0 8px 28px rgba(0,0,0,.45)}',
     '.panel[hidden]{display:none}',
     '.ttl{font-size:13px;font-weight:600;margin:0 0 2px}',
     '.val{font-size:12px;opacity:.8;margin:0 0 10px;min-height:16px}',

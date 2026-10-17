@@ -860,7 +860,7 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- Header: un solo menu invece di quattro pulsanti ---------- */
 .header{position:relative}
 .header-menu-btn{box-sizing:border-box;width:44px;height:44px;border-radius:22px;border:1px solid var(--ink-border);background:transparent;color:var(--ivory);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
-.header-menu{display:none;position:absolute;right:20px;top:100%;z-index:50;min-width:230px;background:var(--ink);border:1px solid var(--ink-border);border-radius:14px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.45);flex-direction:column;gap:4px}
+.header-menu{display:none;position:absolute;right:20px;top:100%;z-index:50;min-width:270px;background:var(--ink);border:1px solid var(--ink-border);border-radius:14px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.45);flex-direction:column;gap:4px}
 .header-menu.open{display:flex}
 .header-menu>a,.header-menu>button{box-sizing:border-box;min-height:44px;height:auto;display:flex;align-items:center;justify-content:flex-start;width:100%;border:0;border-radius:10px;background:transparent;color:var(--ivory);font-family:var(--body);font-size:13px;font-weight:500;padding:0 14px;text-decoration:none;cursor:pointer;white-space:normal}
 .header-menu>.header-assistant-btn{background:var(--gold-soft);color:var(--ink);font-weight:600}
@@ -892,3 +892,16 @@ button{font-family:inherit;cursor:pointer}
 .luggage-title{margin-top:10px}
 
 .ob-never-btn{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:6;min-height:44px;padding:0 18px;background:transparent;border:0;color:var(--muted);font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.04em;text-decoration:underline;cursor:pointer;white-space:nowrap}
+/* Menu: righe con pulsante 📌 e barra delle funzioni fisse scelte dal cliente */
+.header-menu .menu-section{margin:4px 14px 2px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-on-ink)}
+.header-menu .menu-hint{margin:6px 14px 4px;font-size:11px;line-height:1.4;color:var(--muted-on-ink)}
+.header-menu .menu-row{display:flex;gap:4px;align-items:stretch}
+.header-menu .menu-row>button:first-child{flex:1;box-sizing:border-box;min-height:44px;display:flex;align-items:center;justify-content:flex-start;border:0;border-radius:10px;background:transparent;color:var(--ivory);font-family:var(--body);font-size:13px;font-weight:500;padding:0 14px;text-align:left;cursor:pointer;white-space:normal}
+.header-menu .menu-row>.header-assistant-btn{background:var(--gold-soft);color:var(--ink);font-weight:600}
+.header-menu .menu-pin{flex:0 0 44px;box-sizing:border-box;min-height:44px;border:1px solid var(--ink-border);border-radius:10px;background:transparent;font-size:16px;opacity:.5;cursor:pointer;padding:0}
+.header-menu .menu-pin[aria-pressed="true"]{opacity:1;background:var(--gold);border-color:var(--gold)}
+.pin-bar{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:520px;box-sizing:border-box;z-index:40;display:flex;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:var(--ink);border-top:1px solid var(--ink-border)}
+.pin-bar .pin-btn{flex:1;min-width:0;min-height:48px;box-sizing:border-box;border-radius:12px;border:1px solid var(--ink-border);background:transparent;color:var(--ivory);font-family:var(--body);font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;cursor:pointer}
+.pin-bar .pin-ico{font-size:18px;line-height:1}
+#app.has-pinbar{padding-bottom:76px}
+@media print{.pin-bar{display:none}}
