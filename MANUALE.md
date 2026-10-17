@@ -1823,3 +1823,10 @@ Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi 
 - Nessuna funzione esistente cambia; la lingua IT/EN resta nell'intestazione. Testi in italiano e inglese. Test: `dist/assets/__tests__/pinned-functions.test.js`.
 
 **Estetica.** Pannello più largo di prima (minimo 270 px), fondo nero come il resto del menu, righe alte almeno 44 px con la funzione a sinistra e il pulsante 📌 quadrato da 44 px a destra; 📌 spento: bordo sottile e icona attenuata; acceso: fondo oro pieno. Intestazione di sezione «VAI A» in maiuscolo piccolo e spaziato, colore grigio chiaro. La barra in basso è larga come l'app (massimo 520 px), fondo nero con bordo superiore sottile, pulsanti con angoli 12 px alti 48 px: icona grande sopra, nome in grassetto 11 px sotto, bordo sottile; rispetta l'area sicura dei telefoni; lo spazio in fondo alla pagina aumenta di 76 px così nulla resta coperto.
+
+## Controlli automatici e aggiornamenti di sicurezza (GitHub)
+
+**Funzione.** Due file nuovi, nessun cambiamento al software:
+- `.github/workflows/test.yml` — a ogni pull request e a ogni modifica di `main` GitHub esegue `npm ci` e `npm test` (Node 22) su un computer pulito; se un test fallisce la pull request mostra la X rossa. Esegue anche `npm audit --omit=dev --audit-level=high` come **solo avviso**: segnala dipendenze con vulnerabilità gravi ma non blocca nulla. Non usa segreti. Costo: minuti di calcolo del piano GitHub (qualche minuto per esecuzione).
+- `.github/dependabot.yml` — ogni lunedì Dependabot controlla le dipendenze npm e apre al massimo 5 pull request raggruppate per aggiornamenti minori e di sicurezza; una volta al mese controlla le azioni di GitHub. Non unisce mai nulla da solo: serve il «mergia».
+Limite noto: le funzioni Netlify non vengono eseguite online, i test girano sul codice.

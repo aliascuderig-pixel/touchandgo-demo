@@ -1,0 +1,26 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test
+        run: npm test
+      - name: Dipendenze vulnerabili (solo avviso, non blocca)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
