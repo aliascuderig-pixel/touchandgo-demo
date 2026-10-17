@@ -287,9 +287,7 @@ L'app supporta italiano e inglese con rilevamento automatico, in `dist/assets/ap
 
 Un acquisto (`item`) attraversa fino a 4 stati:
 
-```
-in sospeso → in confezionamento → ritiro richiesto → ritirato
-```
+Gli stati si susseguono così: in sospeso, poi in confezionamento, poi ritiro richiesto, poi ritirato.
 
 - **in sospeso**: appena creato, lasciato in negozio, in attesa che qualcuno lo confezioni.
 - **in confezionamento**: lo staff (dal CRM) lo ha inviato a chi imballa, registrando contatto e orario (`packagingDispatch: { to, sentAt }`). Da qui il turista può anche vedere un **bottone "📦 Richiedi ritiro"** nel proprio storico acquisti.
@@ -980,10 +978,7 @@ Nessun valore reale di queste variabili è mai scritto in questo file o nel codi
 
 Netlify supporta le Scheduled Functions tramite il wrapper `schedule()` del pacchetto `@netlify/functions` (aggiunto come nuova dipendenza in `package.json`, prima non presente in questo repository):
 
-```js
-const { schedule } = require("@netlify/functions");
-exports.handler = schedule("0 6 * * *", async () => { /* ... */ });
-```
+La funzione è registrata con lo scheduler di Netlify con orario «0 6 * * *» (ogni giorno alle 06:00 UTC).
 
 Verificata leggendo il codice/README pubblicati sul registro npm della versione corrente (`@netlify/functions@6.0.0`, 2026) — non tramite ricordo: l'espressione cron è letta **staticamente in fase di build** da Netlify per registrare il trigger; a runtime `schedule(cron, handler)` in questa versione restituisce semplicemente `handler` invariato. Nessuna modifica a `netlify.toml` è necessaria. Conseguenza pratica utile per i test: **chiamare l'URL della function anche manualmente** (curl, o direttamente in locale) esegue davvero l'handler e ne restituisce il risultato reale — non serve aspettare le 06:00 per verificarne il comportamento.
 
@@ -999,10 +994,7 @@ Il sito `touchandgo-internal` (dominio `touchandgo-crm.netlify.app`) è protetto
 
 **Approccio attuale (7 settembre 2026) — non ci si autentica più come un browser contro il sito**. Si interroga invece la **Netlify Management API**, ufficiale e documentata (`https://docs.netlify.com/api/get-started/`), per leggere lo stato dell'ultimo deploy del progetto CRM:
 
-```
-GET https://api.netlify.com/api/v1/sites/{CRM_SITE_ID}/deploys?per_page=1
-Authorization: Bearer <NETLIFY_HEALTHCHECK_TOKEN>
-```
+Per il CRM si interroga l'API di Netlify chiedendo l'ultimo deploy del sito del CRM, con autenticazione a token tramite la variabile `NETLIFY_HEALTHCHECK_TOKEN`.
 
 `CRM_SITE_ID` (`81ef474e-77e4-4852-bfae-0e159f6a2931`) è il site ID del progetto — non un segreto, è un identificativo pubblico, hardcoded nel file. `NETLIFY_HEALTHCHECK_TOKEN` è un **Personal Access Token Netlify dedicato**, mai quello personale di Giuseppe — vedi "Come generarlo" più sotto.
 
@@ -1043,19 +1035,7 @@ Un nuovo store Netlify Blobs condiviso, **`system-reports`**, stesse credenziali
 
 Forma di ogni record:
 
-```json
-{
-  "date": "2026-09-01",
-  "checkedAt": "2026-09-01T06:00:00.000Z",
-  "overallStatus": "ok",
-  "devices": {
-    "main":   { "status": "ok", "responseTimeMs": 123 },
-    "guest":  { "status": "ok", "responseTimeMs": 140 },
-    "router": { "status": "ok", "responseTimeMs": 88 },
-    "crm":    { "status": "problem", "responseTimeMs": 210, "error": "crm_healthcheck_token_non_configurato" }
-  }
-}
-```
+Il report del giorno ha: `date` (giorno), `checkedAt` (ISO-8601), `overallStatus` («ok» o «problem») e `devices` con quattro voci (`main`, `guest`, `router`, `crm`), ciascuna con `status` («ok» o «problem»), `responseTimeMs` ed eventualmente `error` (per esempio «crm_healthcheck_token_non_configurato»).
 
 **Storico e pulizia**: dopo ogni scrittura, la function elenca tutte le chiavi dello store (sono già `"YYYY-MM-DD"`, quindi l'ordine alfabetico coincide con quello cronologico) e cancella tutte tranne le **30 più recenti**. Netlify Blobs non ha una scadenza nativa per singola chiave, quindi la pulizia è fatta così, sempre dalla stessa function che scrive: nessun meccanismo separato da tenere sincronizzato, e non può "dimenticarsene" perché gira ad ogni esecuzione. 30 giorni bastano per uno storico mensile utile nel CRM senza far crescere lo store indefinitamente; un errore nella pulizia è comunque best-effort e non fa mai fallire il salvataggio del report del giorno, già avvenuto prima.
 
@@ -1262,19 +1242,7 @@ Bottone nell'header (`Header()`, `dist/assets/app.js`), **accanto** al bottone e
 
 Scrive sullo store Blobs condiviso `"support-requests"` (stesso store già letto dal CRM) con i nomi di campo **allineati deliberatamente** a quelli già attesi da quel lato (nessun codice condiviso tra i due repository — solo lo stesso schema dati, stessa "duplicazione deliberata" già in uso per altre coppie di campi tra i repository Touch&Go, es. `DESTINATIONS_MAP` tra `touchandgo-demo`/`touchandgo-internal`):
 
-```js
-{
-  id: "SR-XXXXXX",           // generato qui, stesso stile "PREFISSO-" + alfanumerico casuale di generateDiscountCode()/generateBookingCode()
-  createdAt: "2026-09-10T08:00:00.000Z",  // ISO-8601
-  message: "Testo del problema, trim() applicato",
-  contactEmail: "turista@example.com" | null,  // null se non fornita, MAI un motivo di rifiuto
-  context: "Scegli indirizzo" | null,           // etichetta leggibile della schermata al momento dell'invio
-  trail: [ /* vedi sotto */ ],
-  // "status" volutamente ASSENTE: il CRM tratta qualunque record senza
-  // status==="gestita" come "Nuova" — un campo assente è già lo stato
-  // corretto, nessun valore esplicito "nuova" da inventare.
-}
-```
+Campi del record richiesta di assistenza: `id` («SR-» più caratteri alfanumerici casuali, stesso stile degli altri codici), `createdAt` (ISO-8601), `message` (testo del problema, ripulito dagli spazi), `contactEmail` (email o nulla se non fornita; mai un motivo di rifiuto), `context` (etichetta leggibile della schermata al momento dell'invio, o nulla), `trail` (percorso dell'utente, vedi sotto). Il campo `status` è volutamente assente: il CRM tratta ogni record senza stato «gestita» come «Nuova».
 
 - **`id`**: `generateSupportRequestId()`, stesso stile `"PREFISSO-" + 6 caratteri alfanumerici casuali maiuscoli` già in uso per `generateDiscountCode()`/`generatePartnerCode()` in questo stesso file e `generateBookingCode()` in `app.js` — prefisso `"SR-"` (Support Request). Retry-loop contro collisioni (fino a 10 tentativi, poi fallback con `Date.now()` appeso), stesso schema di `generatePartnerCode()`/`generateDiscountCode()`.
 - **`message`**: obbligatorio — un messaggio vuoto o solo spazi è rifiutato con 400, **nessuna scrittura** sullo store.
@@ -1290,9 +1258,7 @@ Scrive sullo store Blobs condiviso `"support-requests"` (stesso store già letto
 
 Formato di ogni voce (invariato rispetto a PR #46 — `dist/assets/app.js`, `recordTrailEntry()`):
 
-```json
-{ "type": "screen" | "action", "label": "<stringa leggibile>", "at": "<ISO-8601>" }
-```
+Ogni passo del percorso (`trail`) ha tre campi: tipo («screen» per una schermata, «action» per un'azione), etichetta leggibile e data e ora in formato ISO-8601.
 
 - `type: "screen"`: cambio di schermata (`TRAIL_SCREEN_LABELS[state.screen]`, es. `"Scegli indirizzo"`, `"Risultato"`).
 - `type: "action"`: una delle 7 azioni tracciate da PR #46 (foto caricata/scattata, errore mostrato — testo incluso, QR generato, "Concludi e paga" cliccato, "Richiedi ritiro" cliccato, codice partner inserito — mai il codice, recensione inviata).
@@ -1384,13 +1350,7 @@ Non va confuso con `getRecentTrail()` (PR #46, "Trail di supporto (assistenza pr
 ### Cosa viene registrato
 
 Campo nuovo sull'item: **`customerNotices`** — array di `{ type, message, shownAt }`. `confirmPickupSchedule()` (`dist/assets/app.js`) ne aggiunge una voce ad ogni conferma:
-```js
-it.customerNotices = (it.customerNotices || []).concat({
-  type: "pickup-scheduling",
-  message: confirmationMessage,   // testo ESATTO di buildPickupConfirmationMessage()
-  shownAt: new Date().toISOString(),
-});
-```
+Il messaggio viene aggiunto all'elenco `customerNotices` dell'oggetto come voce con tipo «pickup-scheduling», il testo esatto prodotto da `buildPickupConfirmationMessage()` e la data e ora in cui è stato mostrato (`shownAt`, ISO-8601).
 Scritta in **entrambi** i casi — data rispettata e data posticipata — non solo nel caso "problematico": la prova serve anche per dimostrare che una data rispettata è stata comunicata correttamente. **Sempre accodata, mai sovrascritta**: ogni chiamata parte dall'array già presente sull'item (voci di tipi futuri diversi da `"pickup-scheduling"` restano intatte) e vi aggiunge la nuova voce in coda, mai un `=` che sostituisce l'array intero.
 
 ### Sincronizzazione
@@ -1643,3 +1603,113 @@ Il turista può spedire i propri bagagli **andata e ritorno** direttamente dall'
 - **Salvataggio**: l'oggetto creato include `shipmentKind: "bagaglio"`, `luggageDirection` e, solo per l'andata, `stayLabel`; vengono validati dalla function `save-purchase.js` come per i partner. La bozza si azzera dopo il salvataggio e quando parte un normale acquisto (`handleDescribe`/`handleImageDataUrl`).
 - **Test**: `tourist-luggage.test.js` (5). Suite 577/577.
 - **Da verificare**: peso/misure dei bagagli sono dichiarati dal turista (non stimati): il corriere reale potrà richiedere una verifica.
+
+## Specifica dettagliata del comportamento (17 ottobre 2026)
+
+Questa sezione descrive il comportamento reale del backend e delle regole di business al livello di dettaglio necessario per riscrivere il software da zero. Dove un valore è un dato di contenuto (testi dei prompt, tariffe delle compagnie aeree, regole per Paese) va ricostituito o ceduto separatamente, non dedotto da qui. Nessun segreto è riportato: solo i nomi delle variabili d'ambiente.
+
+### Regole comuni a tutte le funzioni pubbliche
+
+- **Rate limit per IP**: finestra di 60 minuti, contatore salvato nello store `rate-limits` con chiave `<funzione>:<IP>`. L'IP viene letto dall'intestazione di connessione di Netlify (con ripiego sull'altra intestazione client-ip). Oltre il massimo la risposta è 429 «Troppe richieste, riprova tra qualche minuto.». Il contatore si incrementa a ogni chiamata, anche respinta.
+- **Massimi**: 20/ora per classify, assistant, estimate-duty, city-photo, category-averages, airline-baggage-fees, promo, partner-discount, partner-stats, save-review, save-shipment-group, create-checkout-session; 30/ora per verify-checkout-session; 60/ora per track-event; per subscriber-access 10/ora (register), 30/ora (verify), 30/ora (attach-email), con chiave distinta per azione. Il rate limit è applicato dopo la validazione di base del corpo, tranne dove indicato.
+- **Spazio ospite**: ogni nome di store passa da una funzione che aggiunge il suffisso `-guest` quando la variabile `GUEST_MODE` vale «true» (senza distinzione di maiuscole). Le due installazioni quindi non condividono dati.
+- **Accesso ai dati**: tutti gli store sono Netlify Blobs, autenticati con `NETLIFY_BLOBS_SITE_ID` e `NETLIFY_BLOBS_TOKEN`.
+- **Metodi**: ogni funzione risponde 405 a un metodo diverso da quello previsto. Le risposte di errore hanno quasi sempre la forma con un campo `error` (testo, oppure oggetto con `message` nelle funzioni AI).
+- **Modello AI**: tutte le chiamate usano Anthropic Sonnet 5 sull'API Messages, con la variabile `ANTHROPIC_API_KEY`; se manca la risposta è 500 con messaggio esplicito.
+
+### Prezzi (stessa logica lato app e lato server)
+
+- Tariffa di servizio: 39 € piena, 19 € per l'abbonato. Il tier `breakeven` azzera la tariffa di servizio (resta il costo vivo del corriere).
+- Costo corriere: tre zone con scaglioni di peso, ricarico del 25 %, peso volumetrico (lunghezza × larghezza × altezza / 5000), peso minimo fatturabile. Le tabelle delle zone sono nel codice `netlify/lib/pricing.js` e vanno ricostituite come dato.
+- Spedizione consolidata: tutti gli oggetti con lo stesso `addressLabel` formano un gruppo; il totale del gruppo è calcolato sul peso complessivo con una sola tariffa di servizio. Il server ricalcola sempre il totale da zero (pesi, dimensioni, tier, sconto partner): qualsiasi campo «total» o «amount» mandato dal client viene ignorato.
+- Statistiche per categoria: 10 categorie fisse (tra cui «Attrezzatura sportiva»), con peso e dimensioni medi di ripiego. Una media reale sostituisce il valore di ripiego solo con almeno 5 campioni. Un valore è anomalo se supera 3 volte la media della categoria.
+
+### save-purchase (POST)
+
+Salva un acquisto nello store `purchases`. Validazione: prezzo da 0 a 5000, peso maggiore di zero e minore di 50 kg, `pricingTier` tra pieno / abbonato / breakeven, campi di testo con lunghezze limitate. Ordine dei controlli: metodo, validazione, blocklist (403 se il cliente è bloccato), rate limit.
+- **Attribuzione partner**: se l'acquisto porta un codice partner valido, viene registrato; la commissione è il 10 % e viene accreditata sul credito del partner solo quando lo stato passa a «ritirato», mai per il piano gratuito. L'importo accreditato resta nel campo `creditIssuedAmount` (usato poi dalle statistiche).
+- **Riferimento doganale**: a ogni classificazione registrata si aggiorna lo store `customs-reference` (categoria + materiale → codice HS più frequente e numero di casi).
+- **Antifrode**: l'acquisto riceve `flaggedReasons` quando scatta una regola (valore anomalo per categoria, ripetizioni ravvicinate nella finestra di 1 ora, e le altre regole elencate nella sezione Sicurezza). Un acquisto segnalato viene salvato comunque ma resta visibile al CRM come da verificare.
+
+### sync (POST, azione nel corpo)
+
+Azioni: lettura acquisti per identificativi (massimo 200), lettura acquisti per email, conferma del punto di ritiro, riscatto del credito per fattura, generazione di un codice sconto partner, registrazione partner, passaggio di piano del partner, elenco e lettura dei comunicati, elenco delle spedizioni generate, invio di una richiesta di assistenza.
+- **Piani partner** (canone mensile in euro): boutique 49, enoteche 59, sport 69, hotel 99, agenzie 149, touroperator 199, free 0.
+- **Registrazione partner**: crea il record con piano, data di inizio piano e credito a zero.
+
+### partner-stats (POST)
+
+Il codice partner è la credenziale. Un codice vuoto, inesistente o qualunque errore interno risponde 200 con `valid` falso (non distingue i casi).
+- **Accesso**: piano gratuito valido 365 giorni dalla data di inizio piano, poi blocco con motivo «free-expired»; piano a pagamento non confermato pagato dopo 30 giorni di tolleranza: blocco con motivo «paid-unpaid». Per i partner senza data di inizio piano (registrati prima della regola) la data viene impostata alla prima lettura.
+- **Risposta**: nome, piano, stato pagato, data inizio, stato di accesso (con giorni residui per il gratuito), numero di vendite, valore totale delle vendite, commissione stimata al 10 % su tutte le vendite, saldo credito, andamento per mese (ultimi 12 mesi: ordini, valore, commissione realmente accreditata) e ultimi 20 ordini.
+- Le statistiche si calcolano leggendo tutti gli acquisti e filtrando per codice partner.
+
+### promo (POST)
+
+Codici invito monouso creati dal CRM nello store `promo` (formato 3 lettere + 3 cifre). Azioni `check` e `redeem`, con lo stesso budget di rate limit condiviso. Codice vuoto: 400. Codice inesistente, disattivato o già usato: stessa risposta «valid: false» (non rivela quali esistono). `check` risponde valido con offerta «breakeven» se il codice non è stato riscattato; `redeem` lo marca come riscattato con data e ora. Azione diversa: 400.
+
+### partner-discount (POST)
+
+Riscatta un codice sconto partner (store `partner-discount-codes`). Ordine: rate limit, codice presente, azione «redeem», tariffa di servizio valida (solo 39 o 19, altrimenti 400), codice esistente e non usato, partner esistente. Lo sconto è il 10 % della tariffa di servizio (non del corriere) e viene scalato dal credito del partner; se il credito non basta il codice resta inutilizzato e la risposta spiega che il partner non ha credito sufficiente. A buon fine il codice riporta data d'uso ed email del turista (facoltativa, normalizzata in minuscolo).
+
+### subscriber-access (POST)
+
+Codici dell'abbonato all'app per usare «Genera spedizione» da PC.
+- **register**: genera un codice «ABB-» più 8 caratteri da un alfabeto senza simboli ambigui (niente I, O, 0, 1); fino a 5 tentativi se il codice esiste già. Salva data, origine «app-simulated» ed email facoltativa (valida e normalizzata, massimo 254 caratteri). Poiché l'abbonamento all'app è ancora simulato, nessun pagamento viene verificato: chiunque può ottenere un codice (limite noto).
+- **verify**: risponde solo se il codice è valido; un codice con formato errato, inesistente o revocato dal CRM dà «valid: false».
+- **attach-email**: associa l'email al codice una volta sola e mai sovrascrivendo; serve allo staff per ritrovare un codice perso.
+- Il prefisso «ABB-» è riservato: i codici abbonato non sono mai codici partner e non danno commissioni, crediti né accesso a dati altrui.
+
+### create-checkout-session (POST) e verify-checkout-session (POST)
+
+- **create**: richiede un elenco non vuoto di oggetti, ciascuno con etichetta di destinazione, Paese, peso (maggiore di zero e minore di 50 kg) e tier valido; altrimenti 400. Raggruppa per destinazione e crea una sessione di pagamento Stripe in modalità «payment», valuta euro, una riga per gruppo con nome «Spedizione consolidata verso …» (numero oggetti e peso). Gli indirizzi di ritorno si ricavano dall'origine della richiesta (intestazione Origin, in alternativa Referer): successo sull'origine con l'identificativo di sessione, annullamento sull'origine. Totale zero o negativo: 400. Variabile: `STRIPE_SECRET_KEY` (se manca, 500). Nessuna libreria Stripe: chiamate REST dirette.
+- **verify**: dato un identificativo di sessione, interroga Stripe direttamente e risponde «paid: true» solo se lo stato di pagamento è «paid». In ogni errore (identificativo mancante, chiave non configurata, sessione inesistente, eccezione) risponde 200 con «paid: false» (fail-closed). Include importo e valuta.
+
+### classify (POST)
+
+Inoltra all'API Anthropic l'array `messages` ricevuto dal client (400 se mancante o vuoto), con max 800 token. Il prompt di sistema è la concatenazione di due blocchi: un riferimento alle classificazioni reali precedenti (fino a 8 categorie dallo store `customs-reference`, usato solo se pertinente) e le regole di spedizione per Paese (`netlify/lib/shipping-rules.js`). Restituisce la risposta Anthropic così com'è, con lo stesso codice di stato. Nota: i messaggi sono costruiti dal client e non sono validati dal server (a differenza di assistant ed estimate-duty): il solo freno è il rate limit.
+
+### assistant (POST) ed estimate-duty (POST)
+
+- **assistant**: ammette preflight CORS (OPTIONS risponde 204 senza consumare rate limit) e CORS aperto a tutte le origini. Corpo: messaggio, modalità, lingua. Messaggio vuoto: 400. Tre modalità: domanda, traduci per negoziante, spiega la suite (qualsiasi altro valore diventa «domanda»). Il prompt è costruito interamente lato server dalla identità dell'agente comune più i fatti della modalità; il client manda solo testo dell'utente. Max 500 token.
+- **estimate-duty**: stima informativa di dazi/tasse nel Paese di destinazione. Ingressi: codice HS, categoria, peso, valore, Paese (obbligatorio, altrimenti 400), lingua. Il prompt è costruito interamente lato server. Quattro vincoli: non bloccante per il flusso, mai incluso nel prezzo, disclaimer «Stima indicativa, non vincolante» obbligatorio come ultima frase nel prompt, e dichiarare di non avere una stima affidabile invece di inventare. Max 300 token. Risposta: testo della stima.
+
+### save-review, save-shipment-group, lead-signup, lead-unsubscribe
+
+- **save-review**: identificativo acquisto obbligatorio, voto intero da 1 a 5, testo facoltativo massimo 600 caratteri, codice gruppo e codice partner facoltativi (stringhe). Salva nello store `reviews` con identificativo «RV-…», stato «pending» (moderazione dal CRM) e data. Il codice partner è portato in maiuscolo.
+- **save-shipment-group**: codice, elenco non vuoto di identificativi oggetto, totale tra 0 e 5000, peso maggiore di zero e minore di 500 kg. Più di 6 oggetti in un gruppo aggiunge il motivo di segnalazione «Numero insolito di oggetti in una spedizione» con data. Salva nello store `shipment-groups` con il codice come chiave (sovrascrive).
+- **lead-signup**: iscrizione dal sito. Campo trappola «website» (bot): se compilato risponde 200 senza salvare. Email obbligatoria e valida (massimo 254), consenso esplicitamente vero, profilo tra turista / negoziante / agenzia / tour-operator / altro, origine tra video / sito / altro (predefinita «video»). Chiave del record: «LD-» più i primi 24 caratteri dell'hash SHA-256 dell'email normalizzata, quindi un indirizzo già iscritto non crea duplicati e la risposta è sempre 200. Il record porta la versione del consenso (2026-10-15-v1), stato «new» e data. Se l'invio email è configurato (variabili `RESEND_API_KEY`, `LEAD_MAIL_FROM`, `LEAD_UNSUB_SECRET`) viene inviata una email di benvenuto con link di disiscrizione e intestazione List-Unsubscribe; un errore di invio non fa fallire l'iscrizione.
+- **lead-unsubscribe**: il link contiene identificativo e token (HMAC-SHA256 dell'identificativo, primi 32 caratteri, confronto a tempo costante). Token errato: pagina «Link non valido» (400) con l'indirizzo privacy per la rimozione manuale. GET mostra la pagina di conferma, POST imposta lo stato «unsubscribed» con data (operazione idempotente). Il dominio del link viene da `LEAD_SITE_URL` (in alternativa dall'URL del sito Netlify).
+
+### category-averages, city-photo, airline-baggage-fees, track-event, health, guest-status
+
+- **category-averages** (GET): per ciascuna delle 10 categorie restituisce peso e dimensioni medi calcolati sugli acquisti reali (con ripiego sui valori predefiniti se i campioni sono meno di 5), dimensione del campione e un indicatore di ripiego.
+- **city-photo** (POST): data una città (400 se vuota) cerca la foto principale su Wikipedia e, se la licenza richiede attribuzione, il credito su Wikimedia Commons. Timeout 4 secondi, cache di 30 giorni nello store `city-photo-cache`. Qualsiasi errore esterno risponde 200 con foto nulla. La cover dell'app non la usa più.
+- **airline-baggage-fees** (GET): restituisce la tabella delle tariffe bagaglio extra per compagnia e la data di verifica più recente. La tabella è un dato di contenuto aggiornato ogni lunedì da un'attività pianificata.
+- **track-event** (POST): analisi di utilizzo senza dati personali. Eventi ammessi: app_opened, classification_completed, purchase_saved, agent_chat_opened; ruolo sempre «turista». Registra un contatore giornaliero per origine / ruolo / evento nello store `usage-analytics` (chiave «data__origine__ruolo__evento»), con l'ora dell'ultimo evento.
+- **health** (GET): controlla che il modello Anthropic risponda (timeout 4 secondi). 200 se tutto bene; 503 con motivo (chiave mancante, autenticazione rifiutata, stato anomalo, timeout, irraggiungibile).
+- **guest-status** (GET): risponde se l'installazione è in modalità ospite.
+
+### Funzioni pianificate
+
+- **Controllo giornaliero** (ogni giorno alle 06:00 UTC): verifica sito principale, spazio ospite, router e CRM e salva il report del giorno nello store `system-reports` (conserva i giorni più recenti). Non gira nello spazio ospite. Usa la variabile `NETLIFY_HEALTHCHECK_TOKEN`.
+- **Test end-to-end settimanale**: descritto nella sezione dedicata; gira solo per lo spazio ospite.
+
+### Router di continuità (cartella `router/`)
+
+Sito Netlify separato con tre funzioni; lo stato è un unico record nello store `router-state` (failover attivo, da quando, motivo, ultimo controllo e suo esito).
+- **go** (la radice del sito vi è riscritta internamente, senza reindirizzamento visibile): se la variabile `ACTIVE_TARGET` è impostata, reindirizza (302) al sito principale o allo spazio ospite come indicato. Altrimenti: se il failover è attivo va allo spazio ospite; se l'ultimo controllo ha meno di 45 secondi ed era positivo va al principale; altrimenti chiama la funzione di salute del principale (timeout 4 secondi): positiva → registra stato sano e va al principale; negativa → attiva il failover con il motivo e va allo spazio ospite. Qualsiasi errore interno porta al principale.
+- **status**: riporta modalità (override o automatica), destinazione corrente e stato.
+- **reset** (POST): azzera lo stato di failover. Protetto dalla variabile `ROUTER_ADMIN_PASSWORD` (503 se non configurata, 401 se la password è errata).
+- Il failover, una volta attivato, resta tale finché qualcuno non lo azzera con reset: il ritorno al sito principale non è automatico.
+
+### Osservazioni emerse dalla verifica
+
+- `classify` accetta messaggi costruiti dal client senza validarli; l'unico freno è il rate limit per IP.
+- `subscriber-access` emette codici senza verificare alcun pagamento, perché l'abbonamento è ancora simulato.
+- Il rate limit per IP si basa su un'intestazione e su uno store con scrittura a ogni richiesta; non è atomico (richieste simultanee possono sorpassare il massimo).
+- Il codice partner, il codice invito e il codice abbonato sono le uniche credenziali delle rispettive funzioni: la sicurezza dipende dalla loro non indovinabilità e dal rate limit.
+
+### Regola di instradamento del sito
+
+Il file `dist/_redirects` contiene una sola regola: ogni percorso non trovato viene servito con la pagina principale `index.html` e stato 200 (comportamento da applicazione a pagina singola, senza reindirizzamento visibile).
