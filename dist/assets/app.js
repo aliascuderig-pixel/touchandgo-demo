@@ -5125,31 +5125,26 @@ function PriceBreakdown(b, opts = {}) {
   const box = el("div", "pb");
   const row = (lbl, sub, val, cls) =>
     `<div class="pb-row ${cls || ""}"><div class="pb-lbl"><span>${lbl}</span>${sub ? `<small>${sub}</small>` : ""}</div><b>${val}</b></div>`;
-  let rows = row(
-    tx("Spedizione", "Shipping"),
-    escapeHtml(`${tx("verso", "to")} ${destinationDisplayName(dest) || dest}${kg ? " · " + kg : ""}`),
-    euro(b.shipping)
-  );
+  // Una sola riga «Tariffa di spedizione»: piena per chi non è abbonato,
+  // scontata (derivata dalla piena) per chi è abbonato o ha il codice invito.
+  const where = escapeHtml(`${tx("verso", "to")} ${destinationDisplayName(dest) || dest}${kg ? " · " + kg : ""}`);
+  const fullRate = Math.round((b.shipping + b.feeFull) * 100) / 100;
+  const offPct = fullRate > 0 ? Math.round((1 - b.shipping / fullRate) * 100) : 0;
+  let rows;
   if (b.kind === "full") {
-    rows += row(
-      tx("Sovrapprezzo non abbonato", "Non-subscriber surcharge"),
-      tx(`+${b.feePct}% sulla spedizione, perché non hai un abbonamento`, `+${b.feePct}% on shipping, because you have no subscription`),
-      euro(b.fee),
-      "surcharge"
+    rows = row(
+      tx("Tariffa di spedizione · senza abbonamento", "Shipping rate · no subscription"),
+      `${where}<br>${tx(`Tariffa piena. Con un abbonamento la stessa spedizione costa ${euro(b.shipping)} (−${offPct}%).`, `Full rate. With a subscription the same shipment costs ${euro(b.shipping)} (−${offPct}%).`)}`,
+      euro(fullRate)
     );
-  } else if (b.kind === "breakeven") {
-    rows += row(
-      tx("Sovrapprezzo non abbonato", "Non-subscriber surcharge"),
-      tx("annullato (codice invito / prima spedizione)", "waived (invite code / first shipment)"),
-      `<s>${euro(b.feeFull)}</s> ${euro(0)}`,
-      "waived"
-    );
-  } else if (!b.subscription) {
-    rows += row(
-      tx("Commissione Touch&amp;Go", "Touch&amp;Go fee"),
-      tx("nessuna: sei abbonato", "none: you are subscribed"),
-      euro(0),
-      "waived"
+  } else {
+    const why = b.kind === "breakeven"
+      ? tx("codice invito / prima spedizione", "invite code / first shipment")
+      : tx("tariffa abbonati", "subscriber rate");
+    rows = row(
+      tx("Tariffa di spedizione · scontata", "Shipping rate · discounted"),
+      `${where}<br>${tx(`${why}: −${offPct}% rispetto alla tariffa piena di ${euro(fullRate)}`, `${why}: −${offPct}% vs. the full rate of ${euro(fullRate)}`)}`,
+      `<s>${euro(fullRate)}</s> ${euro(b.shipping)}`
     );
   }
   if (b.subscription) {
@@ -5184,12 +5179,12 @@ function PriceExplain(r, q) {
         `Rate for the destination zone, based on the <i>billable weight</i>: the greater of actual and volumetric weight. Here: ${q.billableKg} kg.`
       )}</p>
        <p><b>${tx("Abbonato", "Subscribed")}.</b> ${tx(
-         `Paghi l'abbonamento una sola volta (${plans}) e poi, per ogni spedizione fino alla scadenza, solo la tariffa di spedizione: nessuna commissione.`,
+         `Paghi l'abbonamento una sola volta (${plans}) e poi, per ogni spedizione fino alla scadenza, solo la tariffa scontata abbonati: nessuna commissione.`,
          `You pay the subscription once (${plans}) and then, for every shipment until it expires, only the shipping rate: no fee.`
        )}</p>
        <p><b>${tx("Non abbonato", "Not subscribed")}.</b> ${tx(
-         `Paghi la spedizione più un sovrapprezzo (qui +${q.surchargePct}%, €${q.surcharge.toFixed(2)}). La percentuale è calcolata in modo che, senza abbonamento, tu spenda sempre più che abbonandoti (spedizione + abbonamento trimestrale). Con un codice invito valido (una volta) il sovrapprezzo non c'è.`,
-         `You pay shipping plus a surcharge (here +${q.surchargePct}%, €${q.surcharge.toFixed(2)}). The percentage is set so that without a subscription you always spend more than by subscribing. With a valid invite code (once) there is no surcharge.`
+         `Paghi la tariffa piena (qui €${(q.shipping + q.surcharge).toFixed(2)}, cioè la tariffa abbonati +${q.surchargePct}%). La tariffa piena è calcolata in modo che, senza abbonamento, tu spenda sempre più che abbonandoti (tariffa abbonati + abbonamento trimestrale). Con un codice invito valido (una volta) paghi la tariffa scontata.`,
+         `You pay the full rate (here €${(q.shipping + q.surcharge).toFixed(2)}, i.e. the subscriber rate +${q.surchargePct}%). The full rate is set so that without a subscription you always spend more than by subscribing. With a valid invite code (once) you pay the discounted rate.`
        )}</p>
        <p><b>${tx("Più acquisti", "Several purchases")}.</b> ${tx(
          "Questa è la stima per un solo oggetto. A fine soggiorno gli acquisti verso la stessa destinazione viaggiano insieme: la spedizione (e l'eventuale sovrapprezzo) si ricalcolano una sola volta sul peso totale.",
@@ -7058,8 +7053,8 @@ function ConcludeScreen() {
           "div",
           "pay-why",
           tx(
-            `Perché non ${euro(est)}? Le stime singole (${items.map((it) => euro(it.price)).join(" + ")} = ${euro(est)}) contavano un trasporto e un sovrapprezzo per ogni oggetto. Spedendo tutto insieme la spedizione (e l'eventuale sovrapprezzo) è calcolata una volta sul peso totale.`,
-            `Why not ${euro(est)}? The single estimates counted one shipment and one surcharge per item. Shipping everything together, shipping (and any surcharge) is calculated once on the total weight.`
+            `Perché non ${euro(est)}? Le stime singole (${items.map((it) => euro(it.price)).join(" + ")} = ${euro(est)}) contavano una tariffa di spedizione per ogni oggetto. Spedendo tutto insieme la tariffa è calcolata una volta sul peso totale.`,
+            `Why not ${euro(est)}? The single estimates counted one shipping rate per item. Shipping everything together, the rate is calculated once on the total weight.`
           )
         )
       );

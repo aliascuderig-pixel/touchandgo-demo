@@ -1877,7 +1877,7 @@ Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (c
 
 **Modello (corregge la versione con commissione per spedizione):**
 - **Abbonato:** paga l'abbonamento UNA SOLA VOLTA (scelto dal turista: trimestrale €29, semestrale €49, annuale €79; il partner non sceglie la durata). Poi paga solo la **tariffa di spedizione**, nessuna commissione.
-- **Non abbonato:** paga spedizione + **sovrapprezzo percentuale** calcolato in modo che non abbonarsi non convenga mai.
+- **Non abbonato:** paga la **tariffa piena** = tariffa abbonati + percentuale calcolata in modo che non abbonarsi non convenga mai. In app NON compare come riga di sovrapprezzo: c'è una sola riga «Tariffa di spedizione» (piena per il non abbonato; scontata, con la piena barrata e il −%, per abbonato/codice invito).
 - **Prima spedizione / codice invito:** nessun sovrapprezzo (tabella con voce «azzerato»).
 
 **Algoritmo del sovrapprezzo** (`nonSubscriberSurcharge(spedizione)`): `pct = min(300, max(40, ceil(100 × 29 × 1,1 / spedizione)))`. Il sovrapprezzo in € vale quindi almeno il prezzo del trimestrale + 10%: il non abbonato paga sempre più di chi si abbona (spedizione + €29). Costanti provvisorie: `SURCHARGE_MARGIN` 0,1, `SURCHARGE_MIN_PCT` 40, `SURCHARGE_MAX_PCT` 300, `SUBSCRIPTION_PLANS`, `SUBSCRIBED_FEE` 0. Sulle spedizioni molto economiche il tetto 300% può non bastare: in quel caso l'abbonamento conviene comunque.
