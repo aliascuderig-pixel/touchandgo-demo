@@ -1607,6 +1607,16 @@ Il turista può spedire i propri bagagli **andata e ritorno** direttamente dall'
 - **Test**: `tourist-luggage.test.js` (5). Suite 577/577.
 - **Da verificare**: peso/misure dei bagagli sono dichiarati dal turista (non stimati): il corriere reale potrà richiedere una verifica.
 
+## Slogan «Compreresti Touch&Go?» (17 ottobre 2026)
+
+**Testo ufficiale** (da Giuseppe, rifinito il 17/10/2026). Va riusato com'è, senza numeri o confronti non verificati:
+- Domanda e risposta: **«Compreresti Touch&Go? Assolutamente sì.»**
+- *Se spedisci già:* perché riunisce in un solo strumento, e fa funzionare bene, ciò che oggi il mercato offre frammentato.
+- *Se non credevi si potesse comprare in viaggio:* perché ora hai uno strumento efficace, semplice e a portata di mano.
+- Firma breve: **«Un solo strumento. A portata di mano.»**
+
+**Dove compare.** Nella **guida all'utilizzo** (`dist/site/guida.html`, riquadro `#slogan` nella copertina, sotto l'introduzione) e nella **pagina di iscrizione** (`dist/site/iscrizione.html`, riquadro sotto il titolo). Nell'**E-shop** compare in «Come funziona» (manuale di `touchandgo-eshop`). **Non** è nell'app turista: la copertina dell'app ha già il suo testo e l'app deve restare pulita. Il pitch deck (kit riservato del CRM) e il Playbook (Drive) non sono toccati da questa modifica: vanno allineati dall'aggiornamento settimanale.
+
 ## Specifica dettagliata del comportamento (17 ottobre 2026)
 
 Questa sezione descrive il comportamento reale del backend e delle regole di business al livello di dettaglio necessario per riscrivere il software da zero. Dove un valore è un dato di contenuto (testi dei prompt, tariffe delle compagnie aeree, regole per Paese) va ricostituito o ceduto separatamente, non dedotto da qui. Nessun segreto è riportato: solo i nomi delle variabili d'ambiente.
