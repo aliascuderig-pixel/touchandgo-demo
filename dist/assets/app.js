@@ -5273,8 +5273,12 @@ function appendPricing(wrap, r, q) {
         "div",
         "price-option-note",
         tx(
-          `Dalla prossima spedizione paghi solo la spedizione. Rispetto a «senza abbonamento» risparmi già ${euro(fullB.total - subB.total)} su questa.`,
-          `From the next shipment you pay shipping only. Compared with «without a subscription» you already save ${euro(fullB.total - subB.total)} on this one.`
+          fullB.total - subB.total >= 0
+            ? `Dalla prossima spedizione paghi solo la spedizione. Rispetto a «senza abbonamento» risparmi già ${euro(fullB.total - subB.total)} su questa.`
+            : `Dalla prossima spedizione paghi solo la spedizione, senza sovrapprezzo: l'abbonamento si ripaga con le spedizioni successive.`,
+          fullB.total - subB.total >= 0
+            ? `From the next shipment you pay shipping only. Compared with «without a subscription» you already save ${euro(fullB.total - subB.total)} on this one.`
+            : `From the next shipment you pay shipping only, with no surcharge: the subscription pays for itself on later shipments.`
         )
       )
     );
