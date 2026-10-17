@@ -1617,6 +1617,16 @@ Il turista può spedire i propri bagagli **andata e ritorno** direttamente dall'
 
 **Dove compare.** Nella **guida all'utilizzo** (`dist/site/guida.html`, riquadro `#slogan` nella copertina, sotto l'introduzione) e nella **pagina di iscrizione** (`dist/site/iscrizione.html`, riquadro sotto il titolo). Nell'**E-shop** compare in «Come funziona» (manuale di `touchandgo-eshop`). **Non** è nell'app turista: la copertina dell'app ha già il suo testo e l'app deve restare pulita. Il pitch deck (kit riservato del CRM) e il Playbook (Drive) non sono toccati da questa modifica: vanno allineati dall'aggiornamento settimanale.
 
+## «Mettilo in vendita» — l'Usato dell'E-shop (17 ottobre 2026)
+
+**Cosa fa.** In «I tuoi acquisti», dopo che il turista ha confermato «Sì, l'ho ricevuto», sotto «✓ Consegna confermata» compare il pulsante **«🏷️ Mettilo in vendita»** (non per i bagagli). Un clic apre un campo con l'email già compilata (se nota) e il pulsante «Conferma e metti in vendita»: l'acquisto, con foto e descrizione (nome, categoria, materiale, misure, peso), finisce nell'**Usato dell'E-shop** (sito `touchandgo-eshop`, riservato ad abbonati e clienti con un acquisto). Non serve altro. Il manuale dell'E-shop, sezione «Sezione Usato e pagamenti», descrive il resto (ordini, pagamento di prova, spedizione).
+
+**Cosa vede il turista dopo il clic** (banner nello stesso punto): l'articolo è in vendita con prezzo di partenza = valore dichiarato (modificabile nell'E-shop); la **commissione Touch&Go** e, se attiva, la **promozione «ora gratuita per tutti»**; la frase **«la spedizione di questo articolo è riservata a Touch&Go»**; il codice spedizione e il link «Vai all'Usato →» (per entrare serve il codice spedizione + la sua email). Se l'acquisto non ha valore dichiarato l'annuncio resta bozza e il banner chiede di indicare il prezzo nell'E-shop.
+
+**Verifica di proprietà (passaggio in più).** L'app turista non ha un vero login: la function `list-used-item.js` confronta l'email indicata con quella del record dell'acquisto. Email diversa e acquisto inesistente danno **lo stesso errore** (404); un acquisto senza email sul record non si può mettere in vendita da qui (409, «contatta l'assistenza»). Si vende solo un oggetto con consegna confermata (`deliveryConfirmedAt` già sul server: prima del clic l'app risincronizza l'acquisto) e non un bagaglio. Max 10 richieste/ora per IP.
+
+**File.** `netlify/functions/list-used-item.js` (solo POST; scrive SOLO `eshop-used` e `eshop-used-index`, **mai** `purchases`), `netlify/lib/used-listing.js` (copia **identica** di quella di `touchandgo-eshop` e `touchandgo-gestionale`: va tenuta uguale), `UsedSaleBox()` in `dist/assets/app.js` (`syncPurchaseToCRM` ora restituisce la promise), stili `.used-sale-*` in `style.css`. Test: `netlify/functions/__tests__/list-used-item.test.js` (8).
+
 ## Specifica dettagliata del comportamento (17 ottobre 2026)
 
 Questa sezione descrive il comportamento reale del backend e delle regole di business al livello di dettaglio necessario per riscrivere il software da zero. Dove un valore è un dato di contenuto (testi dei prompt, tariffe delle compagnie aeree, regole per Paese) va ricostituito o ceduto separatamente, non dedotto da qui. Nessun segreto è riportato: solo i nomi delle variabili d'ambiente.
@@ -1835,3 +1845,10 @@ Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi 
 - Nessuna funzione esistente cambia; la lingua IT/EN resta nell'intestazione. Testi in italiano e inglese. Test: `dist/assets/__tests__/pinned-functions.test.js`.
 
 **Estetica.** Pannello più largo di prima (minimo 270 px), fondo nero come il resto del menu, righe alte almeno 44 px con la funzione a sinistra e il pulsante 📌 quadrato da 44 px a destra; 📌 spento: bordo sottile e icona attenuata; acceso: fondo oro pieno. Intestazione di sezione «VAI A» in maiuscolo piccolo e spaziato, colore grigio chiaro. La barra in basso è larga come l'app (massimo 520 px), fondo nero con bordo superiore sottile, pulsanti con angoli 12 px alti 48 px: icona grande sopra, nome in grassetto 11 px sotto, bordo sottile; rispetta l'area sicura dei telefoni; lo spazio in fondo alla pagina aumenta di 76 px così nulla resta coperto.
+
+## Controlli automatici e aggiornamenti di sicurezza (GitHub)
+
+**Funzione.** Due file nuovi, nessun cambiamento al software:
+- `.github/workflows/test.yml` — a ogni pull request e a ogni modifica di `main` GitHub esegue `npm ci` e `npm test` (Node 22) su un computer pulito; se un test fallisce la pull request mostra la X rossa. Esegue anche `npm audit --omit=dev --audit-level=high` come **solo avviso**: segnala dipendenze con vulnerabilità gravi ma non blocca nulla. Non usa segreti. Costo: minuti di calcolo del piano GitHub (qualche minuto per esecuzione).
+- `.github/dependabot.yml` — ogni lunedì Dependabot controlla le dipendenze npm e apre al massimo 5 pull request raggruppate per aggiornamenti minori e di sicurezza; una volta al mese controlla le azioni di GitHub. Non unisce mai nulla da solo: serve il «mergia».
+Limite noto: le funzioni Netlify non vengono eseguite online, i test girano sul codice.
