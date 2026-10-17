@@ -69,11 +69,11 @@ async function checkRateLimit(key) {
 
 // Specchio del modello di prezzo in dist/assets/app.js (17/10/2026): abbonamenti
 // una tantum + sola spedizione; non abbonati con sovrapprezzo percentuale.
-const { SUBSCRIPTION_PLANS, SURCHARGE_MIN_PCT, SURCHARGE_MAX_PCT } = require("../lib/pricing");
+const { SUBSCRIPTION_PLANS } = require("../lib/pricing");
 const PLANS_TEXT = SUBSCRIPTION_PLANS.map((p) => `${p.label.toLowerCase()} €${p.price} (${p.months} mesi)`).join(", ");
 
 // Specchio di SHIPPING_RATES in dist/assets/app.js — prezzi già
-// comprensivi del margine Touch&Go del 25% (SHIPPING_MARGIN), come
+// comprensivi del margine Touch&Go del 30% (SHIPPING_MARGIN), come
 // mostrato al turista in ogni preventivo. Qui espressi come range
 // arrotondati per una risposta discorsiva, non come tabella a fasce.
 const QUESTION_MODE_FACTS = `Il servizio Touch&Go permette a un turista in Italia di fotografare un acquisto in negozio, farlo classificare da un'AI (dogana, peso, dimensioni), lasciarlo in negozio con un QR e riceverlo spedito a casa — con esenzione IVA export gestita in automatico.
@@ -81,7 +81,7 @@ const QUESTION_MODE_FACTS = `Il servizio Touch&Go permette a un turista in Itali
 MERCI VIETATE: Touch&Go non spedisce armi, droghe, merci contraffatte, materiali pericolosi o infiammabili, né ciò che il Paese di destinazione non ammette (es. carne e latticini verso USA o Canada). Se il turista chiede di spedire qualcosa di questo tipo, spiega che non è possibile; se è un dubbio, invitalo a verificare prima di acquistare. Non inventare liste di regole per Paese.
 
 FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
-- Abbonamento Touch&Go (solo per il turista, UNA TANTUM, a scelta): ${PLANS_TEXT}. Chi è abbonato paga, per ogni spedizione fino alla scadenza, SOLO la tariffa di spedizione: nessuna commissione. Chi NON è abbonato paga la spedizione con un sovrapprezzo percentuale (tra il ${SURCHARGE_MIN_PCT}% e il ${SURCHARGE_MAX_PCT}% della spedizione, più alto quando la spedizione costa poco) calcolato in modo che senza abbonamento costi sempre più che abbonandosi. Non esiste nessuna fee fissa per spedizione.
+- Abbonamento Touch&Go (solo per il turista, UNA TANTUM, a scelta): ${PLANS_TEXT}. Chi è abbonato paga, per ogni spedizione fino alla scadenza, una tariffa SCONTATA in proporzione alla durata dell'abbonamento: trimestrale -7,5%, semestrale -15%, annuale -30% rispetto alla tariffa piena. Chi NON è abbonato paga la tariffa piena (circa +43% rispetto alla tariffa dell'annuale). Nessuna tariffa è mai sotto il costo del corriere più il 30%. Non esiste nessuna fee fissa per spedizione.
 - Costo del corriere (già comprensivo del margine Touch&Go del 25%, nessun costo nascosto aggiuntivo), a fasce di peso/volume, tre zone:
   · Italia (spedizione domestica): da €11,25 (fino a 1kg) a €41,25 (fino a 30kg), +€1,38/kg oltre; consegna in 24–48 ore.
   · Unione Europea, Regno Unito, Svizzera (transfrontaliero): da €18,75 a €68,75, +€2,75/kg oltre; consegna in 2–4 giorni lavorativi.

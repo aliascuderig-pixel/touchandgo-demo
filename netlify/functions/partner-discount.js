@@ -27,12 +27,15 @@ const COMMISSION_RATE = 0.1;
 // abbonato: il client manda la spedizione e il server ricalcola il sovrapprezzo
 // con la stessa formula (mai fidandosi di una fee arbitraria); l'abbonato (fee 0)
 // non ha nulla su cui applicare lo sconto.
-const { nonSubscriberSurcharge } = require("../lib/pricing");
+const { nonSubscriberSurcharge, subscriberExtra, SUBSCRIPTION_PLANS } = require("../lib/pricing");
 const MAX_SHIPPING = 2000;
 function feeIsValid(fee, shipping) {
   if (typeof fee !== "number" || typeof shipping !== "number" || !isFinite(fee) || !isFinite(shipping)) return false;
   if (shipping <= 0 || shipping > MAX_SHIPPING || fee <= 0) return false;
-  return Math.abs(nonSubscriberSurcharge(shipping).amount - fee) <= 0.01;
+  // La «fee» scontabile è la parte di tariffa sopra il pavimento: quella del non
+  // abbonato oppure quella di uno dei tre abbonamenti (mai un valore inventato).
+  const valid = [nonSubscriberSurcharge(shipping).amount, ...SUBSCRIPTION_PLANS.map((p) => subscriberExtra(shipping, p.id).amount)];
+  return valid.some((v) => v > 0 && Math.abs(v - fee) <= 0.01);
 }
 
 function getClientIp(event) {

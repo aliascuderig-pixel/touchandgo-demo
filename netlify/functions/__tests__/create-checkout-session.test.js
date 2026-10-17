@@ -123,15 +123,15 @@ test("il totale (unit_amount) della sessione Checkout corrisponde esattamente al
   const getLastCall = mockStripeCreateFetch();
 
   // Italia (zona "domestico"), 1kg reale, dims piccole (volumetrico
-  // trascurabile): bracket <=1kg = 9€, margine 25% -> 11.25€ shipping,
-  // + fee piena 39€ = 50.25€ -> 4320 centesimi.
+  // trascurabile): bracket <=1kg = 9€, margine 30% -> 11.7€ shipping,
+  // + tariffa piena +43% (5.01€) = 16.71€ -> 1671 centesimi.
   const res = await mod.handler(makeEvent({ items: [item({ weightKg: 1 })] }));
   assert.equal(res.statusCode, 200);
 
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4320");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "1671");
   const data = JSON.parse(res.body);
-  assert.equal(data.amountTotalCents, 4320);
+  assert.equal(data.amountTotalCents, 1671);
 });
 
 test("il totale corrisponde esattamente al prezzo consolidato per un GRUPPO di più oggetti verso la stessa destinazione (una sola fee)", async () => {
@@ -153,7 +153,7 @@ test("il totale corrisponde esattamente al prezzo consolidato per un GRUPPO di p
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4953");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "2600");
   assert.equal(call.body.get("line_items[1]"), null, "un solo line item per il gruppo consolidato, non uno per oggetto");
 });
 
@@ -187,7 +187,7 @@ test("multicollo: vince il peso REALE (nessun volume dichiarato) — 3kg + 4kg =
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "5445");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "3343");
 });
 
 test("multicollo: vince il peso VOLUMETRICO (poco peso reale, molto volume) — 12.8kg + 5.4kg = 18.2kg fatturabili -> 70.25€", async () => {
@@ -209,7 +209,7 @@ test("multicollo: vince il peso VOLUMETRICO (poco peso reale, molto volume) — 
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "6344");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4643");
 });
 
 test("multicollo: peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al limite esatto di una fascia) — mai la somma (10kg), mai un valore diverso da 5 -> 56.50€", async () => {
@@ -234,7 +234,7 @@ test("multicollo: peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al li
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4953");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "2600");
 });
 
 test("due destinazioni diverse generano DUE line item Stripe distinti, la cui somma è il totale complessivo", async () => {
@@ -273,19 +273,19 @@ test("un 'total' o 'amount' mandato dal client viene sempre ignorato: il totale 
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  // Lo stesso identico totale del primo test (4320), MAI 1.
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4320");
+  // Lo stesso identico totale del primo test (1671), MAI 1.
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "1671");
 });
 
 test("uno sconto codice partner viene sottratto dalla fee, mai dal costo di spedizione", async () => {
   const mod = freshModule();
   const getLastCall = mockStripeCreateFetch();
 
-  // Stesso caso del primo test (4320 centesimi) meno 10€ di sconto = 3320.
-  const res = await mod.handler(makeEvent({ items: [item({ weightKg: 1, partnerDiscountAmount: 10 })] }));
+  // Stesso caso del primo test (1671 centesimi) meno lo sconto partner (10% della parte sopra il pavimento: 0.50€) = 1621.
+  const res = await mod.handler(makeEvent({ items: [item({ weightKg: 1, partnerDiscountAmount: 0.5 })] }));
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "3320");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "1621");
 });
 
 // ---------------------------------------------------------------------

@@ -89,10 +89,10 @@ function formatDims(l, w, h) {
 //  - ABBONATO: paga UNA TANTUM l'abbonamento (trimestrale, semestrale o
 //    annuale, solo il turista sceglie la durata) e poi, per ogni
 //    spedizione, SOLO la tariffa di spedizione: nessuna commissione.
-//  - NON ABBONATO: paga la spedizione con un SOVRAPPREZZO percentuale,
-//    calcolato in modo che, senza abbonamento, costi sempre più che
-//    abbonandosi (vedi nonSubscriberSurcharge()).
-//  - Codice invito / prima spedizione: nessun sovrapprezzo (una volta).
+//  - TARIFFA: pavimento = costo corriere + 30% (mai sotto). Il non abbonato
+//    paga la tariffa piena (pavimento +43%); l'abbonato una tariffa scontata
+//    in proporzione alla durata (7,5% / 15% / 30%): l'annuale = pavimento.
+//  - Codice invito / prima spedizione: tariffa al pavimento (una volta).
 // Stessi valori in netlify/lib/pricing.js (e nella copia di internal).
 // ---------------------------------------------------------------------
 const SUBSCRIPTION_PLANS = [
@@ -101,26 +101,46 @@ const SUBSCRIPTION_PLANS = [
   { id: "annuale", label: "Annuale", months: 12, price: 79 },
 ];
 const SUBSCRIBED_FEE = 0;
-// Il sovrapprezzo deve superare il costo dell'abbonamento più economico di
-// questo margine: così la spedizione da non abbonato costa SEMPRE più di
-// «spedizione + abbonamento trimestrale».
-const SURCHARGE_MARGIN = 0.1;
-const SURCHARGE_MIN_PCT = 40; // anche sulle spedizioni care: mai meno del 40%
-const SURCHARGE_MAX_PCT = 300; // tetto di sicurezza
+// Sconto massimo sulla tariffa PIENA (non abbonato), concesso all'abbonamento
+// più lungo; gli altri hanno uno sconto proporzionale alla durata:
+//   sconto = SUBSCRIPTION_MAX_DISCOUNT × mesi / 12   (trim. 7,5% · sem. 15% · ann. 30%)
+// La tariffa dell'abbonamento annuale è esattamente il PAVIMENTO
+// (costo corriere + SHIPPING_MARGIN 30%): nessuna tariffa scende mai sotto.
+// La tariffa piena = pavimento / (1 − sconto massimo) = pavimento + 43%.
+const SUBSCRIPTION_MAX_DISCOUNT = 0.3;
+const DEFAULT_RATE_PLAN = "trimestrale";
 
 function subscriptionPlanById(id) {
   return SUBSCRIPTION_PLANS.find((p) => p.id === id) || null;
 }
-
-// Sovrapprezzo % per chi NON è abbonato, in funzione del costo di spedizione:
-// la percentuale più bassa (intera) per cui
-//   spedizione + sovrapprezzo >= spedizione + abbonamento_minimo × (1 + margine)
-// limitata tra SURCHARGE_MIN_PCT e SURCHARGE_MAX_PCT.
-function nonSubscriberSurcharge(shipping) {
-  const ship = Math.max(0.01, Number(shipping) || 0);
-  const target = SUBSCRIPTION_PLANS[0].price * (1 + SURCHARGE_MARGIN);
-  const pct = Math.min(SURCHARGE_MAX_PCT, Math.max(SURCHARGE_MIN_PCT, Math.ceil((100 * target) / ship)));
-  return { pct, amount: Math.round(ship * pct) / 100 };
+const _cents = (n) => Math.round(n * 100) / 100;
+function planDiscountFraction(planId) {
+  const p = subscriptionPlanById(planId) || subscriptionPlanById(DEFAULT_RATE_PLAN);
+  return (SUBSCRIPTION_MAX_DISCOUNT * p.months) / 12;
+}
+// `floor` = tariffa di base (costo corriere + 30%, il pavimento). Restituisce
+// quanto si aggiunge al pavimento per chi NON è abbonato.
+function nonSubscriberSurcharge(floor) {
+  const f = Math.max(0.01, Number(floor) || 0);
+  const k = SUBSCRIPTION_MAX_DISCOUNT / (1 - SUBSCRIPTION_MAX_DISCOUNT);
+  return { pct: Math.round(k * 100), amount: _cents(f * k) };
+}
+// Quanto si aggiunge al pavimento per un abbonato con quel piano
+// (0 per l'annuale: paga esattamente il pavimento).
+function subscriberExtra(floor, planId) {
+  const f = Math.max(0.01, Number(floor) || 0);
+  const ratio = (1 - planDiscountFraction(planId)) / (1 - SUBSCRIPTION_MAX_DISCOUNT);
+  return { pct: Math.round((ratio - 1) * 1000) / 10, amount: _cents(f * (ratio - 1)) };
+}
+// Piano che determina la tariffa di un gruppo di oggetti.
+function ratePlanForItems(items) {
+  for (const it of items) {
+    if (it.pricingTier === "abbonato" && subscriptionPlanById(it.subscriptionPlanId)) return it.subscriptionPlanId;
+  }
+  for (const it of items) {
+    if (subscriptionPlanById(it.subscriptionPurchase)) return it.subscriptionPurchase;
+  }
+  return DEFAULT_RATE_PLAN;
 }
 
 const DESTINATIONS = [
@@ -192,7 +212,7 @@ const SHIPPING_RATES = {
 // una sola volta, dentro shippingCost() — ogni preventivo, riepilogo e
 // salvataggio a save-purchase.js legge sempre e solo il valore già
 // comprensivo di margine, mai il grezzo.
-const SHIPPING_MARGIN = 0.25;
+const SHIPPING_MARGIN = 0.3;
 
 // I corrieri espresso reali fatturano sul maggiore tra peso reale e peso
 // volumetrico (L×W×H in cm / 5000) — un pacco grande ma leggero occupa
@@ -240,7 +260,13 @@ function priceQuotes(weightKg, destinationName, dims) {
     surcharge: sur.amount,
     surchargePct: sur.pct,
     full: round(shipping + sur.amount),
-    subscribed: round(shipping + SUBSCRIBED_FEE),
+    plans: Object.fromEntries(
+      SUBSCRIPTION_PLANS.map((pl) => {
+        const ex = subscriberExtra(shipping, pl.id);
+        return [pl.id, { extra: ex.amount, extraPct: ex.pct, rate: round(shipping + ex.amount) }];
+      })
+    ),
+    subscribed: round(shipping + subscriberExtra(shipping, state.subscriptionPlan || DEFAULT_RATE_PLAN).amount),
     breakeven: round(shipping),
   };
 }
@@ -366,7 +392,7 @@ function consolidatedGroupPrice(items) {
   // ora); altrimenti conta l'abbonamento se anche un solo oggetto lo è.
   const onBreakeven = items.some((it) => it.pricingTier === "breakeven");
   const isSubscribed = items.some((it) => it.pricingTier === "abbonato");
-  const fee = onBreakeven || isSubscribed ? 0 : nonSubscriberSurcharge(shipping).amount;
+  const fee = onBreakeven ? 0 : isSubscribed ? subscriberExtra(shipping, ratePlanForItems(items)).amount : nonSubscriberSurcharge(shipping).amount;
 
   // Eventuali sconti codice partner già applicati ai singoli oggetti in
   // ResultScreen restano validi e si sommano (nella pratica quasi sempre un
@@ -5097,7 +5123,9 @@ function withSurcharge(q) {
 // opts.subscriptionPlan: abbonamento una tantum che questo oggetto porta con sé.
 function planBreakdown(q, plan, discount, opts = {}) {
   q = withSurcharge(q);
-  const fee = plan === "full" ? q.surcharge : 0;
+  const ratePlan = opts.ratePlan || opts.subscriptionPlan || state.subscriptionPlan || DEFAULT_RATE_PLAN;
+  const ex = plan === "subscribed" ? subscriberExtra(q.shipping, ratePlan) : { amount: 0, pct: 0 };
+  const fee = plan === "full" ? q.surcharge : ex.amount;
   const sub = opts.subscriptionPlan ? subscriptionPlanById(opts.subscriptionPlan) : null;
   const disc = Math.max(0, Number(discount) || 0);
   const total = Math.max(0, Math.round((q.shipping + fee + (sub ? sub.price : 0) - disc) * 100) / 100);
@@ -5105,8 +5133,9 @@ function planBreakdown(q, plan, discount, opts = {}) {
     kind: plan,
     shipping: q.shipping,
     fee,
-    feePct: plan === "full" ? q.surchargePct : 0,
+    feePct: plan === "full" ? q.surchargePct : ex.pct,
     feeFull: q.surcharge,
+    ratePlan: plan === "subscribed" ? ratePlan : null,
     subscription: sub,
     discount: disc,
     total,
@@ -5129,22 +5158,26 @@ function PriceBreakdown(b, opts = {}) {
   // scontata (derivata dalla piena) per chi è abbonato o ha il codice invito.
   const where = escapeHtml(`${tx("verso", "to")} ${destinationDisplayName(dest) || dest}${kg ? " · " + kg : ""}`);
   const fullRate = Math.round((b.shipping + b.feeFull) * 100) / 100;
-  const offPct = fullRate > 0 ? Math.round((1 - b.shipping / fullRate) * 100) : 0;
+  const paidRate = Math.round((b.shipping + b.fee) * 100) / 100;
+  const offPct = fullRate > 0 ? Math.round((1 - paidRate / fullRate) * 1000) / 10 : 0;
+  const pctTxt = String(offPct).replace(".", ",");
   let rows;
   if (b.kind === "full") {
     rows = row(
       tx("Tariffa di spedizione · senza abbonamento", "Shipping rate · no subscription"),
-      `${where}<br>${tx(`Tariffa piena. Con un abbonamento la stessa spedizione costa ${euro(b.shipping)} (−${offPct}%).`, `Full rate. With a subscription the same shipment costs ${euro(b.shipping)} (−${offPct}%).`)}`,
+      `${where}<br>${tx("Tariffa piena. Con un abbonamento la stessa spedizione costa meno: fino a −30% con l'annuale.", "Full rate. With a subscription the same shipment costs less: up to −30% with the annual plan.")}`,
       euro(fullRate)
     );
   } else {
-    const why = b.kind === "breakeven"
-      ? tx("codice invito / prima spedizione", "invite code / first shipment")
-      : tx("tariffa abbonati", "subscriber rate");
+    const pl = b.ratePlan && subscriptionPlanById(b.ratePlan);
+    const why =
+      b.kind === "breakeven"
+        ? tx("codice invito / prima spedizione", "invite code / first shipment")
+        : tx(`tariffa abbonati${pl ? " " + pl.label.toLowerCase() : ""}`, `subscriber rate${pl ? " " + pl.label.toLowerCase() : ""}`);
     rows = row(
       tx("Tariffa di spedizione · scontata", "Shipping rate · discounted"),
-      `${where}<br>${tx(`${why}: −${offPct}% rispetto alla tariffa piena di ${euro(fullRate)}`, `${why}: −${offPct}% vs. the full rate of ${euro(fullRate)}`)}`,
-      `<s>${euro(fullRate)}</s> ${euro(b.shipping)}`
+      `${where}<br>${tx(`${why}: −${pctTxt}% rispetto alla tariffa piena di ${euro(fullRate)}`, `${why}: −${pctTxt}% vs. the full rate of ${euro(fullRate)}`)}`,
+      offPct > 0 ? `<s>${euro(fullRate)}</s> ${euro(paidRate)}` : euro(paidRate)
     );
   }
   if (b.subscription) {
@@ -5179,16 +5212,16 @@ function PriceExplain(r, q) {
         `Rate for the destination zone, based on the <i>billable weight</i>: the greater of actual and volumetric weight. Here: ${q.billableKg} kg.`
       )}</p>
        <p><b>${tx("Abbonato", "Subscribed")}.</b> ${tx(
-         `Paghi l'abbonamento una sola volta (${plans}) e poi, per ogni spedizione fino alla scadenza, solo la tariffa scontata abbonati: nessuna commissione.`,
-         `You pay the subscription once (${plans}) and then, for every shipment until it expires, only the shipping rate: no fee.`
+         `Paghi l'abbonamento una sola volta (${plans}) e poi, per ogni spedizione fino alla scadenza, solo la tariffa scontata. Lo sconto cresce con la durata: trimestrale −7,5%, semestrale −15%, annuale −30% sulla tariffa piena. Nessuna tariffa scende mai sotto il costo del corriere più il 30%.`,
+         `You pay the subscription once (${plans}) and then, for every shipment until it expires, only the discounted rate. The discount grows with the length: quarterly −7.5%, six-month −15%, annual −30% off the full rate. No rate ever goes below the carrier cost plus 30%.`
        )}</p>
        <p><b>${tx("Non abbonato", "Not subscribed")}.</b> ${tx(
-         `Paghi la tariffa piena (qui €${(q.shipping + q.surcharge).toFixed(2)}, cioè la tariffa abbonati +${q.surchargePct}%). La tariffa piena è calcolata in modo che, senza abbonamento, tu spenda sempre più che abbonandoti (tariffa abbonati + abbonamento trimestrale). Con un codice invito valido (una volta) paghi la tariffa scontata.`,
-         `You pay the full rate (here €${(q.shipping + q.surcharge).toFixed(2)}, i.e. the subscriber rate +${q.surchargePct}%). The full rate is set so that without a subscription you always spend more than by subscribing. With a valid invite code (once) you pay the discounted rate.`
+         `Paghi la tariffa piena (qui €${(q.shipping + q.surcharge).toFixed(2)}). Con un codice invito valido (una volta) paghi la tariffa scontata più bassa.`,
+         `You pay the full rate (here €${(q.shipping + q.surcharge).toFixed(2)}). With a valid invite code (once) you pay the lowest discounted rate.`
        )}</p>
        <p><b>${tx("Più acquisti", "Several purchases")}.</b> ${tx(
-         "Questa è la stima per un solo oggetto. A fine soggiorno gli acquisti verso la stessa destinazione viaggiano insieme: la spedizione (e l'eventuale sovrapprezzo) si ricalcolano una sola volta sul peso totale.",
-         "This is the estimate for one item. At the end of your stay, purchases to the same destination travel together: shipping (and any surcharge) is recalculated once on the total weight."
+         "Questa è la stima per un solo oggetto. A fine soggiorno gli acquisti verso la stessa destinazione viaggiano insieme: la tariffa di spedizione si ricalcola una sola volta sul peso totale.",
+         "This is the estimate for one item. At the end of your stay, purchases to the same destination travel together: the shipping rate is recalculated once on the total weight."
        )}</p>`
     )
   );
@@ -5252,7 +5285,7 @@ function appendPricing(wrap, r, q) {
       const chip = el("button", "plan-chip" + (state.subscriptionChoice === pl.id ? " on" : ""));
       chip.type = "button";
       chip.dataset.plan = pl.id;
-      chip.innerHTML = `<span>${pl.label}</span><b>€${pl.price}</b><small>${pl.months} ${tx("mesi", "months")}</small>`;
+      chip.innerHTML = `<span>${pl.label}</span><b>€${pl.price}</b><small>${pl.months} ${tx("mesi", "months")} · −${String(Math.round(planDiscountFraction(pl.id) * 1000) / 10).replace(".", ",")}%</small>`;
       chip.addEventListener("click", () => {
         state.subscriptionChoice = pl.id;
         render();
@@ -5263,17 +5296,19 @@ function appendPricing(wrap, r, q) {
     const planId = subscriptionPlanById(state.subscriptionChoice) ? state.subscriptionChoice : SUBSCRIPTION_PLANS[0].id;
     const subB = planBreakdown(q, "subscribed", 0, { subscriptionPlan: planId });
     optSub.appendChild(PriceBreakdown(subB));
+    const perShipment = Math.round((fullB.total - (subB.shipping + subB.fee)) * 100) / 100;
+    const repay = perShipment > 0 ? Math.ceil(subB.subscription.price / perShipment) : null;
     optSub.appendChild(
       el(
         "div",
         "price-option-note",
         tx(
-          fullB.total - subB.total >= 0
-            ? `Dalla prossima spedizione paghi solo la spedizione. Rispetto a «senza abbonamento» risparmi già ${euro(fullB.total - subB.total)} su questa.`
-            : `Dalla prossima spedizione paghi solo la spedizione, senza sovrapprezzo: l'abbonamento si ripaga con le spedizioni successive.`,
-          fullB.total - subB.total >= 0
-            ? `From the next shipment you pay shipping only. Compared with «without a subscription» you already save ${euro(fullB.total - subB.total)} on this one.`
-            : `From the next shipment you pay shipping only, with no surcharge: the subscription pays for itself on later shipments.`
+          perShipment > 0
+            ? `Con l'abbonamento ${subB.subscription.label.toLowerCase()} risparmi ${euro(perShipment)} su ogni spedizione come questa: l'abbonamento si ripaga dopo ${repay} ${repay === 1 ? "spedizione" : "spedizioni"}.`
+            : "Con questo abbonamento paghi la tariffa scontata su ogni spedizione fino alla scadenza.",
+          perShipment > 0
+            ? `With the ${subB.subscription.label.toLowerCase()} plan you save ${euro(perShipment)} on every shipment like this: it pays for itself after ${repay} ${repay === 1 ? "shipment" : "shipments"}.`
+            : "With this plan you pay the discounted rate on every shipment until it expires."
         )
       )
     );
@@ -7041,7 +7076,7 @@ function ConcludeScreen() {
         (() => {
           const kind = items.some((it) => it.pricingTier === "breakeven") ? "breakeven" : items.some((it) => it.pricingTier === "abbonato") ? "subscribed" : "full";
           const sur = nonSubscriberSurcharge(g.shipping);
-          return { kind, shipping: g.shipping, fee: g.fee, feePct: kind === "full" ? sur.pct : 0, feeFull: sur.amount, discount: g.partnerDiscount, total: g.total, billableKg: g.weightKg, subscription: null };
+          return { kind, ratePlan: kind === "subscribed" ? ratePlanForItems(items) : null, shipping: g.shipping, fee: g.fee, feePct: kind === "full" ? sur.pct : 0, feeFull: sur.amount, discount: g.partnerDiscount, total: g.total, billableKg: g.weightKg, subscription: null };
         })(),
         { destination: g.destinationCountry || dest }
       )
@@ -7173,6 +7208,7 @@ async function createCheckoutSession(itemsByDest) {
         pricingTier: it.pricingTier,
         partnerDiscountAmount: it.partnerDiscountAmount || 0,
         ...(subscriptionPlanById(it.subscriptionPurchase) ? { subscriptionPurchase: it.subscriptionPurchase } : {}),
+        ...(subscriptionPlanById(it.subscriptionPlanId) ? { subscriptionPlanId: it.subscriptionPlanId } : {}),
       });
     });
   });
@@ -7920,6 +7956,7 @@ function ChooseAddressScreen() {
             : priceQuotes(state.result.weight_kg, currentDestinationName(), state.result).surcharge,
         // Abbonamento una tantum da addebitare col primo pagamento (una sola volta).
         ...(state.subscriptionToCharge ? { subscriptionPurchase: state.subscriptionToCharge } : {}),
+        ...(state.isSubscribed && !state.priceConfirmedAsBreakeven && subscriptionPlanById(state.subscriptionPlan) ? { subscriptionPlanId: state.subscriptionPlan } : {}),
         pickupPoint: itemPickupPoint,
         pickupSource: itemPickupPoint === state.pickupPoint ? state.pickupSource : null,
         addressId: addr ? addr.id : null,

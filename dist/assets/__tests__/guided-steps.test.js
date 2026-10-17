@@ -115,8 +115,9 @@ test("Prezzo e piano: in ogni riquadro Spedizione + Commissione = Totale", (t) =
     const { sum, total } = sumMatches(b);
     assert.equal(sum, total);
   }
-  const [full, sub] = boxes.map((b) => sumMatches(b).total);
-  assert.ok(full > sub, "senza abbonamento costa più che abbonandosi (spedizione + abbonamento) già alla prima spedizione");
+  // Riquadro abbonati: tariffa scontata (piena barrata) + abbonamento una tantum.
+  assert.ok(boxes[1].querySelector(".pb-row s"), "la tariffa piena compare barrata accanto a quella scontata");
+  assert.ok(boxes[1].querySelector(".pb-row.subscription"));
 });
 
 test("Riepilogo: il dettaglio prezzo somma al totale e c'è la spiegazione «Come si calcola»", (t) => {

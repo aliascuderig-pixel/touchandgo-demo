@@ -57,6 +57,7 @@ function isValidItem(it) {
   if (!isFinite(weight) || weight <= 0 || weight >= 50) return false;
   if (!VALID_PRICING_TIERS.includes(it.pricingTier)) return false;
   if (it.subscriptionPurchase !== undefined && !subscriptionPlanById(it.subscriptionPurchase)) return false;
+  if (it.subscriptionPlanId !== undefined && !subscriptionPlanById(it.subscriptionPlanId)) return false;
   return true;
 }
 

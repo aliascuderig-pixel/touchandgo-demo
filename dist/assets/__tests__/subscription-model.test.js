@@ -28,29 +28,46 @@ test("i tre abbonamenti: trimestrale €29, semestrale €49, annuale €79", (t
   assert.deepEqual(JSON.parse(call("JSON.stringify(SUBSCRIPTION_PLANS.map(p=>[p.id,p.months,p.price]))")), [["trimestrale", 3, 29], ["semestrale", 6, 49], ["annuale", 12, 79]]);
 });
 
-test("senza abbonamento costa SEMPRE più che abbonandosi (spedizione + abbonamento trimestrale), per ogni spedizione realistica", (t) => {
+test("sconto proporzionale alla durata: più lungo l'abbonamento, più alto lo sconto sulla tariffa piena", (t) => {
+  const { call } = boot(t);
+  const d = JSON.parse(call(`JSON.stringify(SUBSCRIPTION_PLANS.map(p => planDiscountFraction(p.id)))`));
+  assert.deepEqual(d, [0.075, 0.15, 0.3]);
+  const q = JSON.parse(call(`JSON.stringify(priceQuotes(1.2, "Unione Europea", null))`));
+  assert.ok(q.full > q.plans.trimestrale.rate && q.plans.trimestrale.rate > q.plans.semestrale.rate && q.plans.semestrale.rate > q.plans.annuale.rate);
+});
+
+test("MAI una tariffa sotto costo corriere +30%: vale per ogni destinazione, peso, piano e per il codice invito", (t) => {
   const { call } = boot(t);
   const bad = JSON.parse(call(`JSON.stringify((() => { const out = [];
     for (const dest of DESTINATIONS) for (let kg = 0.3; kg <= 49; kg += 0.7) {
+      const sc = shippingCost(kg, dest.name, null);
       const q = priceQuotes(kg, dest.name, null);
-      const subToday = q.shipping + SUBSCRIPTION_PLANS[0].price;
-      if (!(q.full > subToday)) out.push([dest.name, kg, q.full, subToday]);
+      const zone = SHIPPING_RATES[dest.zone || DESTINATIONS.find(d=>d.name===dest.name).zone];
+      const raw = bracketPrice(zone, Math.max(0.3, kg));
+      const floor = Math.round(raw * 1.3 * 100) / 100;
+      const rates = [q.full, q.breakeven, ...Object.values(q.plans).map(p => p.rate)];
+      if (rates.some(r => r + 0.011 < floor)) out.push([dest.name, kg, floor, rates]);
     } return out; })())`));
-  assert.deepEqual(bad, [], "nessuna combinazione destinazione/peso in cui non abbonarsi conviene");
+  assert.deepEqual(bad, []);
 });
 
-test("sovrapprezzo: mai sotto il 40%, mai sopra il 300%, più alto sulle spedizioni economiche", (t) => {
+test("tariffa piena = pavimento +43%; l'annuale paga esattamente il pavimento", (t) => {
   const { call } = boot(t);
-  const lo = JSON.parse(call("JSON.stringify(nonSubscriberSurcharge(11.25))"));
-  const hi = JSON.parse(call("JSON.stringify(nonSubscriberSurcharge(300))"));
-  assert.ok(lo.pct > hi.pct);
-  assert.equal(hi.pct, 40);
-  assert.ok(lo.pct <= 300);
-  assert.equal(JSON.parse(call("JSON.stringify(nonSubscriberSurcharge(1))")).pct, 300);
+  const q = JSON.parse(call(`JSON.stringify(priceQuotes(1.2, "Italia", null))`));
+  assert.equal(q.surchargePct, 43);
+  assert.equal(q.plans.annuale.extra, 0);
+  assert.equal(q.plans.annuale.rate, q.shipping);
 });
 
-test("l'abbonato paga solo la spedizione: nessuna commissione per spedizione", (t) => {
-  const { call } = boot(t, "state.isSubscribed = true;");
+test("Italia su Italia: la tariffa piena resta contenuta (+43% sul pavimento, non multipli)", (t) => {
+  const { call } = boot(t);
+  const q = JSON.parse(call(`JSON.stringify(priceQuotes(1, "Italia", null))`));
+  assert.equal(q.shipping, 11.7);
+  assert.ok(q.full <= 17);
+});
+
+test("l'abbonato annuale paga solo la tariffa al pavimento (nessun extra)", (t) => {
+  const { call } = boot(t, "state.isSubscribed = true; state.subscriptionPlan = 'annuale';");
   assert.equal(call("priceFor(1.2,'Unione Europea',state.result).grandTotal"), call("priceQuotes(1.2,'Unione Europea',state.result).shipping"));
 });
 

@@ -139,15 +139,13 @@ const TOURIST_EMAIL = "weekly-e2e-test@touchandgo-internal-test.it";
 // app.js cambiano, questa replica va aggiornata a mano — nessun modo
 // automatico di tenerle sincronizzate finché restano in due posti.
 // ---------------------------------------------------------------------
-// Replica indipendente del sovrapprezzo da non abbonato (modello 17/10/2026):
-// percentuale intera minima per cui spedizione + sovrapprezzo >= spedizione +
-// abbonamento trimestrale (€29) x 1,10, tra 40% e 300%.
+// Replica indipendente del modello 17/10/2026: tariffa piena (non abbonato) =
+// pavimento (costo corriere +30%) x 1/(1-0,30), cioè pavimento +43%.
 function nonSubscriberSurcharge(shipping) {
   const ship = Math.max(0.01, Number(shipping) || 0);
-  const pct = Math.min(300, Math.max(40, Math.ceil((100 * 29 * 1.1) / ship)));
-  return Math.round(ship * pct) / 100;
+  return Math.round(ship * (0.3 / 0.7) * 100) / 100;
 }
-const SHIPPING_MARGIN = 0.25;
+const SHIPPING_MARGIN = 0.3;
 const ZONE_TRANSFRONTALIERO = {
   brackets: [[1, 15], [2, 20], [5, 26], [10, 34], [20, 44], [30, 55]],
   perKgOver: 2.2,
