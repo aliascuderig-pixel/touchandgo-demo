@@ -558,6 +558,22 @@ const I18N = {
   it: {
     // ---- Header / chrome globale (sempre visibile) ----
     header_menu_label: "Menu",
+    menu_go_label: "Vai a",
+    menu_pin_hint: "Tocca 📌 per tenere una funzione sempre sullo schermo.",
+    nav_home: "🏠 Inizio",
+    nav_history: "🧳 I miei oggetti",
+    nav_dashboard: "📊 Riepilogo spedizioni",
+    nav_documents: "📄 Documenti",
+    pinshort_home: "Inizio",
+    pinshort_history: "Oggetti",
+    pinshort_dashboard: "Riepilogo",
+    pinshort_documents: "Documenti",
+    pinshort_assistant: "Agente",
+    pinshort_support: "Aiuto",
+    pin_add: "Fissa «{name}» sullo schermo",
+    pin_remove: "Togli «{name}» dallo schermo",
+    pin_max: "Puoi fissare al massimo {max} funzioni: togline una prima.",
+    pinbar_label: "Funzioni fisse",
     header_site_link: "🌐 Sito",
     header_reset_title: "Resetta profilo e ricomincia",
     header_reset_label: "Reset",
@@ -881,6 +897,22 @@ const I18N = {
   en: {
     // ---- Header / global chrome (always visible) ----
     header_menu_label: "Menu",
+    menu_go_label: "Go to",
+    menu_pin_hint: "Tap 📌 to keep a function always on screen.",
+    nav_home: "🏠 Home",
+    nav_history: "🧳 My items",
+    nav_dashboard: "📊 Shipments summary",
+    nav_documents: "📄 Documents",
+    pinshort_home: "Home",
+    pinshort_history: "Items",
+    pinshort_dashboard: "Summary",
+    pinshort_documents: "Docs",
+    pinshort_assistant: "Agent",
+    pinshort_support: "Help",
+    pin_add: "Pin “{name}” to the screen",
+    pin_remove: "Unpin “{name}” from the screen",
+    pin_max: "You can pin at most {max} functions: unpin one first.",
+    pinbar_label: "Pinned functions",
     header_site_link: "🌐 Site",
     header_reset_title: "Reset profile and start over",
     header_reset_label: "Reset",
@@ -1678,6 +1710,7 @@ function render() {
   else if (state.screen === "package-check") app.appendChild(PackageCheckScreen());
   else if (state.screen === "review") app.appendChild(ReviewScreen());
   if (state.screen === "home") app.appendChild(Footer());
+  refreshPinBar();
   if (state.mode !== "partner" && state.screen === "result") {
     requestAnimationFrame(() => animateResult(state.result, state.price));
   }
@@ -1719,6 +1752,63 @@ function escapeHtml(value) {
 
 let headerMenuCloser = () => {};
 let headerMenuBound = false;
+// ---------------- Funzioni fisse scelte dal cliente ----------------
+// Ogni funzione del menu ha un pulsante 📌: il cliente decide quali tenere
+// sempre sullo schermo, in una barra fissa in basso (al massimo PIN_MAX).
+// La scelta è salvata solo sul dispositivo (localStorage "tg_pins").
+const PIN_MAX = 4;
+const QUICK_FUNCS = [
+  { id: "home", icon: "🏠", short: "pinshort_home", run() { state.screen = "home"; render(); } },
+  { id: "history", icon: "🧳", short: "pinshort_history", run() { state.screen = "history"; render(); syncPurchaseUpdatesFromCRM(); } },
+  { id: "dashboard", icon: "📊", short: "pinshort_dashboard", run() { state.screen = "dashboard"; render(); syncPurchaseUpdatesFromCRM(); } },
+  { id: "documents", icon: "📄", short: "pinshort_documents", run() { state.screen = "documents"; render(); } },
+  { id: "assistant", icon: "💬", short: "pinshort_assistant", run() { state.assistantChatOpen = true; trackEvent("agent_chat_opened"); render(); } },
+  { id: "support", icon: "🆘", short: "pinshort_support", run() {
+    state.supportModalOpen = true; state.supportMessage = ""; state.supportContactEmail = state.touristEmail || "";
+    state.supportSubmitError = null; state.supportSubmitted = false; render();
+  } },
+];
+function pinButtonHtml(id) {
+  const f = QUICK_FUNCS.find((x) => x.id === id);
+  const on = quickPins.includes(id);
+  const name = t(f.short);
+  return `<button class="menu-pin" type="button" data-pin="${id}" aria-pressed="${on}" aria-label="${escapeHtml(t(on ? "pin_remove" : "pin_add", { name }))}">📌</button>`;
+}
+function loadPins() {
+  try {
+    const a = JSON.parse(localStorage.getItem("tg_pins") || "[]");
+    return Array.isArray(a) ? a.filter((id, i) => QUICK_FUNCS.some((f) => f.id === id) && a.indexOf(id) === i).slice(0, PIN_MAX) : [];
+  } catch (e) { return []; }
+}
+let quickPins = loadPins();
+function savePins() { try { localStorage.setItem("tg_pins", JSON.stringify(quickPins)); } catch (e) {} }
+const PINBAR_HIDDEN_SCREENS = ["cover", "onboarding", "biometric-lock", "analyzing"];
+function PinBar() {
+  if (state.mode !== "turista" || !quickPins.length || PINBAR_HIDDEN_SCREENS.includes(state.screen)) return null;
+  const bar = el("nav", "pin-bar");
+  bar.setAttribute("aria-label", t("pinbar_label"));
+  quickPins.forEach((id) => {
+    const f = QUICK_FUNCS.find((x) => x.id === id);
+    if (!f) return;
+    const b = el("button", "pin-btn", `<span class="pin-ico" aria-hidden="true">${f.icon}</span><span>${t(f.short)}</span>`);
+    b.type = "button";
+    b.dataset.fn = f.id;
+    b.addEventListener("click", () => f.run());
+    bar.appendChild(b);
+  });
+  return bar;
+}
+// Rimette la barra al suo posto senza ridisegnare la schermata (usato quando
+// il cliente fissa/toglie una funzione con il menu aperto).
+function refreshPinBar() {
+  const old = app.querySelector(".pin-bar");
+  if (old) old.remove();
+  const bar = PinBar();
+  if (bar) app.appendChild(bar);
+  app.classList.toggle("has-pinbar", !!bar);
+  document.documentElement.style.setProperty("--tg-fab-bottom", bar ? "84px" : "16px");
+}
+
 function Header() {
   const wrap = el("div");
   const header = el("div", "header");
@@ -1744,8 +1834,11 @@ function Header() {
       ${isLandingScreen ? `<button class="header-reset" id="header-reset" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>` : `<button class="header-menu-btn" id="header-menu-btn" type="button" aria-label="${t("header_menu_label")}" aria-expanded="false" aria-controls="header-menu"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>`}
     </div>
     ${isLandingScreen ? "" : `<div class="header-menu" id="header-menu" role="menu">
-      ${state.mode === "turista" ? `<button class="header-assistant-btn" id="header-assistant-btn" type="button" role="menuitem">${t("header_assistant_btn")}</button>` : ""}
-      ${state.mode === "turista" ? `<button class="header-support-btn" id="header-support-btn" type="button" role="menuitem">${t("header_support_btn")}</button>` : ""}
+      ${state.mode === "turista" ? `<p class="menu-section">${t("menu_go_label")}</p>
+      ${["home", "history", "dashboard", "documents"].map((id) => `<div class="menu-row"><button class="header-nav-btn" data-fn="${id}" type="button" role="menuitem">${t("nav_" + id)}</button>${pinButtonHtml(id)}</div>`).join("")}
+      <div class="menu-row"><button class="header-assistant-btn" id="header-assistant-btn" type="button" role="menuitem">${t("header_assistant_btn")}</button>${pinButtonHtml("assistant")}</div>
+      <div class="menu-row"><button class="header-support-btn" id="header-support-btn" type="button" role="menuitem">${t("header_support_btn")}</button>${pinButtonHtml("support")}</div>
+      <p class="menu-hint">${t("menu_pin_hint")}</p>` : ""}
       <a class="header-site-link" href="/site/index.html" target="_blank" rel="noopener" role="menuitem">${t("header_site_link")}</a>
       <button class="header-reset" id="header-reset" type="button" role="menuitem" title="${t("header_reset_title")}">⟲ ${t("header_reset_label")}</button>
     </div>`}`;
@@ -1772,6 +1865,27 @@ function Header() {
   header.querySelector("#header-reset").addEventListener("click", resetEverything);
   header.querySelectorAll("[data-lang]").forEach((b) =>
     b.addEventListener("click", () => setLang(b.dataset.lang))
+  );
+  header.querySelectorAll(".header-nav-btn").forEach((b) =>
+    b.addEventListener("click", () => QUICK_FUNCS.find((f) => f.id === b.dataset.fn).run())
+  );
+  header.querySelectorAll(".menu-pin").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation(); // il menu resta aperto: si possono fissare più funzioni di fila
+      const id = b.dataset.pin, i = quickPins.indexOf(id);
+      const hint = header.querySelector(".menu-hint");
+      if (i >= 0) quickPins.splice(i, 1);
+      else if (quickPins.length >= PIN_MAX) { if (hint) hint.textContent = t("pin_max", { max: PIN_MAX }); return; }
+      else quickPins.push(id);
+      savePins();
+      if (hint) hint.textContent = t("menu_pin_hint");
+      header.querySelectorAll(".menu-pin").forEach((x) => {
+        const on = quickPins.includes(x.dataset.pin), f = QUICK_FUNCS.find((q) => q.id === x.dataset.pin);
+        x.setAttribute("aria-pressed", String(on));
+        x.setAttribute("aria-label", t(on ? "pin_remove" : "pin_add", { name: t(f.short) }));
+      });
+      refreshPinBar();
+    })
   );
   const assistantBtn = header.querySelector("#header-assistant-btn");
   if (assistantBtn) {
