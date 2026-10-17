@@ -1798,3 +1798,15 @@ I temi «lime» e «corallo» sono anteprime di prova (rotte di anteprima, non i
 ### Da fare per completare il restyle
 
 Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi definitivi. Il manuale va aggiornato quando una di queste parti cambia.
+
+## Regolatore di tono dei colori
+
+**Funzione.** In ogni pagina compare un pulsante tondo (44 px, icona cerchio mezzo pieno, etichetta accessibile «Regola il tono dei colori») in basso a sinistra, a 16 px dai bordi, sopra a tutti i contenuti. Al tocco apre un pannello con titolo «Tono dei colori», il livello scelto, un cursore da 0 a 100 con estremi «Riposante» e «Brillante», il pulsante «Confronta con l'originale (tieni premuto)» e il pulsante «Ripristina».
+- Posizione 50 = tavolozza originale del dispositivo (il cursore si aggancia all'originale entro ±2). Verso sinistra: meno contrasto (fino a −22%), colori meno saturi (fino a −30%) e tinte spostate fino al 12% verso il caldo. Verso destra: più contrasto (fino a +22%) e colori più saturi (fino a +30%). La variazione è progressiva e continua mentre si muove il cursore.
+- «Confronta» mostra l'originale finché resta premuto (anche da tastiera con spazio o invio); al rilascio torna alla scelta fatta. «Ripristina» riporta a 50.
+- Cambia SOLO l'aspetto cromatico: legge i colori definiti come variabili CSS in `:root` e li riscrive come valori in linea su `<html>`; le trasparenze restano. Layout, testi, font e funzioni non cambiano; non parte nessuna richiesta al server.
+- La scelta è ricordata nel browser (chiave `tg-tone`, localStorage; se non disponibile la pagina funziona lo stesso).
+- Il file `tg-tone.js` è identico in tutti i dispositivi Touch&Go ed è caricato in fondo a ogni pagina principale (non nelle anteprime di design né nei file del kit riservato). Test: `__tests__/tg-tone.test.js`.
+- Limiti noti: i colori scritti direttamente nei CSS (non come variabili), le immagini, le ombre e i gradienti non cambiano.
+
+**Estetica.** Il pulsante e il pannello hanno aspetto uguale in ogni dispositivo e non seguono il tema della pagina: fondo quasi nero (96% opaco), testo #f2f2f2, bordo bianco al 20%, angoli del pannello 12 px, ombra morbida, pulsanti con bordo bianco al 30% e angoli 8 px alti almeno 44 px. La barra del cursore è un gradiente da grigio-azzurro (#8fa3ad) a crema (#d9d2c3, centro) a giallo (#ffd24a); il cursore è un cerchio bianco con bordo scuro. Contorno bianco visibile al focus da tastiera. Nascosto in stampa. Larghezza massima del pannello 300 px, mai oltre i bordi dello schermo sul telefono.
