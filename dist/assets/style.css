@@ -935,3 +935,96 @@ button{font-family:inherit;cursor:pointer}
 .step-row.step-total{background:var(--ink);border-bottom:0;color:var(--gold-soft)}
 .step-row.step-total .step-row-lbl{color:var(--gold-soft);opacity:.8}
 .step-row.step-total .step-row-val{font-size:28px;color:var(--gold-soft)}
+
+/* ===== Layout mobile v2 (17 ottobre 2026) =====
+   Solo distribuzione degli spazi: margine laterale unico (16px), angoli
+   arrotondati coerenti (16px), bersagli di tocco da almeno 52px, una sola
+   azione principale in evidenza per schermata. Colori e logica invariati. */
+:root{--gut:16px;--r:16px}
+.section{padding:16px var(--gut) 24px}
+.topbar{padding:14px var(--gut) 4px}
+.step-pad,.step-progress-box{padding-left:var(--gut);padding-right:var(--gut)}
+.btn-primary,.btn-secondary{border-radius:14px;min-height:52px}
+.result-actions{padding:16px var(--gut) 24px;display:flex;flex-direction:column;gap:10px}
+.result-actions .btn-primary,.result-actions .btn-secondary{margin:0}
+
+/* Home: foto in primo piano, secondarie in griglia, informazioni raccolte */
+.section .step-lbl{margin:0 2px 10px}
+.capture-card{margin:0;border-radius:22px;min-height:clamp(230px,36vh,320px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;
+  background:radial-gradient(120% 90% at 50% 0%,var(--ink-glow,#241d12) 0%,var(--ink) 70%);box-shadow:0 10px 30px rgba(0,0,0,.18);cursor:pointer}
+.capture-card .capture-icon{transform:scale(1.25);margin-bottom:18px}
+.capture-card h3{font-size:24px;margin:0 0 12px}
+.capture-card p{margin:0;padding:9px 18px;border:1px solid var(--gold);border-radius:999px;font-size:12px;letter-spacing:.04em;color:var(--gold-soft)}
+.home-quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.home-quick .gallery-card,.home-quick .luggage-card{margin:0;width:auto;min-height:76px;border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px 12px;gap:3px}
+.home-quick .gallery-card{font-size:13px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+.home-quick .luggage-card b{font-size:13px}
+.home-quick .luggage-card span{font-size:10.5px;line-height:1.35}
+.section .tg-lbl{margin:20px 2px 8px}
+.describe-box{margin:0}
+.describe-box input{height:54px;border-radius:var(--r);padding-left:18px;box-sizing:border-box;width:100%}
+.home-foot{margin-top:16px;padding:0 8px;line-height:1.5}
+.promo-link{margin-top:10px}
+.pending-banner{margin:12px var(--gut) 0;border-radius:var(--r);padding:14px 16px}
+.pending-banner .btn-secondary{margin-top:10px;width:100%}
+.home-info{padding:0 var(--gut) 8px;display:flex;flex-direction:column;gap:10px}
+.home-info .location-reminder{margin:0;border:1px solid var(--gold-soft);border-radius:var(--r);padding:12px 14px}
+.home-more{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.home-more>summary{cursor:pointer;list-style:none;padding:15px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;min-height:22px}
+.home-more>summary::-webkit-details-marker{display:none}
+.home-more>summary::after{content:"+";font-size:18px;color:var(--gold-deep)}
+.home-more[open]>summary::after{content:"–"}
+.home-more[open]>summary{border-bottom:1px solid var(--line)}
+.home-more .prohibited-banner{margin:12px;border-radius:12px}
+.home-more .trust-row{border-bottom:0}
+.footer{padding:6px var(--gut) 28px}
+.footer p{font-size:10px;opacity:.8}
+.footer-links{gap:6px 18px;margin-top:10px}
+.footer .reset-link{font-size:12px;padding:6px 2px}
+
+/* Destinazione e moduli: stesso margine e stessi angoli ovunque */
+.dest-field,.dest-field-block{border-radius:var(--r);margin:0 0 12px;min-height:54px;box-sizing:border-box}
+.dest-field{padding:8px 16px;gap:12px}
+.dest-input{width:auto;flex:1;min-width:0;text-overflow:ellipsis;font-size:14px}
+.dest-field .voice-field-wrap{width:auto;flex:1;min-width:0}
+.dest-field-block{padding:14px 16px}
+.pending-desc{padding:0 2px}
+.back{display:inline-flex;align-items:center;min-height:44px;font-size:14px;margin:0 0 4px -4px}
+.section .home-foot,.section .info-line{text-align:left;padding-left:2px;padding-right:2px}
+.addr-option{border-radius:12px;padding:12px 14px}
+
+/* Risultato, prezzo, riepilogo */
+.result-card{margin:12px var(--gut) 0;border-radius:var(--r);overflow:hidden}
+.price-option,.price-card,.promo-card-inline{border-radius:var(--r)}
+.price-dual,.price-card,.promo-card-inline{margin-left:var(--gut);margin-right:var(--gut)}
+.step-more,.step-summary{margin-left:var(--gut);margin-right:var(--gut);border-radius:var(--r);overflow:hidden}
+.step-row.step-total{border-radius:0}
+.queue-item{border-radius:var(--r)}
+.pickup-note,.addr-summary,.dest-field-block .addr-summary{font-size:12px;line-height:1.55;color:var(--text-secondary);margin:6px 2px 14px}
+.pickup-use-location{border-radius:999px;min-height:40px;padding:8px 14px;margin:0 0 6px;font-size:12px}
+.pickup-chip{min-height:36px;border-radius:999px}
+.dest-field-block .dest-field{border:0;background:none;padding:0;margin:0 0 6px;min-height:44px;border-radius:0}
+.dest-field-block .addr-summary{margin:0 0 12px}
+.dest-field-block .btn-secondary{width:100%}
+.dest-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;line-height:1.3}
+.dest-select{font-size:14px;max-width:60%}
+.pending-desc{margin:4px 0 14px}
+.section .assistant-avatar,.section .avatar-row{margin-bottom:12px}
+/* v2 — allineamenti dentro .section (niente doppi margini) e campi a due righe */
+.section .price-card,.section .prohibited-banner,.section .promo-card-inline,.section .price-dual,.section .airline-compare,.section .info-card{margin-left:0;margin-right:0}
+.section .prohibited-banner{margin-top:0;margin-bottom:14px;border-radius:12px}
+.identify-intro{font-size:13px;line-height:1.6;margin-bottom:14px;padding:0 2px}
+.back{margin-left:-2px}
+.dest-field:not(.dest-field-block .dest-field){flex-direction:column;align-items:stretch;justify-content:center;gap:2px;padding:10px 16px}
+.dest-field:not(.dest-field-block .dest-field) .dest-input,
+.dest-field:not(.dest-field-block .dest-field) .voice-field-wrap{width:100%;text-align:left;flex:none}
+.dest-field:not(.dest-field-block .dest-field) .dest-input{font-size:15px;padding:2px 0}
+.dest-field-block .dest-field{flex-direction:row;align-items:center}
+.home-foot,.pickup-note{margin-bottom:16px}
+.section>.btn-primary,.section>.btn-secondary{width:100%;margin-top:4px}
+.queue-item{padding:14px 16px}
+.queue-item-change{border-radius:999px;min-height:36px;padding:6px 14px}
+.section .baggage-compare-card{margin:16px 0 14px;border-radius:var(--r)}
+.baggage-compare-controls select{min-height:44px;border-radius:12px;font-size:14px}
+.assistant-tip{margin:12px var(--gut);border-radius:var(--r)}
+.home-more .assistant-tip{margin:12px}
