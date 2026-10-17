@@ -1793,7 +1793,7 @@ Descrizione dell'identità visiva reale dell'app (file `dist/assets/style.css`, 
 
 ### Temi opzionali
 
-I temi «lime» e «corallo» sono anteprime di prova (rotte di anteprima, non in produzione). Cambiano solo i token invertibili: il tema lime rende scuro lo sfondo principale (carta #0B1113, superficie #172023, testo #E9EEEB) e sostituisce l'oro con un verde lime (#C9F24D, chiaro #E4FF8E); il tema corallo usa un accento corallo con la stessa logica. La «chrome» scura (header, copertina, scheda di acquisizione, blocco codice, scheda promo, onboarding) resta scura in ogni tema. Non esiste una modalità scura automatica in base alle preferenze di sistema.
+I temi «lime» e «corallo» sono anteprime di prova (rotte di anteprima, non in produzione). Cambiano solo i token invertibili: il tema lime rende scuro lo sfondo principale (carta #0B1113, superficie #172023, testo #E9EEEB) e sostituisce l'oro con un verde lime (#C9F24D, chiaro #E4FF8E); il tema corallo rende scuro lo sfondo (carta #101014, superficie #1E1E25, testo #EDECEF) e usa un accento corallo (#FF6B4A, chiaro #FF8E73). La «chrome» scura (header, copertina, scheda di acquisizione, blocco codice, scheda promo, onboarding) resta scura in ogni tema. Non esiste una modalità scura automatica in base alle preferenze di sistema.
 
 ### Da fare per completare il restyle
 
