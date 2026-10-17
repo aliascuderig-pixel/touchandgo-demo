@@ -11,8 +11,29 @@
 // cambiati anche qui — vedi MANUALE.md, sezione "Pagamento reale con
 // Stripe Checkout".
 
-const FULL_FEE = 39;
-const SUBSCRIBED_FEE = 19;
+// MODELLO DI PREZZO (17/10/2026) — identico a dist/assets/app.js:
+// abbonato = abbonamento una tantum + sola spedizione; non abbonato =
+// spedizione + sovrapprezzo percentuale (nonSubscriberSurcharge()).
+const SUBSCRIPTION_PLANS = [
+  { id: "trimestrale", label: "Trimestrale", months: 3, price: 29 },
+  { id: "semestrale", label: "Semestrale", months: 6, price: 49 },
+  { id: "annuale", label: "Annuale", months: 12, price: 79 },
+];
+const SUBSCRIBED_FEE = 0;
+const SURCHARGE_MARGIN = 0.1;
+const SURCHARGE_MIN_PCT = 40;
+const SURCHARGE_MAX_PCT = 300;
+
+function subscriptionPlanById(id) {
+  return SUBSCRIPTION_PLANS.find((p) => p.id === id) || null;
+}
+
+function nonSubscriberSurcharge(shipping) {
+  const ship = Math.max(0.01, Number(shipping) || 0);
+  const target = SUBSCRIPTION_PLANS[0].price * (1 + SURCHARGE_MARGIN);
+  const pct = Math.min(SURCHARGE_MAX_PCT, Math.max(SURCHARGE_MIN_PCT, Math.ceil((100 * target) / ship)));
+  return { pct, amount: Math.round(ship * pct) / 100 };
+}
 
 const DESTINATIONS = [
   { name: "Italia", zone: "domestico" },
@@ -74,7 +95,7 @@ function consolidatedGroupPriceForItems(items) {
 
   const onBreakeven = items.some((it) => it.pricingTier === "breakeven");
   const isSubscribed = items.some((it) => it.pricingTier === "abbonato");
-  const fee = onBreakeven ? 0 : isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+  const fee = onBreakeven || isSubscribed ? 0 : nonSubscriberSurcharge(shipping).amount;
 
   const totalPartnerDiscount = items.reduce((sum, it) => sum + (parseFloat(it.partnerDiscountAmount) || 0), 0);
   const total = Math.max(0, Math.round((shipping + fee - totalPartnerDiscount) * 100) / 100);
@@ -88,13 +109,28 @@ function consolidatedGroupPriceForItems(items) {
   };
 }
 
+// Abbonamento una tantum portato da uno degli oggetti: si addebita UNA volta.
+function subscriptionForItems(items) {
+  for (const it of items) {
+    const plan = subscriptionPlanById(it.subscriptionPurchase);
+    if (plan) return plan;
+  }
+  return null;
+}
+
 module.exports = {
   consolidatedGroupPriceForItems,
+  subscriptionForItems,
+  subscriptionPlanById,
+  nonSubscriberSurcharge,
+  SUBSCRIPTION_PLANS,
   DESTINATIONS,
   SHIPPING_RATES,
   SHIPPING_MARGIN,
-  FULL_FEE,
   SUBSCRIBED_FEE,
+  SURCHARGE_MARGIN,
+  SURCHARGE_MIN_PCT,
+  SURCHARGE_MAX_PCT,
   volumetricWeight,
   bracketPrice,
 };

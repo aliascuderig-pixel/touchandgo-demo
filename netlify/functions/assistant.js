@@ -67,9 +67,10 @@ async function checkRateLimit(key) {
   return record.count <= RATE_LIMIT_MAX;
 }
 
-// Specchio di FULL_FEE/SUBSCRIBED_FEE in dist/assets/app.js.
-const FULL_FEE = 39;
-const SUBSCRIBED_FEE = 19;
+// Specchio del modello di prezzo in dist/assets/app.js (17/10/2026): abbonamenti
+// una tantum + sola spedizione; non abbonati con sovrapprezzo percentuale.
+const { SUBSCRIPTION_PLANS, SURCHARGE_MIN_PCT, SURCHARGE_MAX_PCT } = require("../lib/pricing");
+const PLANS_TEXT = SUBSCRIPTION_PLANS.map((p) => `${p.label.toLowerCase()} €${p.price} (${p.months} mesi)`).join(", ");
 
 // Specchio di SHIPPING_RATES in dist/assets/app.js — prezzi già
 // comprensivi del margine Touch&Go del 25% (SHIPPING_MARGIN), come
@@ -80,17 +81,17 @@ const QUESTION_MODE_FACTS = `Il servizio Touch&Go permette a un turista in Itali
 MERCI VIETATE: Touch&Go non spedisce armi, droghe, merci contraffatte, materiali pericolosi o infiammabili, né ciò che il Paese di destinazione non ammette (es. carne e latticini verso USA o Canada). Se il turista chiede di spedire qualcosa di questo tipo, spiega che non è possibile; se è un dubbio, invitalo a verificare prima di acquistare. Non inventare liste di regole per Paese.
 
 FATTI REALI DEL SERVIZIO — usa SOLO questi numeri, non inventarne altri:
-- Fee di servizio Touch&Go: €${FULL_FEE} a tariffa piena, €${SUBSCRIBED_FEE} con abbonamento, per ogni spedizione — separata dal costo del corriere.
+- Abbonamento Touch&Go (solo per il turista, UNA TANTUM, a scelta): ${PLANS_TEXT}. Chi è abbonato paga, per ogni spedizione fino alla scadenza, SOLO la tariffa di spedizione: nessuna commissione. Chi NON è abbonato paga la spedizione con un sovrapprezzo percentuale (tra il ${SURCHARGE_MIN_PCT}% e il ${SURCHARGE_MAX_PCT}% della spedizione, più alto quando la spedizione costa poco) calcolato in modo che senza abbonamento costi sempre più che abbonandosi. Non esiste nessuna fee fissa per spedizione.
 - Costo del corriere (già comprensivo del margine Touch&Go del 25%, nessun costo nascosto aggiuntivo), a fasce di peso/volume, tre zone:
   · Italia (spedizione domestica): da €11,25 (fino a 1kg) a €41,25 (fino a 30kg), +€1,38/kg oltre; consegna in 24–48 ore.
   · Unione Europea, Regno Unito, Svizzera (transfrontaliero): da €18,75 a €68,75, +€2,75/kg oltre; consegna in 2–4 giorni lavorativi.
   · Resto del mondo (worldwide): da €62,50 a €206,25, +€6,88/kg oltre; consegna in 4–8 giorni lavorativi.
 - Esenzione IVA export: gestita automaticamente (Art. 8 DPR 633/72) — documentazione doganale generata senza pratiche aggiuntive in aeroporto.
-- La primissima spedizione di un nuovo cliente è SEMPRE senza fee di servizio (paga solo il corriere, a tariffa piena) — un modo per provare il servizio prima di scegliere se abbonarsi. Codici invito o codici sconto partner, se il turista ne ha uno, possono azzerare o ridurre ulteriormente la fee.
+- La primissima spedizione di un nuovo cliente è SEMPRE senza sovrapprezzo (paga solo la spedizione) — un modo per provare il servizio prima di scegliere se abbonarsi. Codici invito o codici sconto partner, se il turista ne ha uno, possono azzerare o ridurre ulteriormente la fee.
 - Stati di un acquisto, in ordine: "in sospeso" (lasciato in negozio, in attesa che qualcuno lo imballi) → "in confezionamento" (in preparazione) → "ritiro richiesto" (il turista ha chiesto il ritiro) → "ritirato" (il corriere è passato, la spedizione è avviata).
 - I bagagli (le valigie) si possono spedire anche all'andata e al ritorno, ma tramite agenzie di viaggio, tour operator o hotel partner, che generano la spedizione per il cliente dalla loro area partner. Il bagaglio non è un acquisto: si paga come spedizione, senza esenzione IVA export. Se il turista chiede di spedire la valigia, consiglia di chiedere alla propria agenzia o al proprio hotel partner.
 - Durante il soggiorno si possono lasciare più oggetti in negozi diversi: alla fine, tutti gli acquisti "in sospeso" verso la stessa destinazione vengono consolidati in un unico ordine di ritiro, invece di tante spedizioni separate.
-- Non esiste ancora un piano "Touch&Go Black" o abbonamenti a più livelli nell'app reale (solo tariffa piena/abbonamento base come sopra) — se ti viene chiesto, di' semplicemente che oggi il servizio ha questi due livelli.
+- Non esiste un piano "Touch&Go Black": gli abbonamenti sono solo i tre sopra (trimestrale, semestrale, annuale), che differiscono solo per durata e prezzo.
 - Non sei un consulente fiscale o legale: per casi doganali molto specifici (soglie insolite, paesi con regole particolari) consiglia di verificare col supporto Touch&Go o un professionista, senza inventare una risposta.
 
 ${buildRulesContext()}

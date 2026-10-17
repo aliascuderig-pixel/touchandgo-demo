@@ -23,7 +23,17 @@ const COMMISSION_RATE = 0.1;
 // Fee di servizio realmente applicabili lato app (dist/assets/app.js,
 // FULL_FEE / SUBSCRIBED_FEE) — un client non può inventare una fee
 // arbitraria per gonfiare lo sconto e prosciugare il credito del partner.
-const VALID_FEES = [39, 19];
+// Dal 17/10/2026 la «fee» su cui si applica il 10% è il SOVRAPPREZZO del non
+// abbonato: il client manda la spedizione e il server ricalcola il sovrapprezzo
+// con la stessa formula (mai fidandosi di una fee arbitraria); l'abbonato (fee 0)
+// non ha nulla su cui applicare lo sconto.
+const { nonSubscriberSurcharge } = require("../lib/pricing");
+const MAX_SHIPPING = 2000;
+function feeIsValid(fee, shipping) {
+  if (typeof fee !== "number" || typeof shipping !== "number" || !isFinite(fee) || !isFinite(shipping)) return false;
+  if (shipping <= 0 || shipping > MAX_SHIPPING || fee <= 0) return false;
+  return Math.abs(nonSubscriberSurcharge(shipping).amount - fee) <= 0.01;
+}
 
 function getClientIp(event) {
   return event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown-ip";
@@ -61,7 +71,7 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { action, code, fee, touristEmail } = body;
+    const { action, code, fee, shipping, touristEmail } = body;
     const normalized = (code || "").trim().toUpperCase();
 
     if (!normalized) {
@@ -70,7 +80,7 @@ exports.handler = async (event) => {
     if (action !== "redeem") {
       return { statusCode: 400, body: JSON.stringify({ error: "Azione non riconosciuta" }) };
     }
-    if (!VALID_FEES.includes(fee)) {
+    if (!feeIsValid(fee, shipping)) {
       return { statusCode: 400, body: JSON.stringify({ error: "Fee non valida" }) };
     }
 

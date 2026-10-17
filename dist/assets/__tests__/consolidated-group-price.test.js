@@ -54,7 +54,7 @@ function callGlobal(context, expr) {
 
 // Indirizzo di consegna (destinazione) — Italia, quindi zona "domestico"
 // (brackets [[1,9],[2,11],[5,14],[10,18],[20,25],[30,33]], perKgOver 1.1,
-// margine 25%, FULL_FEE 39€ per pricingTier "pieno"). Stesso identico
+// margine 25%, sovrapprezzo da non abbonato per pricingTier "pieno"). Stesso identico
 // oggetto usato dal codice reale in state.addresses — vedi
 // destinationCountryForItem() in app.js, che consolidatedGroupPrice()
 // chiama su items[0] per risolvere la zona tariffaria.
@@ -98,8 +98,8 @@ test("consolidatedGroupPrice(): 2 colli, vince il peso REALE (nessun volume dich
   // fee piena 39€ -> totale 61.5€.
   assert.equal(result.weightKg, 7);
   assert.equal(result.shipping, 22.5);
-  assert.equal(result.fee, 39);
-  assert.equal(result.total, 61.5);
+  assert.equal(result.fee, 31.95);
+  assert.equal(result.total, 54.45);
 });
 
 test("consolidatedGroupPrice(): 2 colli, vince il peso VOLUMETRICO (poco peso reale, molto volume) — 12.8kg + 5.4kg = 18.2kg fatturabili", (t) => {
@@ -119,8 +119,8 @@ test("consolidatedGroupPrice(): 2 colli, vince il peso VOLUMETRICO (poco peso re
   // totale 70.25€.
   assert.equal(result.weightKg, 18.2);
   assert.equal(result.shipping, 31.25);
-  assert.equal(result.fee, 39);
-  assert.equal(result.total, 70.25);
+  assert.equal(result.fee, 32.19);
+  assert.equal(result.total, 63.44);
 });
 
 test("consolidatedGroupPrice(): 2 colli, peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al limite esatto di una fascia) — mai la somma (10kg), mai un valore diverso da 5", (t) => {
@@ -143,8 +143,8 @@ test("consolidatedGroupPrice(): 2 colli, peso reale e volumetrico ESATTAMENTE ug
   // 39€ -> totale 56.5€.
   assert.equal(result.weightKg, 5);
   assert.equal(result.shipping, 17.5);
-  assert.equal(result.fee, 39);
-  assert.equal(result.total, 56.5);
+  assert.equal(result.fee, 32.03);
+  assert.equal(result.total, 49.53);
 });
 
 // ---------------------------------------------------------------------
@@ -163,7 +163,7 @@ test("consolidatedGroupPrice(): un gruppo di UN SOLO oggetto produce esattamente
   assert.equal(group.total, solitary.grandTotal);
   // 1kg reale, nessun volume: bracket domestico 1<=1 -> 9€ grezzo;
   // shipping 9*1.25 = 11.25€; fee piena 39€ -> 50.25€.
-  assert.equal(group.total, 50.25);
+  assert.equal(group.total, 43.2);
 });
 
 test("shippingCost()/priceFor() per il caso a collo singolo restano invariati (nessuna modifica alla loro formula)", (t) => {
@@ -192,7 +192,7 @@ test("computeConcludeGroups(): CASO 1 — più colli dallo STESSO punto di ritir
   const [dest, items] = Object.entries(itemsByDest)[0];
   assert.equal(items.length, 2);
   // Stesso risultato del test "vince il peso reale" sopra (3kg+4kg=7kg).
-  assert.equal(groupPricing[dest].total, 61.5);
+  assert.equal(groupPricing[dest].total, 54.45);
 });
 
 test("computeConcludeGroups(): CASO 2 — più colli da punti di ritiro DIVERSI ma verso la stessa destinazione -> comunque UN solo gruppo consolidato (già solido, nessuna modifica necessaria)", (t) => {
@@ -219,7 +219,7 @@ test("computeConcludeGroups(): CASO 2 — più colli da punti di ritiro DIVERSI 
     ["Firenze centro", "Roma nord"],
     "il gruppo include davvero colli da negozi diversi"
   );
-  assert.equal(groupPricing[dest].total, 61.5);
+  assert.equal(groupPricing[dest].total, 54.45);
 });
 
 test("computeConcludeGroups(): destinazioni diverse restano SEMPRE gruppi separati, anche con lo stesso punto di ritiro", (t) => {

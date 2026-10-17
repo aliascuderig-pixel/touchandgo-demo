@@ -1873,13 +1873,17 @@ Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (c
 - **Risultato / Prezzo / Riepilogo:** stessi margini e angoli della Home.
 - Se in futuro si aggiunge una schermata, usare `.section` (margine 16px) e le classi esistenti: non reintrodurre margini fissi di 20px.
 
-## Prezzo chiaro (17 ottobre 2026)
+## Prezzo chiaro e abbonamento una tantum (17 ottobre 2026)
 
-Prima ogni schermata scriveva il prezzo a modo suo (solo il totale, oppure «Fee + spedizione» in una frase) e a fine soggiorno il totale cambiava senza spiegazione. Ora c'è **una sola tabella**, uguale ovunque: **Spedizione + Commissione Touch&Go − Sconto = Totale**.
+**Modello (corregge la versione con commissione per spedizione):**
+- **Abbonato:** paga l'abbonamento UNA SOLA VOLTA (scelto dal turista: trimestrale €29, semestrale €49, annuale €79; il partner non sceglie la durata). Poi paga solo la **tariffa di spedizione**, nessuna commissione.
+- **Non abbonato:** paga spedizione + **sovrapprezzo percentuale** calcolato in modo che non abbonarsi non convenga mai.
+- **Prima spedizione / codice invito:** nessun sovrapprezzo (tabella con voce «azzerato»).
 
-- **Codice:** in `dist/assets/app.js`, `planBreakdown(q, piano, sconto)` calcola le voci e il totale come SOMMA delle voci; `PriceBreakdown(voci)` le disegna; `PriceExplain` è il riquadro «Come si calcola il prezzo?». Il totale mostrato è sempre quello salvato in `state.price.grandTotal`.
-- **Dove compare:** Prezzo e piano (un riquadro per ogni piano: prezzo pieno, abbonamento, promo), Riepilogo, Conclusione (una tabella per destinazione).
-- **Conclusione con più oggetti:** il totale è ricalcolato sul gruppo (spedizione una sola volta sul peso totale, una sola commissione). Se differisce dalla somma delle stime singole, compare il riquadro «Perché non €X?» con le stime sommate.
-- **Peso fatturabile:** il maggiore tra peso reale e volumetrico (L×P×H ÷ 5000); `priceQuotes()` ora restituisce anche `billableKg`.
-- **Invariato:** tariffe, commissioni (€39 / €19 / €0 con codice invito), margine sul corriere e ricalcolo lato server in `create-checkout-session.js`.
-- **Test:** 3 nuovi in `guided-steps.test.js` (la somma delle voci è sempre il totale).
+**Algoritmo del sovrapprezzo** (`nonSubscriberSurcharge(spedizione)`): `pct = min(300, max(40, ceil(100 × 29 × 1,1 / spedizione)))`. Il sovrapprezzo in € vale quindi almeno il prezzo del trimestrale + 10%: il non abbonato paga sempre più di chi si abbona (spedizione + €29). Costanti provvisorie: `SURCHARGE_MARGIN` 0,1, `SURCHARGE_MIN_PCT` 40, `SURCHARGE_MAX_PCT` 300, `SUBSCRIPTION_PLANS`, `SUBSCRIBED_FEE` 0. Sulle spedizioni molto economiche il tetto 300% può non bastare: in quel caso l'abbonamento conviene comunque.
+
+**Codice:** `planBreakdown()` calcola le voci, `PriceBreakdown()` le disegna (Spedizione, Sovrapprezzo non abbonato, Abbonamento, Sconto, Totale = somma delle voci). In «Prezzo e piano» due scelte («Senza abbonamento» / «Abbonati», con 3 chip per la durata). `activateSubscription()` attiva il piano; l'abbonamento viene addebitato una sola volta nel primo pagamento (`subscriptionToCharge` → `subscriptionPurchase` sull'oggetto); se il cliente cambia piano prima, `revokeUnchargedSubscription()` lo annulla. Alla scadenza (`subscriptionExpiresAt`) il profilo torna «non abbonato».
+- **Server:** `netlify/lib/pricing.js` ricalcola tutto da zero (mai fidarsi del totale del client); `create-checkout-session.js` aggiunge una sola riga Stripe «Abbonamento Touch&Go … (una tantum)»; `partner-discount.js` valida lo sconto sul sovrapprezzo ricalcolato dalla spedizione; `assistant.js` e `weekly-e2e-test.js` allineati.
+- **Conclusione:** una tabella per destinazione + riga abbonamento (una sola volta) + totale generale.
+- **Test:** `subscription-model.test.js` (garanzia «senza abbonamento costa sempre di più» su tutte le destinazioni/pesi, limiti 40–300%, tre durate, attivazione/annullo) e aggiornati i test di prezzo/checkout.
+- **Da confermare (scelte mie provvisorie):** margine 10%, minimo 40%, massimo 300%, durata evidenziata di default = trimestrale, partner senza codice ABB trattati come non abbonati.
