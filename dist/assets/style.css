@@ -891,6 +891,7 @@ button{font-family:inherit;cursor:pointer}
 .luggage-form .dest-lbl{display:block;margin-bottom:6px}
 .luggage-title{margin-top:10px}
 
+.ob-never-btn{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:6;min-height:44px;padding:0 18px;background:transparent;border:0;color:var(--muted);font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.04em;text-decoration:underline;cursor:pointer;white-space:nowrap}
 /* Menu: righe con pulsante 📌 e barra delle funzioni fisse scelte dal cliente */
 .header-menu .menu-section{margin:4px 14px 2px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-on-ink)}
 .header-menu .menu-hint{margin:6px 14px 4px;font-size:11px;line-height:1.4;color:var(--muted-on-ink)}

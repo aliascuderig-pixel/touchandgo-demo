@@ -890,6 +890,7 @@ const I18N = {
     onboarding_t3: "Concludi e consolidiamo",
     onboarding_p3: "Fine vacanza: un solo ordine di ritiro per tutti gli acquisti verso la stessa destinazione, invece di tante spedizioni separate.",
     onboarding_skip: "Salta",
+    onboarding_never: "Non mostrare più",
     onboarding_music_on: "Attiva la musica",
     onboarding_music_off: "Disattiva la musica",
     onboarding_replay: "Rivedi come funziona",
@@ -1228,6 +1229,7 @@ const I18N = {
     onboarding_t3: "Wrap up and we consolidate",
     onboarding_p3: "End of trip: one single pickup order for everything going to the same destination, instead of many separate shipments.",
     onboarding_skip: "Skip",
+    onboarding_never: "Don't show again",
     onboarding_music_on: "Turn music on",
     onboarding_music_off: "Turn music off",
     onboarding_replay: "See how it works again",
@@ -4014,6 +4016,18 @@ function OnboardingScreen() {
     stage.appendChild(slide);
     slides.push(slide);
   }
+
+  // "Non mostrare più": segna questo dispositivo come già passato
+  // dall'onboarding (stesso flag di saveProfile()), così non riparte più ai
+  // prossimi avvii nemmeno prima della registrazione. Resta rivedibile da
+  // "Rivedi come funziona" nella Dashboard.
+  const neverBtn = el("button", "ob-never-btn", t("onboarding_never"));
+  neverBtn.type = "button";
+  neverBtn.addEventListener("click", () => {
+    try { localStorage.setItem("tg_onboarded", "1"); } catch (e) {}
+    finishOnboarding();
+  });
+  stage.appendChild(neverBtn);
 
   const dotsWrap = el("div", "ob-dots");
   for (let i = 0; i < total; i++) {
