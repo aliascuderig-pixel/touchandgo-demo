@@ -5288,7 +5288,9 @@ function PendingSyncBanner() {
 
 function syncPurchaseToCRM(item) {
   const payload = item.touristEmail ? item : Object.assign({}, item, { touristEmail: state.touristEmail });
-  fetch("/.netlify/functions/save-purchase", {
+  // Restituisce la promise (prima non serviva): «Mettilo in vendita» aspetta
+  // che la conferma di consegna sia arrivata al server prima di mettere in vendita.
+  return fetch("/.netlify/functions/save-purchase", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -7909,6 +7911,90 @@ function loadHistory() {
   } catch (e) {}
 }
 
+// ---------------- «Mettilo in vendita» (Usato dell'E-shop) ----------------
+// Dopo la conferma di consegna, un clic porta l'acquisto nell'Usato dell'E-shop
+// con foto e descrizione (function list-used-item.js). Passaggio in più per
+// verificare che l'acquisto sia del turista: l'email usata all'acquisto.
+const ESHOP_USED_URL = "https://touchandgo-eshop.netlify.app/site/usato.html";
+
+function usedSaleSuccessLines(r, purchaseId) {
+  const pct = (n) => String(Math.round(n * 10000) / 100).replace(".", ",") + "%";
+  const lines = [];
+  lines.push(
+    r.status === "bozza"
+      ? "✓ Annuncio creato, ma manca il prezzo: indicalo nell'Usato dell'E-shop per pubblicarlo."
+      : `✓ L'articolo è in vendita nell'Usato dell'E-shop, con foto e descrizione. Prezzo di partenza: €${String(r.price).replace(".", ",")} (puoi cambiarlo nell'E-shop).`
+  );
+  lines.push(
+    r.promoActive
+      ? `Commissione Touch&Go: ${pct(r.commissionRate)} sul prezzo di vendita — in promozione, ora è gratuita per tutti.`
+      : `Commissione Touch&Go: ${pct(r.commissionRate)} sul prezzo di vendita, per averti dato visibilità e messo in vendita l'articolo.`
+  );
+  lines.push("La spedizione di questo articolo è riservata a Touch&Go: tu non spedisci nulla.");
+  lines.push(`Per vederlo entra nell'E-shop con il codice spedizione ${purchaseId} e la tua email.`);
+  return lines;
+}
+
+function UsedSaleBox(it) {
+  const box = el("div", "used-sale-box");
+  const btn = el("button", "queue-item-change", "🏷️ Mettilo in vendita");
+  const form = el("div", "used-sale-form");
+  form.hidden = true;
+  const hint = el("div", "history-meta");
+  hint.textContent = "Per confermare che l'acquisto è tuo, scrivi l'email che hai usato quando l'hai acquistato.";
+  const input = document.createElement("input");
+  input.type = "email";
+  input.className = "used-sale-email";
+  input.autocomplete = "email";
+  input.maxLength = 200;
+  input.value = it.touristEmail || state.touristEmail || "";
+  const go = el("button", "btn-primary", "Conferma e metti in vendita");
+  const msg = el("div", "history-meta used-sale-msg");
+  form.appendChild(hint);
+  form.appendChild(input);
+  form.appendChild(go);
+  form.appendChild(msg);
+  box.appendChild(btn);
+  box.appendChild(form);
+  [btn, form].forEach((n) => n.addEventListener("click", (e) => e.stopPropagation()));
+  btn.addEventListener("click", () => {
+    form.hidden = !form.hidden;
+  });
+  go.addEventListener("click", async () => {
+    msg.textContent = "";
+    go.disabled = true;
+    try {
+      // Assicura che la conferma di consegna sia già sul server.
+      await syncPurchaseToCRM(it);
+      const res = await fetch("/.netlify/functions/list-used-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purchaseId: it.id, email: input.value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Non è stato possibile metterlo in vendita.");
+      box.textContent = "";
+      const ok = el("div", "used-sale-done");
+      usedSaleSuccessLines(data, it.id).forEach((line) => {
+        const p = document.createElement("div");
+        p.textContent = line;
+        ok.appendChild(p);
+      });
+      const link = document.createElement("a");
+      link.href = ESHOP_USED_URL;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "Vai all'Usato →";
+      ok.appendChild(link);
+      box.appendChild(ok);
+    } catch (e) {
+      msg.textContent = e.message || "Non è stato possibile metterlo in vendita.";
+      go.disabled = false;
+    }
+  });
+  return box;
+}
+
 function PurchaseHistoryList(items, emptyText, editable) {
   const wrap = el("div", "history-list");
   if (!items.length) {
@@ -7996,6 +8082,7 @@ function PurchaseHistoryList(items, emptyText, editable) {
           ? ""
           : confirmedDt.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
         row.appendChild(el("div", "delivery-confirmed-note", `✓ Consegna confermata${confirmedStr ? " il " + confirmedStr : ""}`));
+        if (it.shipmentKind !== "bagaglio") row.appendChild(UsedSaleBox(it));
       }
       wrap.appendChild(row);
     });
