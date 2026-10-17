@@ -905,3 +905,13 @@ button{font-family:inherit;cursor:pointer}
 .pin-bar .pin-ico{font-size:18px;line-height:1}
 #app.has-pinbar{padding-bottom:76px}
 @media print{.pin-bar{display:none}}
+
+/* Step guidati (ottobre 2026) */
+.step-more{margin:12px 20px;border:1px solid var(--line,#2a2a2a);border-radius:10px;padding:8px 12px}
+.step-more>summary{cursor:pointer;font-weight:600;font-size:13px}
+.step-summary{margin:12px 20px;display:flex;flex-direction:column;gap:8px}
+.step-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line,#2a2a2a);border-radius:10px}
+.step-row-lbl{flex:0 0 108px;font-size:12px;opacity:.7}
+.step-row-val{flex:1;font-size:14px;word-break:break-word}
+.step-row-edit{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;font-size:12px}
+.step-total{font-weight:700}
