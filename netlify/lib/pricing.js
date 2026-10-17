@@ -11,8 +11,56 @@
 // cambiati anche qui — vedi MANUALE.md, sezione "Pagamento reale con
 // Stripe Checkout".
 
-const FULL_FEE = 39;
-const SUBSCRIBED_FEE = 19;
+// MODELLO DI PREZZO (17/10/2026) — identico a dist/assets/app.js:
+// pavimento = costo corriere + 30%; non abbonato = pavimento +43%; abbonato =
+// tariffa scontata in proporzione alla durata (annuale = pavimento).
+const SUBSCRIPTION_PLANS = [
+  { id: "trimestrale", label: "Trimestrale", months: 3, price: 29 },
+  { id: "semestrale", label: "Semestrale", months: 6, price: 49 },
+  { id: "annuale", label: "Annuale", months: 12, price: 79 },
+];
+const SUBSCRIBED_FEE = 0;
+// Sconto massimo sulla tariffa PIENA (non abbonato), concesso all'abbonamento
+// più lungo; gli altri hanno uno sconto proporzionale alla durata:
+//   sconto = SUBSCRIPTION_MAX_DISCOUNT × mesi / 12   (trim. 7,5% · sem. 15% · ann. 30%)
+// La tariffa dell'abbonamento annuale è esattamente il PAVIMENTO
+// (costo corriere + SHIPPING_MARGIN 30%): nessuna tariffa scende mai sotto.
+// La tariffa piena = pavimento / (1 − sconto massimo) = pavimento + 43%.
+const SUBSCRIPTION_MAX_DISCOUNT = 0.3;
+const DEFAULT_RATE_PLAN = "trimestrale";
+
+function subscriptionPlanById(id) {
+  return SUBSCRIPTION_PLANS.find((p) => p.id === id) || null;
+}
+const _cents = (n) => Math.round(n * 100) / 100;
+function planDiscountFraction(planId) {
+  const p = subscriptionPlanById(planId) || subscriptionPlanById(DEFAULT_RATE_PLAN);
+  return (SUBSCRIPTION_MAX_DISCOUNT * p.months) / 12;
+}
+// `floor` = tariffa di base (costo corriere + 30%, il pavimento). Restituisce
+// quanto si aggiunge al pavimento per chi NON è abbonato.
+function nonSubscriberSurcharge(floor) {
+  const f = Math.max(0.01, Number(floor) || 0);
+  const k = SUBSCRIPTION_MAX_DISCOUNT / (1 - SUBSCRIPTION_MAX_DISCOUNT);
+  return { pct: Math.round(k * 100), amount: _cents(f * k) };
+}
+// Quanto si aggiunge al pavimento per un abbonato con quel piano
+// (0 per l'annuale: paga esattamente il pavimento).
+function subscriberExtra(floor, planId) {
+  const f = Math.max(0.01, Number(floor) || 0);
+  const ratio = (1 - planDiscountFraction(planId)) / (1 - SUBSCRIPTION_MAX_DISCOUNT);
+  return { pct: Math.round((ratio - 1) * 1000) / 10, amount: _cents(f * (ratio - 1)) };
+}
+// Piano che determina la tariffa di un gruppo di oggetti.
+function ratePlanForItems(items) {
+  for (const it of items) {
+    if (it.pricingTier === "abbonato" && subscriptionPlanById(it.subscriptionPlanId)) return it.subscriptionPlanId;
+  }
+  for (const it of items) {
+    if (subscriptionPlanById(it.subscriptionPurchase)) return it.subscriptionPurchase;
+  }
+  return DEFAULT_RATE_PLAN;
+}
 
 const DESTINATIONS = [
   { name: "Italia", zone: "domestico" },
@@ -32,7 +80,7 @@ const SHIPPING_RATES = {
   worldwide: { brackets: [[1, 50], [2, 58], [5, 75], [10, 95], [20, 130], [30, 165]], perKgOver: 5.5 },
 };
 
-const SHIPPING_MARGIN = 0.25;
+const SHIPPING_MARGIN = 0.3;
 
 function volumetricWeight(dims) {
   if (!dims) return 0;
@@ -74,7 +122,7 @@ function consolidatedGroupPriceForItems(items) {
 
   const onBreakeven = items.some((it) => it.pricingTier === "breakeven");
   const isSubscribed = items.some((it) => it.pricingTier === "abbonato");
-  const fee = onBreakeven ? 0 : isSubscribed ? SUBSCRIBED_FEE : FULL_FEE;
+  const fee = onBreakeven ? 0 : isSubscribed ? subscriberExtra(shipping, ratePlanForItems(items)).amount : nonSubscriberSurcharge(shipping).amount;
 
   const totalPartnerDiscount = items.reduce((sum, it) => sum + (parseFloat(it.partnerDiscountAmount) || 0), 0);
   const total = Math.max(0, Math.round((shipping + fee - totalPartnerDiscount) * 100) / 100);
@@ -88,12 +136,29 @@ function consolidatedGroupPriceForItems(items) {
   };
 }
 
+// Abbonamento una tantum portato da uno degli oggetti: si addebita UNA volta.
+function subscriptionForItems(items) {
+  for (const it of items) {
+    const plan = subscriptionPlanById(it.subscriptionPurchase);
+    if (plan) return plan;
+  }
+  return null;
+}
+
 module.exports = {
   consolidatedGroupPriceForItems,
+  subscriptionForItems,
+  subscriptionPlanById,
+  nonSubscriberSurcharge,
+  subscriberExtra,
+  ratePlanForItems,
+  planDiscountFraction,
+  SUBSCRIPTION_MAX_DISCOUNT,
+  DEFAULT_RATE_PLAN,
+  SUBSCRIPTION_PLANS,
   DESTINATIONS,
   SHIPPING_RATES,
   SHIPPING_MARGIN,
-  FULL_FEE,
   SUBSCRIBED_FEE,
   volumetricWeight,
   bracketPrice,

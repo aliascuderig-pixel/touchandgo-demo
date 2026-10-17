@@ -54,7 +54,7 @@ function callGlobal(context, expr) {
 
 // Indirizzo di consegna (destinazione) — Italia, quindi zona "domestico"
 // (brackets [[1,9],[2,11],[5,14],[10,18],[20,25],[30,33]], perKgOver 1.1,
-// margine 25%, FULL_FEE 39€ per pricingTier "pieno"). Stesso identico
+// margine 25%, sovrapprezzo da non abbonato per pricingTier "pieno"). Stesso identico
 // oggetto usato dal codice reale in state.addresses — vedi
 // destinationCountryForItem() in app.js, che consolidatedGroupPrice()
 // chiama su items[0] per risolvere la zona tariffaria.
@@ -94,12 +94,12 @@ test("consolidatedGroupPrice(): 2 colli, vince il peso REALE (nessun volume dich
   const result = callGlobal(context, "consolidatedGroupPrice(state.__t_items)");
 
   // combinedReal = 3+4 = 7, combinedVolumetric = 0 -> billable = 7.
-  // bracket domestico: 7 <= 10 -> 18€ grezzo; shipping = 18*1.25 = 22.5€;
-  // fee piena 39€ -> totale 61.5€.
+  // bracket domestico: 7 <= 10 -> 18€ grezzo; shipping = 18*1.30 = 23.4€;
+  // sovrapprezzo non abbonato +43% (10.03€) -> totale 33.43€.
   assert.equal(result.weightKg, 7);
-  assert.equal(result.shipping, 22.5);
-  assert.equal(result.fee, 39);
-  assert.equal(result.total, 61.5);
+  assert.equal(result.shipping, 23.4);
+  assert.equal(result.fee, 10.03);
+  assert.equal(result.total, 33.43);
 });
 
 test("consolidatedGroupPrice(): 2 colli, vince il peso VOLUMETRICO (poco peso reale, molto volume) — 12.8kg + 5.4kg = 18.2kg fatturabili", (t) => {
@@ -115,12 +115,12 @@ test("consolidatedGroupPrice(): 2 colli, vince il peso VOLUMETRICO (poco peso re
 
   // combinedReal = 0.5+0.5 = 1, combinedVolumetric = 12.8+5.4 = 18.2 ->
   // billable = 18.2 (il volumetrico vince nettamente). bracket domestico:
-  // 18.2 <= 20 -> 25€ grezzo; shipping = 25*1.25 = 31.25€; fee 39€ ->
-  // totale 70.25€.
+  // 18.2 <= 20 -> 25€ grezzo; shipping = 25*1.30 = 32.5€; sovrapprezzo +43% (13.93€) ->
+  // totale 46.43€.
   assert.equal(result.weightKg, 18.2);
-  assert.equal(result.shipping, 31.25);
-  assert.equal(result.fee, 39);
-  assert.equal(result.total, 70.25);
+  assert.equal(result.shipping, 32.5);
+  assert.equal(result.fee, 13.93);
+  assert.equal(result.total, 46.43);
 });
 
 test("consolidatedGroupPrice(): 2 colli, peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al limite esatto di una fascia) — mai la somma (10kg), mai un valore diverso da 5", (t) => {
@@ -139,12 +139,12 @@ test("consolidatedGroupPrice(): 2 colli, peso reale e volumetrico ESATTAMENTE ug
   // coincidono) — se il codice sommasse per errore i due totali invece di
   // prendere il maggiore, verrebbe 10 (fascia successiva, prezzo diverso):
   // questo test lo intercetterebbe. bracket domestico: 5 <= 5 -> 14€
-  // grezzo (non la fascia successiva); shipping = 14*1.25 = 17.5€; fee
-  // 39€ -> totale 56.5€.
+  // grezzo (non la fascia successiva); shipping = 14*1.30 = 18.2€; sovrapprezzo
+  // +43% (7.8€) -> totale 26€.
   assert.equal(result.weightKg, 5);
-  assert.equal(result.shipping, 17.5);
-  assert.equal(result.fee, 39);
-  assert.equal(result.total, 56.5);
+  assert.equal(result.shipping, 18.2);
+  assert.equal(result.fee, 7.8);
+  assert.equal(result.total, 26);
 });
 
 // ---------------------------------------------------------------------
@@ -162,14 +162,14 @@ test("consolidatedGroupPrice(): un gruppo di UN SOLO oggetto produce esattamente
 
   assert.equal(group.total, solitary.grandTotal);
   // 1kg reale, nessun volume: bracket domestico 1<=1 -> 9€ grezzo;
-  // shipping 9*1.25 = 11.25€; fee piena 39€ -> 50.25€.
-  assert.equal(group.total, 50.25);
+  // shipping 9*1.30 = 11.7€; tariffa piena +43% -> 16.71€.
+  assert.equal(group.total, 16.71);
 });
 
 test("shippingCost()/priceFor() per il caso a collo singolo restano invariati (nessuna modifica alla loro formula)", (t) => {
   const { context } = bootApp(t);
   const { shipping, eta } = callGlobal(context, `shippingCost(1, "Italia", null)`);
-  assert.equal(shipping, 11.25);
+  assert.equal(shipping, 11.7);
   assert.equal(eta, "24–48 ore");
 });
 
@@ -192,7 +192,7 @@ test("computeConcludeGroups(): CASO 1 — più colli dallo STESSO punto di ritir
   const [dest, items] = Object.entries(itemsByDest)[0];
   assert.equal(items.length, 2);
   // Stesso risultato del test "vince il peso reale" sopra (3kg+4kg=7kg).
-  assert.equal(groupPricing[dest].total, 61.5);
+  assert.equal(groupPricing[dest].total, 33.43);
 });
 
 test("computeConcludeGroups(): CASO 2 — più colli da punti di ritiro DIVERSI ma verso la stessa destinazione -> comunque UN solo gruppo consolidato (già solido, nessuna modifica necessaria)", (t) => {
@@ -219,7 +219,7 @@ test("computeConcludeGroups(): CASO 2 — più colli da punti di ritiro DIVERSI 
     ["Firenze centro", "Roma nord"],
     "il gruppo include davvero colli da negozi diversi"
   );
-  assert.equal(groupPricing[dest].total, 61.5);
+  assert.equal(groupPricing[dest].total, 33.43);
 });
 
 test("computeConcludeGroups(): destinazioni diverse restano SEMPRE gruppi separati, anche con lo stesso punto di ritiro", (t) => {

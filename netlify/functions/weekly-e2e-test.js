@@ -139,8 +139,13 @@ const TOURIST_EMAIL = "weekly-e2e-test@touchandgo-internal-test.it";
 // app.js cambiano, questa replica va aggiornata a mano — nessun modo
 // automatico di tenerle sincronizzate finché restano in due posti.
 // ---------------------------------------------------------------------
-const FULL_FEE = 39;
-const SHIPPING_MARGIN = 0.25;
+// Replica indipendente del modello 17/10/2026: tariffa piena (non abbonato) =
+// pavimento (costo corriere +30%) x 1/(1-0,30), cioè pavimento +43%.
+function nonSubscriberSurcharge(shipping) {
+  const ship = Math.max(0.01, Number(shipping) || 0);
+  return Math.round(ship * (0.3 / 0.7) * 100) / 100;
+}
+const SHIPPING_MARGIN = 0.3;
 const ZONE_TRANSFRONTALIERO = {
   brackets: [[1, 15], [2, 20], [5, 26], [10, 34], [20, 44], [30, 55]],
   perKgOver: 2.2,
@@ -164,13 +169,13 @@ function bracketPrice(weightKg) {
 }
 
 // Prezzo individuale stimato per UN oggetto da solo — stessa formula di
-// priceFor()/shippingCost() in app.js con pricingTier "pieno" (FULL_FEE).
+// priceFor()/shippingCost() in app.js con pricingTier "pieno" (sovrapprezzo da non abbonato).
 function computeIndividualPrice(weightKg, dims) {
   const realWeight = Math.max(0.3, parseFloat(weightKg) || 1);
   const billableWeight = Math.max(realWeight, volumetricWeight(dims));
   const rawCost = bracketPrice(billableWeight);
   const shipping = parseFloat((rawCost * (1 + SHIPPING_MARGIN)).toFixed(2));
-  return parseFloat((shipping + FULL_FEE).toFixed(2));
+  return parseFloat((shipping + nonSubscriberSurcharge(shipping)).toFixed(2));
 }
 
 // Prezzo consolidato per il GRUPPO — stessa formula di
@@ -185,8 +190,9 @@ function computeConsolidatedPrice(items) {
   const billableWeight = Math.max(combinedRealWeight, combinedVolumetricWeight);
   const rawCost = bracketPrice(billableWeight);
   const shipping = parseFloat((rawCost * (1 + SHIPPING_MARGIN)).toFixed(2));
-  const total = Math.round((shipping + FULL_FEE) * 100) / 100;
-  return { weightKg: parseFloat(billableWeight.toFixed(2)), shipping, fee: FULL_FEE, total };
+  const fee = nonSubscriberSurcharge(shipping);
+  const total = Math.round((shipping + fee) * 100) / 100;
+  return { weightKg: parseFloat(billableWeight.toFixed(2)), shipping, fee, total };
 }
 
 // Controllo di business esplicitamente richiesto: il prezzo consolidato del

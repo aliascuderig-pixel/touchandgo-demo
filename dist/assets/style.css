@@ -1061,3 +1061,11 @@ button{font-family:inherit;cursor:pointer}
 .pb-explain{margin-left:var(--gut,16px);margin-right:var(--gut,16px)}
 .section .pb-explain,.price-option .pb-explain,.promo-card-inline .pb-explain{margin-left:0;margin-right:0}
 .identify-intro.step-pad,.info-line.step-pad{padding-left:var(--gut,16px);padding-right:var(--gut,16px)}
+
+/* Abbonamento una tantum: scelta della durata */
+.plan-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.plan-chip{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px;border:1.5px solid var(--border,#d9dde3);border-radius:12px;background:#fff;font:inherit;cursor:pointer}
+.plan-chip b{font-size:1.05rem}
+.plan-chip small{font-size:.75rem;opacity:.7}
+.plan-chip.on{border-color:var(--accent,#0a7d5a);box-shadow:0 0 0 2px rgba(10,125,90,.18)}
+.pb-row.pay-subscription{border-top:1px dashed var(--border,#d9dde3);padding-top:6px}

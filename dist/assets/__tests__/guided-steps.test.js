@@ -56,7 +56,7 @@ test("scelto il piano compare «Vai al riepilogo» e il riepilogo elenca le scel
   assert.equal(call("state.screen"), "step-summary");
   const rows = [...d.querySelectorAll(".step-row")].map((r) => r.dataset.row);
   assert.deepEqual(rows, ["obj", "pickup", "dest", "plan", "discount"]);
-  assert.match(d.querySelector('[data-row="plan"]').textContent, /Tariffa piena/);
+  assert.match(d.querySelector('[data-row="plan"]').textContent, /Senza abbonamento/);
   assert.match(d.querySelector('[data-row="pickup"]').textContent, /Catania/);
 });
 
@@ -115,8 +115,9 @@ test("Prezzo e piano: in ogni riquadro Spedizione + Commissione = Totale", (t) =
     const { sum, total } = sumMatches(b);
     assert.equal(sum, total);
   }
-  const [full, sub] = boxes.map((b) => sumMatches(b).total);
-  assert.equal(Math.round((full - sub) * 100) / 100, 20, "l'abbonamento fa risparmiare la differenza tra le commissioni (39 − 19)");
+  // Riquadro abbonati: tariffa scontata (piena barrata) + abbonamento una tantum.
+  assert.ok(boxes[1].querySelector(".pb-row s"), "la tariffa piena compare barrata accanto a quella scontata");
+  assert.ok(boxes[1].querySelector(".pb-row.subscription"));
 });
 
 test("Riepilogo: il dettaglio prezzo somma al totale e c'è la spiegazione «Come si calcola»", (t) => {

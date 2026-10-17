@@ -123,15 +123,15 @@ test("il totale (unit_amount) della sessione Checkout corrisponde esattamente al
   const getLastCall = mockStripeCreateFetch();
 
   // Italia (zona "domestico"), 1kg reale, dims piccole (volumetrico
-  // trascurabile): bracket <=1kg = 9€, margine 25% -> 11.25€ shipping,
-  // + fee piena 39€ = 50.25€ -> 5025 centesimi.
+  // trascurabile): bracket <=1kg = 9€, margine 30% -> 11.7€ shipping,
+  // + tariffa piena +43% (5.01€) = 16.71€ -> 1671 centesimi.
   const res = await mod.handler(makeEvent({ items: [item({ weightKg: 1 })] }));
   assert.equal(res.statusCode, 200);
 
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "5025");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "1671");
   const data = JSON.parse(res.body);
-  assert.equal(data.amountTotalCents, 5025);
+  assert.equal(data.amountTotalCents, 1671);
 });
 
 test("il totale corrisponde esattamente al prezzo consolidato per un GRUPPO di più oggetti verso la stessa destinazione (una sola fee)", async () => {
@@ -140,7 +140,7 @@ test("il totale corrisponde esattamente al prezzo consolidato per un GRUPPO di p
 
   // Due oggetti, stessa destinazione (stesso addressLabel): peso reale
   // combinato 1+2=3kg -> bracket <=5kg = 14€, margine 25% -> 17.5€
-  // shipping, + UNA sola fee piena 39€ = 56.5€ -> 5650 centesimi (non il
+  // shipping, + UNA sola fee piena 39€ = 56.5€ -> 4953 centesimi (non il
   // doppio di due fee separate).
   const dest = "Casa — Via Test 1, Roma 00100, Italia";
   const res = await mod.handler(
@@ -153,7 +153,7 @@ test("il totale corrisponde esattamente al prezzo consolidato per un GRUPPO di p
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "5650");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "2600");
   assert.equal(call.body.get("line_items[1]"), null, "un solo line item per il gruppo consolidato, non uno per oggetto");
 });
 
@@ -175,7 +175,7 @@ test("multicollo: vince il peso REALE (nessun volume dichiarato) — 3kg + 4kg =
 
   // combinedReal = 3+4 = 7, combinedVolumetric = 0 -> billable = 7.
   // bracket domestico 7<=10 -> 18€ grezzo; shipping 18*1.25 = 22.5€; fee
-  // piena 39€ -> 61.5€ -> 6150 centesimi.
+  // piena 39€ -> 61.5€ -> 5445 centesimi.
   const dest = "Casa — Via Test 1, Roma 00100, Italia";
   const res = await mod.handler(
     makeEvent({
@@ -187,7 +187,7 @@ test("multicollo: vince il peso REALE (nessun volume dichiarato) — 3kg + 4kg =
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "6150");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "3343");
 });
 
 test("multicollo: vince il peso VOLUMETRICO (poco peso reale, molto volume) — 12.8kg + 5.4kg = 18.2kg fatturabili -> 70.25€", async () => {
@@ -197,7 +197,7 @@ test("multicollo: vince il peso VOLUMETRICO (poco peso reale, molto volume) — 
   // combinedReal = 0.5+0.5 = 1, combinedVolumetric = 64000/5000 + 27000/5000
   // = 12.8+5.4 = 18.2 -> billable = 18.2 (il volumetrico vince nettamente).
   // bracket domestico 18.2<=20 -> 25€ grezzo; shipping 25*1.25 = 31.25€;
-  // fee piena 39€ -> 70.25€ -> 7025 centesimi.
+  // fee piena 39€ -> 70.25€ -> 6344 centesimi.
   const dest = "Casa — Via Test 1, Roma 00100, Italia";
   const res = await mod.handler(
     makeEvent({
@@ -209,7 +209,7 @@ test("multicollo: vince il peso VOLUMETRICO (poco peso reale, molto volume) — 
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "7025");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4643");
 });
 
 test("multicollo: peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al limite esatto di una fascia) — mai la somma (10kg), mai un valore diverso da 5 -> 56.50€", async () => {
@@ -222,7 +222,7 @@ test("multicollo: peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al li
   // totali invece di prendere il maggiore, verrebbe 10 (fascia successiva,
   // prezzo diverso): questo test lo intercetterebbe. bracket domestico
   // 5<=5 -> 14€ grezzo (non la fascia successiva); shipping 14*1.25 =
-  // 17.5€; fee 39€ -> 56.5€ -> 5650 centesimi.
+  // 17.5€; fee 39€ -> 56.5€ -> 4953 centesimi.
   const dest = "Casa — Via Test 1, Roma 00100, Italia";
   const res = await mod.handler(
     makeEvent({
@@ -234,7 +234,7 @@ test("multicollo: peso reale e volumetrico ESATTAMENTE uguali (5kg vs 5kg, al li
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "5650");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "2600");
 });
 
 test("due destinazioni diverse generano DUE line item Stripe distinti, la cui somma è il totale complessivo", async () => {
@@ -273,19 +273,19 @@ test("un 'total' o 'amount' mandato dal client viene sempre ignorato: il totale 
   );
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  // Lo stesso identico totale del primo test (5025), MAI 1.
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "5025");
+  // Lo stesso identico totale del primo test (1671), MAI 1.
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "1671");
 });
 
 test("uno sconto codice partner viene sottratto dalla fee, mai dal costo di spedizione", async () => {
   const mod = freshModule();
   const getLastCall = mockStripeCreateFetch();
 
-  // Stesso caso del primo test (5025 centesimi) meno 10€ di sconto = 4025.
-  const res = await mod.handler(makeEvent({ items: [item({ weightKg: 1, partnerDiscountAmount: 10 })] }));
+  // Stesso caso del primo test (1671 centesimi) meno lo sconto partner (10% della parte sopra il pavimento: 0.50€) = 1621.
+  const res = await mod.handler(makeEvent({ items: [item({ weightKg: 1, partnerDiscountAmount: 0.5 })] }));
   assert.equal(res.statusCode, 200);
   const call = getLastCall();
-  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "4025");
+  assert.equal(call.body.get("line_items[0][price_data][unit_amount]"), "1621");
 });
 
 // ---------------------------------------------------------------------

@@ -18,7 +18,7 @@
 
 const { getStore } = require("@netlify/blobs");
 const { guestScopedStoreName } = require("../lib/guest-mode");
-const { consolidatedGroupPriceForItems } = require("../lib/pricing");
+const { consolidatedGroupPriceForItems, subscriptionForItems, subscriptionPlanById } = require("../lib/pricing");
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minuti
@@ -56,6 +56,8 @@ function isValidItem(it) {
   const weight = typeof it.weightKg === "number" ? it.weightKg : parseFloat(it.weightKg);
   if (!isFinite(weight) || weight <= 0 || weight >= 50) return false;
   if (!VALID_PRICING_TIERS.includes(it.pricingTier)) return false;
+  if (it.subscriptionPurchase !== undefined && !subscriptionPlanById(it.subscriptionPurchase)) return false;
+  if (it.subscriptionPlanId !== undefined && !subscriptionPlanById(it.subscriptionPlanId)) return false;
   return true;
 }
 
@@ -145,6 +147,19 @@ exports.handler = async (event) => {
         name: `Spedizione consolidata verso ${dest} (${groupItems.length} oggett${groupItems.length === 1 ? "o" : "i"}, ${pricing.weightKg} kg)`,
       };
     });
+
+    // Abbonamento una tantum: UNA riga, una sola volta, a prescindere da quanti
+    // oggetti/gruppi lo dichiarano (prezzo preso dalla tabella del server).
+    const subscription = subscriptionForItems(items);
+    if (subscription) {
+      const amountCents = Math.round(subscription.price * 100);
+      grandTotalCents += amountCents;
+      groups.push({
+        dest: "abbonamento",
+        amountCents,
+        name: `Abbonamento Touch&Go ${subscription.label.toLowerCase()} (una tantum, ${subscription.months} mesi)`,
+      });
+    }
 
     if (grandTotalCents <= 0) {
       return { statusCode: 400, body: JSON.stringify({ error: "Il totale calcolato non è valido" }) };

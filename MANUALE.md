@@ -1873,13 +1873,18 @@ Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (c
 - **Risultato / Prezzo / Riepilogo:** stessi margini e angoli della Home.
 - Se in futuro si aggiunge una schermata, usare `.section` (margine 16px) e le classi esistenti: non reintrodurre margini fissi di 20px.
 
-## Prezzo chiaro (17 ottobre 2026)
+## Prezzo chiaro e abbonamento una tantum (17 ottobre 2026)
 
-Prima ogni schermata scriveva il prezzo a modo suo (solo il totale, oppure «Fee + spedizione» in una frase) e a fine soggiorno il totale cambiava senza spiegazione. Ora c'è **una sola tabella**, uguale ovunque: **Spedizione + Commissione Touch&Go − Sconto = Totale**.
+**Modello (versione 3, 17/10 pomeriggio):**
+- **Pavimento:** nessuna tariffa di spedizione scende MAI sotto *costo corriere + 30%* (`SHIPPING_MARGIN = 0.30`, in `app.js` e `netlify/lib/pricing.js`).
+- **Tariffa piena (non abbonato):** pavimento ÷ (1 − 30%) = pavimento **+43%**. Si vede come UNA riga «Tariffa di spedizione», non come sovrapprezzo separato.
+- **Abbonamento una tantum** (sceglie solo il turista): trimestrale €29, semestrale €49, annuale €79. Lo **sconto sulla tariffa piena è proporzionale alla durata**: `30% × mesi/12` → trimestrale −7,5%, semestrale −15%, annuale −30% (= pavimento). Dopo l'abbonamento si paga solo la tariffa scontata.
+- **Prima spedizione («la prova»):** a tariffa piena, come le successive (nessuna agevolazione). Chi non è abbonato può continuare a spedire a tariffa piena quando vuole.
+- **Codice invito valido:** tariffa al pavimento, una volta.
+- **Si ripaga:** la schermata «Prezzo e piano» dice dopo quante spedizioni come quella l'abbonamento si ripaga (`abbonamento ÷ risparmio per spedizione`). Alla prima spedizione l'abbonamento può costare più della tariffa piena: è voluto, conviene con più spedizioni.
 
-- **Codice:** in `dist/assets/app.js`, `planBreakdown(q, piano, sconto)` calcola le voci e il totale come SOMMA delle voci; `PriceBreakdown(voci)` le disegna; `PriceExplain` è il riquadro «Come si calcola il prezzo?». Il totale mostrato è sempre quello salvato in `state.price.grandTotal`.
-- **Dove compare:** Prezzo e piano (un riquadro per ogni piano: prezzo pieno, abbonamento, promo), Riepilogo, Conclusione (una tabella per destinazione).
-- **Conclusione con più oggetti:** il totale è ricalcolato sul gruppo (spedizione una sola volta sul peso totale, una sola commissione). Se differisce dalla somma delle stime singole, compare il riquadro «Perché non €X?» con le stime sommate.
-- **Peso fatturabile:** il maggiore tra peso reale e volumetrico (L×P×H ÷ 5000); `priceQuotes()` ora restituisce anche `billableKg`.
-- **Invariato:** tariffe, commissioni (€39 / €19 / €0 con codice invito), margine sul corriere e ricalcolo lato server in `create-checkout-session.js`.
-- **Test:** 3 nuovi in `guided-steps.test.js` (la somma delle voci è sempre il totale).
+**Codice:** costanti `SUBSCRIPTION_PLANS`, `SUBSCRIPTION_MAX_DISCOUNT` (0,30), `DEFAULT_RATE_PLAN`; funzioni `planDiscountFraction()`, `nonSubscriberSurcharge(pavimento)`, `subscriberExtra(pavimento, piano)`, `ratePlanForItems(items)`; `priceQuotes()` restituisce `plans.{id}.rate`. `planBreakdown()` calcola le voci, `PriceBreakdown()` le disegna (Tariffa di spedizione [piena barrata se scontata], Abbonamento, Sconto, Totale = somma). Ogni oggetto da abbonato porta `subscriptionPlanId` (la tariffa del gruppo segue quel piano) e, solo sul primo pagamento, `subscriptionPurchase`. `activateSubscription()` / `revokeUnchargedSubscription()` / scadenza `subscriptionExpiresAt` come prima.
+- **Server:** `netlify/lib/pricing.js` ricalcola tutto (mai il totale del client); `create-checkout-session.js` aggiunge una sola riga Stripe «Abbonamento Touch&Go … (una tantum)»; `partner-discount.js` accetta come «fee» scontabile solo la parte sopra il pavimento di non abbonato o di uno dei 3 piani; `assistant.js` e `weekly-e2e-test.js` allineati.
+- **Guida:** `dist/site/guida.html` (sezione turista) descrive la scelta tariffa/abbonamento e gli sconti per durata.
+- **Test:** `subscription-model.test.js` (sconti 7,5/15/30%, mai sotto costo +30% su tutte le destinazioni/pesi/piani, Italia su Italia contenuta, attivazione/annullo).
+- **Da confermare (provvisorio):** sconto massimo 30% (tariffa piena +43%) e durata evidenziata di default = trimestrale.
