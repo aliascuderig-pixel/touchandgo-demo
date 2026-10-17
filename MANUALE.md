@@ -1852,3 +1852,34 @@ Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi 
 - `.github/workflows/test.yml` — a ogni pull request e a ogni modifica di `main` GitHub esegue `npm ci` e `npm test` (Node 22) su un computer pulito; se un test fallisce la pull request mostra la X rossa. Esegue anche `npm audit --omit=dev --audit-level=high` come **solo avviso**: segnala dipendenze con vulnerabilità gravi ma non blocca nulla. Non usa segreti. Costo: minuti di calcolo del piano GitHub (qualche minuto per esecuzione).
 - `.github/dependabot.yml` — ogni lunedì Dependabot controlla le dipendenze npm e apre al massimo 5 pull request raggruppate per aggiornamenti minori e di sicurezza; una volta al mese controlla le azioni di GitHub. Non unisce mai nulla da solo: serve il «mergia».
 Limite noto: le funzioni Netlify non vengono eseguite online, i test girano sul codice.
+
+## Flusso a step guidati (17 ottobre 2026)
+
+Modalità opzionale dell'app del turista, **spenta di default**: chi non la attiva vede il flusso di sempre.
+
+- **Come si accende:** aprendo l'app con `?passi=1` nell'indirizzo (resta salvata nel browser, chiave `tg_guided_flow`); `?passi=0` la spegne. Funzione `guidedFlowOn()` in `dist/assets/app.js`.
+- **Passi:** 1 Foto → 2 Ritiro e destinazione → 3 **Risultato** (solo scheda dell'oggetto; avvisi, merci vietate, dazi e assistente stanno in un riquadro «Da sapere» chiuso) → 4 **Prezzo e piano** (schermata `plan`: piano pieno o abbonato, promo, codice sconto; «Vai al riepilogo» compare solo dopo la scelta) → 5 **Riepilogo** (schermata `step-summary`) → scelta indirizzo e conclusione come prima.
+- **Riepilogo:** elenca oggetto, ritiro, destinazione, piano, codice sconto e totale stimato. «Modifica» su ritiro/destinazione apre `edit-dest` (NON rilancia la classificazione: peso e codice doganale restano; il prezzo si ricalcola e il piano va riconfermato); «Modifica» su piano/sconto riapre la scelta del piano e azzera il codice sconto. Dopo ogni modifica si torna al riepilogo (`state.returnToSummary`).
+- **Aspetto:** barra dei 5 passi in alto (segmenti oro, «Passo N di 5»), riquadro «Da sapere» e righe del riepilogo con angoli netti e etichette in mono come la scheda risultato, «Modifica» in oro, totale su fondo inchiostro. Stili in fondo a `dist/assets/style.css` (sezione «Step guidati»).
+- **Cosa non cambia:** calcolo dei prezzi (`appendPricing` è lo stesso codice del flusso classico, estratto da `ResultScreen`), consolidamento dei gruppi, pagamento Stripe in `ConcludeScreen`, percorso offline. Fino al riepilogo non viene salvato né pagato nulla.
+- **Test:** `dist/assets/__tests__/guided-steps.test.js` (8).
+
+## Layout mobile v2 (17 ottobre 2026)
+
+Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (colori e logica invariati). Tutto è in fondo a `dist/assets/style.css`, sezione «Layout mobile v2» (variabili `--gut` = 16px di margine laterale unico e `--r` = 16px di raggio angoli), più due piccole modifiche al DOM della Home in `app.js`.
+
+- **Home:** la foto è il blocco principale (altezza ~36% dello schermo, bottone «Tocca per aprire la fotocamera»); «Scegli dalla galleria» e «Spedisci i tuoi bagagli» stanno affiancati (`.home-quick`); il campo «descrivilo» ha la stessa larghezza; il suggerimento dell'assistente, le tre garanzie e l'avviso merci vietate sono raccolti nel riquadro «Come funziona e limiti» (`details.home-more`, chiuso); resta in vista solo il promemoria posizione. La Home passa da circa 1,6 a poco più di 1 schermata.
+- **Destinazione, indirizzo, conclusione:** margini e angoli uguali ovunque, campi su due righe (etichetta sopra, valore sotto, niente testo troncato), bersagli di tocco da almeno 52px, nessun doppio margine dentro `.section`.
+- **Risultato / Prezzo / Riepilogo:** stessi margini e angoli della Home.
+- Se in futuro si aggiunge una schermata, usare `.section` (margine 16px) e le classi esistenti: non reintrodurre margini fissi di 20px.
+
+## Prezzo chiaro (17 ottobre 2026)
+
+Prima ogni schermata scriveva il prezzo a modo suo (solo il totale, oppure «Fee + spedizione» in una frase) e a fine soggiorno il totale cambiava senza spiegazione. Ora c'è **una sola tabella**, uguale ovunque: **Spedizione + Commissione Touch&Go − Sconto = Totale**.
+
+- **Codice:** in `dist/assets/app.js`, `planBreakdown(q, piano, sconto)` calcola le voci e il totale come SOMMA delle voci; `PriceBreakdown(voci)` le disegna; `PriceExplain` è il riquadro «Come si calcola il prezzo?». Il totale mostrato è sempre quello salvato in `state.price.grandTotal`.
+- **Dove compare:** Prezzo e piano (un riquadro per ogni piano: prezzo pieno, abbonamento, promo), Riepilogo, Conclusione (una tabella per destinazione).
+- **Conclusione con più oggetti:** il totale è ricalcolato sul gruppo (spedizione una sola volta sul peso totale, una sola commissione). Se differisce dalla somma delle stime singole, compare il riquadro «Perché non €X?» con le stime sommate.
+- **Peso fatturabile:** il maggiore tra peso reale e volumetrico (L×P×H ÷ 5000); `priceQuotes()` ora restituisce anche `billableKg`.
+- **Invariato:** tariffe, commissioni (€39 / €19 / €0 con codice invito), margine sul corriere e ricalcolo lato server in `create-checkout-session.js`.
+- **Test:** 3 nuovi in `guided-steps.test.js` (la somma delle voci è sempre il totale).

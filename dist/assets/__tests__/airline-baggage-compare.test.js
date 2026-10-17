@@ -475,11 +475,11 @@ test("ConcludeScreen: la stima bagaglio è SOLO informativa, mai parte del total
   gotoConclude(context, window);
   await flushMicrotasks();
 
-  const totalBefore = document.querySelector(".info-row.total b").textContent;
+  const totalBefore = document.querySelector(".pay-summary .pb-total b").textContent;
   const airlineSelect = document.querySelector(".baggage-compare-airline");
   airlineSelect.value = "KLM";
   airlineSelect.dispatchEvent(new window.Event("change"));
-  const totalAfter = document.querySelector(".info-row.total b").textContent;
+  const totalAfter = document.querySelector(".pay-summary .pb-total b").textContent;
 
   assert.equal(totalBefore, totalAfter, "scegliere una compagnia aerea non deve MAI alterare il totale Touch&Go");
 });
