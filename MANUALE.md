@@ -1607,6 +1607,16 @@ Il turista può spedire i propri bagagli **andata e ritorno** direttamente dall'
 - **Test**: `tourist-luggage.test.js` (5). Suite 577/577.
 - **Da verificare**: peso/misure dei bagagli sono dichiarati dal turista (non stimati): il corriere reale potrà richiedere una verifica.
 
+## «Mettilo in vendita» — l'Usato dell'E-shop (17 ottobre 2026)
+
+**Cosa fa.** In «I tuoi acquisti», dopo che il turista ha confermato «Sì, l'ho ricevuto», sotto «✓ Consegna confermata» compare il pulsante **«🏷️ Mettilo in vendita»** (non per i bagagli). Un clic apre un campo con l'email già compilata (se nota) e il pulsante «Conferma e metti in vendita»: l'acquisto, con foto e descrizione (nome, categoria, materiale, misure, peso), finisce nell'**Usato dell'E-shop** (sito `touchandgo-eshop`, riservato ad abbonati e clienti con un acquisto). Non serve altro. Il manuale dell'E-shop, sezione «Sezione Usato e pagamenti», descrive il resto (ordini, pagamento di prova, spedizione).
+
+**Cosa vede il turista dopo il clic** (banner nello stesso punto): l'articolo è in vendita con prezzo di partenza = valore dichiarato (modificabile nell'E-shop); la **commissione Touch&Go** e, se attiva, la **promozione «ora gratuita per tutti»**; la frase **«la spedizione di questo articolo è riservata a Touch&Go»**; il codice spedizione e il link «Vai all'Usato →» (per entrare serve il codice spedizione + la sua email). Se l'acquisto non ha valore dichiarato l'annuncio resta bozza e il banner chiede di indicare il prezzo nell'E-shop.
+
+**Verifica di proprietà (passaggio in più).** L'app turista non ha un vero login: la function `list-used-item.js` confronta l'email indicata con quella del record dell'acquisto. Email diversa e acquisto inesistente danno **lo stesso errore** (404); un acquisto senza email sul record non si può mettere in vendita da qui (409, «contatta l'assistenza»). Si vende solo un oggetto con consegna confermata (`deliveryConfirmedAt` già sul server: prima del clic l'app risincronizza l'acquisto) e non un bagaglio. Max 10 richieste/ora per IP.
+
+**File.** `netlify/functions/list-used-item.js` (solo POST; scrive SOLO `eshop-used` e `eshop-used-index`, **mai** `purchases`), `netlify/lib/used-listing.js` (copia **identica** di quella di `touchandgo-eshop` e `touchandgo-gestionale`: va tenuta uguale), `UsedSaleBox()` in `dist/assets/app.js` (`syncPurchaseToCRM` ora restituisce la promise), stili `.used-sale-*` in `style.css`. Test: `netlify/functions/__tests__/list-used-item.test.js` (8).
+
 ## Specifica dettagliata del comportamento (17 ottobre 2026)
 
 Questa sezione descrive il comportamento reale del backend e delle regole di business al livello di dettaglio necessario per riscrivere il software da zero. Dove un valore è un dato di contenuto (testi dei prompt, tariffe delle compagnie aeree, regole per Paese) va ricostituito o ceduto separatamente, non dedotto da qui. Nessun segreto è riportato: solo i nomi delle variabili d'ambiente.
