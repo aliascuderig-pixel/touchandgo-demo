@@ -4828,6 +4828,26 @@ function guidedFlowOn() {
 // Attivi solo con guidedFlowOn(). Il riepilogo è l'ultima pagina prima di
 // scegliere l'indirizzo e di concludere: elenca le scelte del cliente, ognuna
 // con «Modifica». Nulla viene salvato o pagato prima di questo punto.
+// Barra dei passi (flusso guidato): n = passo corrente su 5.
+function StepProgress(n) {
+  const names = ["Foto", "Destinazione", "Risultato", "Prezzo", "Riepilogo"];
+  const bar = el("div", "step-progress");
+  bar.setAttribute("role", "progressbar");
+  bar.setAttribute("aria-valuemin", "1");
+  bar.setAttribute("aria-valuemax", "5");
+  bar.setAttribute("aria-valuenow", String(n));
+  bar.setAttribute("aria-label", `Passo ${n} di 5: ${names[n - 1]}`);
+  names.forEach((nm, i) => {
+    const seg = el("span", "step-seg" + (i + 1 < n ? " done" : i + 1 === n ? " now" : ""));
+    bar.appendChild(seg);
+  });
+  const cap = el("div", "step-progress-cap", `Passo ${n} di 5 · ${names[n - 1]}`);
+  const box = el("div", "step-progress-box");
+  box.appendChild(bar);
+  box.appendChild(cap);
+  return box;
+}
+
 function PlanScreen() {
   const r = state.result;
   const q = state.price.quotes || priceQuotes(r.weight_kg, currentDestinationName(), r);
@@ -4839,8 +4859,9 @@ function PlanScreen() {
     render();
   });
   topbar.appendChild(back);
-  topbar.appendChild(el("h2", null, "Passo 4 · Prezzo e piano"));
+  topbar.appendChild(el("h2", null, "Prezzo e piano"));
   wrap.appendChild(topbar);
+  wrap.appendChild(StepProgress(4));
   appendPricing(wrap, r, q);
   if (state.priceConfirmedForThisResult) {
     const go = el("button", "btn-primary", "Vai al riepilogo →");
@@ -4872,9 +4893,10 @@ function StepSummaryScreen() {
     render();
   });
   topbar.appendChild(back);
-  topbar.appendChild(el("h2", null, "Passo 5 · Riepilogo"));
+  topbar.appendChild(el("h2", null, "Riepilogo"));
   wrap.appendChild(topbar);
-  wrap.appendChild(el("div", "identify-intro", "Ricontrolla le tue scelte. Puoi cambiarle prima di andare avanti: finché non confermi non viene salvato né pagato nulla."));
+  wrap.appendChild(StepProgress(5));
+  wrap.appendChild(el("div", "identify-intro step-pad", "Ricontrolla le tue scelte. Puoi cambiarle prima di andare avanti: finché non confermi non viene salvato né pagato nulla."));
 
   const dest = getSelectedAddress() ? formatAddress(getSelectedAddress()) : destinationDisplayName(state.guestDestinationCountry) || "—";
   const discount = state.partnerDiscountApplied
@@ -4916,10 +4938,10 @@ function StepSummaryScreen() {
   const total = el("div", "step-row step-total");
   total.dataset.row = "total";
   total.appendChild(el("div", "step-row-lbl", "Totale stimato"));
-  total.appendChild(el("div", "step-row-val", `€${state.price.grandTotal}`));
+  total.appendChild(el("div", "step-row-val", `€${Number(state.price.grandTotal).toFixed(2)}`));
   list.appendChild(total);
   wrap.appendChild(list);
-  wrap.appendChild(el("div", "info-line", `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`));
+  wrap.appendChild(el("div", "info-line step-pad", `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`));
 
   const actions = el("div", "result-actions");
   const ok = el("button", "btn-primary", t("result_qr_btn"));
@@ -5088,7 +5110,7 @@ function appendPricing(wrap, r, q) {
   // (Stripe Checkout) sono SOLO in ConcludeScreen — vedi il commento lì
   // sopra confirmBtn e MANUALE.md, sezione "Pagamento reale con Stripe
   // Checkout".
-  const estimateNote = el("div", "info-line");
+  const estimateNote = el("div", "info-line step-pad");
   estimateNote.innerHTML = `<b>${t("result_estimate_badge")}</b> — ${t("result_estimate_note")}`;
   wrap.appendChild(estimateNote);
 
@@ -5113,8 +5135,9 @@ function ResultScreen() {
     render();
   });
   topbar.appendChild(back);
-  topbar.appendChild(el("h2", null, t("result_step3_lbl")));
+  topbar.appendChild(el("h2", null, guidedFlowOn() ? "Risultato" : t("result_step3_lbl")));
   wrap.appendChild(topbar);
+  if (guidedFlowOn()) wrap.appendChild(StepProgress(3));
 
   // Vincolo non negoziabile (vedi MANUALE.md, "Percorso offline"): un
   // prezzo/risultato provvisorio non deve MAI essere scambiato per uno
