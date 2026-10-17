@@ -1713,3 +1713,88 @@ Sito Netlify separato con tre funzioni; lo stato è un unico record nello store 
 ### Regola di instradamento del sito
 
 Il file `dist/_redirects` contiene una sola regola: ogni percorso non trovato viene servito con la pagina principale `index.html` e stato 200 (comportamento da applicazione a pagina singola, senza reindirizzamento visibile).
+
+## Aspetto estetico dell'app turista e partner (17 ottobre 2026)
+
+Descrizione dell'identità visiva reale dell'app (file `dist/assets/style.css`, con i temi opzionali `theme-lime.css` e `theme-corallo.css`). Serve a ricostruire la stessa resa grafica senza il codice. Il sito marketing (`dist/site/`) ha pagine con stili propri, qui non descritti.
+
+### Impostazione generale
+
+- **Una colonna centrata**: l'app è un contenitore largo al massimo 520 px, centrato, alto almeno quanto lo schermo, sullo sfondo «carta». Fuori dalla colonna lo sfondo della pagina è nero (inchiostro). Si progetta sempre per telefono; su schermi larghi resta la colonna.
+- **Carattere dell'identità («Oro notturno»)**: sobria, elegante, da boutique italiana. Fondi scuri o carta calda, accenti oro, titoli in serif, angoli quasi squadrati, nessuna ombra. Il colore brand compare con parsimonia, solo dove c'è un'azione o uno stato attuale.
+- **Colore della barra del browser**: scuro caldo (#12100D). Icona della scheda: l'emoji scatola (placeholder).
+- **Lingue**: italiano e inglese; le stringhe grafiche non cambiano layout tra le due lingue.
+
+### Tipografia
+
+- **Titoli e numeri importanti**: Cormorant Garamond (serif), pesi 600 per i titoli, 500 per i titoli di copertina, corsivo per saluti e didascalie. Caricato da Google Fonts insieme a Montserrat.
+- **Testo corrente e controlli**: Montserrat (sans-serif), pesi da 400 a 800. Con ripiego sul carattere di sistema.
+- **Codici e piccole etichette** (codice doganale, codice QR, etichette in maiuscolo): lo stesso serif, con spaziatura tra le lettere.
+- **Scala dimensionale tipica**: titolo di sezione 30 px; titolo scheda 19–20 px; testo corrente 12,5–14,5 px; etichette in maiuscolo 9,5–11 px con spaziatura 0,05–0,14 em; codice doganale 24 px; cifre delle statistiche 22 px; marchio in copertina 52 px.
+- **Etichette** (eyebrow, divisori, intestazioni di tabella): maiuscolo, piccole, spaziatura ampia, colore «argilla»; l'eyebrow ha un filetto di 14 px davanti.
+
+### Colori (valori del tema predefinito)
+
+| Ruolo | Nome | Valore |
+|---|---|---|
+| Fondo scuro / testo principale | inchiostro | #0F0F0F (variante morbida #161616) |
+| Sfondo dell'app | carta | #FAF8F4 |
+| Sfondo alternativo | crema / avorio | #F4EFE6 |
+| Accento principale | oro | #C9A96E |
+| Oro chiaro (testo e bottoni su scuro) | oro chiaro | #E8D5B0 |
+| Oro vivo (evidenze sul nero) | oro vivo | #F0C877 |
+| Oro scuro | oro profondo | #8B6914 |
+| Etichette e valori strutturali | argilla | #7A5C0A |
+| Testo secondario | grigio | #777 (più scuri #444, #333) |
+| Linee e bordi | linea | #EAE4D8 |
+| Successo | verde | #2E7D32 su fondo #EAF3EA, bordo #C9DEC9 |
+| Attenzione | ambra | testo #7A5C0A su fondo #FFF8EC |
+| Suggerimento | crema dorata | fondo #FBF0DA, bordo #E9D5A6 |
+| Errore | rosso | testo #B33 su fondo #FBEAE6, bordo #EFC5BA |
+| Bagliore di sfondo scuro | — | #241D12 |
+
+- Sulle superfici scure (header, copertina, scheda di acquisizione, blocco codice doganale, scheda promo, onboarding) il testo è avorio, le note sono grigio caldo (#B8B0A0) e i bordi sono bruno scuro (#34301F, #2A251C).
+- Il QR e il suo bordo sono neutri, perché devono restare leggibili in ogni tema.
+
+### Forma, spazi, movimento
+
+- **Raggio degli angoli**: 2 px (quasi squadrato) per schede e bottoni di base; pillole completamente tonde (999 px) per interruttori, etichette e campo «descrivilo»; 12–14 px per i componenti introdotti con il restyle (menu, scheda bagaglio, campi del bagaglio).
+- **Ombre**: nessuna sulle schede; solo il menu a tendina ha un'ombra scura morbida.
+- **Spazi**: margine laterale standard 20 px; sezioni con 26 px sopra e sotto; schede distanziate di circa 10–18 px.
+- **Bersagli toccabili**: minimo 44 px di altezza per pulsanti e voci di menu.
+- **Focus da tastiera**: contorno oro chiaro di 2 px.
+- **Animazioni**: comparsa dolce (sfumatura + 6 px di scorrimento, 0,35 s) di scheda risultato e prezzo; icona fotografica che «respira» (2,4 s); cursore lampeggiante nel testo digitato; impulso oro sul microfono in ascolto; rotazione di 0,9 s sull'indicatore di analisi. Con la preferenza di sistema «riduci movimento» queste animazioni si spengono.
+
+### Componenti
+
+- **Header**: barra nera alta circa 60 px, con filetto inferiore scuro. A sinistra il marchio (serif, 20 px: «Touch» in oro chiaro, «&Go» in avorio); a destra selettore lingua IT/EN e un unico pulsante **Menu** rotondo di 44 px con bordo sottile. Il menu a tendina è un riquadro nero con bordo scuro, angoli da 14 px, ombra e larghezza minima 230 px; voci alte almeno 44 px su testo avorio; la voce «Chiedi all'agente Touch&Go» è evidenziata (fondo oro chiaro, testo nero); «Reset» è staccata da un filetto, in grigio caldo. Si chiude con un tocco fuori, su una voce o con Esc. Sulla copertina restano solo lingua e Reset.
+- **Interruttore Turista/Partner**: due pillole su fondo nero; quella attiva ha fondo oro chiaro e testo nero, l'altra è trasparente con bordo scuro.
+- **Bottone primario**: a tutta larghezza, fondo nero, testo avorio, angoli 2 px, testo 15 px grassetto; al tocco si abbassa di 1 px. **Secondario**: trasparente, bordo 1,5 px color linea, testo scuro. **Ghost**: solo testo grigio.
+- **Scheda di acquisizione (fotocamera)**: riquadro nero, centrato, con l'icona a diaframma (6 lamelle oro chiaro) che si chiude al tocco, titolo serif 19 px e sottotitolo grigio caldo. Sotto, la scheda galleria (carta, bordo 1,5 px) e il divisore con testo in maiuscolo e due filetti.
+- **Campo «descrivilo»**: pillola con bordo 1,5 px, fondo carta; pulsante tondo nero con freccia a destra; icona microfono a sinistra della freccia; il campo è vuoto, senza testo di esempio.
+- **Scheda risultato**: scheda carta con bordo; in alto titolo serif e indicazione di affidabilità verde in maiuscolo a destra; griglia a due colonne di dati (etichetta minuscola in maiuscolo + valore grassetto) separati da linee da 1 px; subito sotto il **blocco codice doganale**, nero, con etichetta oro chiaro e codice serif 24 px oro chiaro, descrizione grigio caldo allineata a destra. La **stima dei dazi** è deliberatamente diversa: bordo tratteggiato, fondo carta, testo neutro e badge «non ufficiale» sempre visibile.
+- **Scheda prezzo**: fondo bianco, bordo linea, 16×18 px di margine interno. **Scheda promo**: nera con bordo oro profondo, valori oro chiaro, importi condonati barrati.
+- **Banner e avvisi**: verde (successo), ambra (attenzione, con bordo oro chiaro), rosa (errore), crema dorata (suggerimento); tutti con angoli 2 px, testo 12–13 px. L'indicatore di coda di sincronizzazione è una riga discreta nella stessa palette di attenzione.
+- **Passi numerati**: cerchietto di 20 px con bordo oro e numero serif oro.
+- **Statistiche**: griglia 2×2 di schede carta con numero serif in argilla (22 px), etichetta grassetto e nota piccola.
+- **Timeline dello stato**: quattro pallini da 14 px uniti da una linea di 2 px, neutra. Lo stato passato ha il pallino pieno grigio, quello attuale è oro con alone oro chiaro di 3 px ed etichetta in grassetto scuro, i futuri sono vuoti. Il colore brand compare solo sullo stato attuale.
+- **Scheda QR**: riquadro bianco con bordo, QR a tutta larghezza (max 220 px), codice in serif 15 px con spaziatura, nota in maiuscolo color argilla.
+- **Moduli indirizzo**: campi con bordo 1 px, fondo bianco, testo 12,5 px; CAP stretto (max 90 px); opzione selezionata con bordo oro e fondo ambra; microfono di dettatura tondo da 24 px dentro il campo (attenuato se non supportato, con un avviso ambra in basso).
+- **Assistente («agente Touch&Go»)**: suggerimento in riga (avatar tondo nero con iniziali oro, testo 11,5 px) e finestra a tutto schermo sopra un velo scuro al 72 %: scheda carta con angoli superiori da 10 px, che su schermi larghi diventa centrata con angoli da 6 px; risposta in riquadro con barra oro a sinistra e firma «Touch&Go» in maiuscolo.
+- **Firma e documento d'identità**: riquadri tratteggiati; l'area firma ha un bordo tratteggiato su fondo bianco.
+
+### Schermate principali
+
+- **Copertina (presentazione dell'app)**: tutto a fondo nero con un leggero bagliore caldo al centro; in alto il marchio serif da 52 px, subito sotto la riga «Utility app per i turisti» in oro (15 px), poi il titolo «I servizi del tuo viaggio in Italia, a portata di mano.» (serif 30 px, avorio), tre punti con pallino oro (fotografa un acquisto; dogana, documenti e spedizione gestiti da noi con partner selezionati; bagagli andata e ritorno) e in basso, dopo un filetto, la nota «Compri in Italia, lo ritrovi a casa tua.» in grigio caldo. Un tocco entra nell'app.
+- **Home**: la fotocamera è in primo piano (scheda nera + galleria + «descrivilo»), seguono la scheda «Spedisci i tuoi bagagli» (trasparente, bordo oro 1,5 px, angoli 14 px) e i banner informativi, raccolti in un unico gruppo. Restano sopra solo gli avvisi che richiedono un'azione.
+- **Risultato**: barra in alto, scheda con dati e codice doganale, poi agente e banner; l'avviso di rischio specifico dell'oggetto resta in cima.
+- **Bagaglio**: titolo serif 26 px; interruttore Andata/Ritorno a pillola con bordo oro (la scelta attiva è piena oro con testo nero); campi alti almeno 48 px con bordo 1,5 px e angoli da 12 px.
+- **Onboarding**: sfondo nero con bagliore radiale caldo, marchio serif in alto, slide a schermo intero con illustrazione 150×112 px, etichetta «chip» con cifra serif oro vivo, selettore lingua a pillola con voce attiva oro vivo, pulsanti di suono e salta su fondo nero trasparente. Etichetta «live» con puntino verde pulsante.
+
+### Temi opzionali
+
+I temi «lime» e «corallo» sono anteprime di prova (rotte di anteprima, non in produzione). Cambiano solo i token invertibili: il tema lime rende scuro lo sfondo principale (carta #0B1113, superficie #172023, testo #E9EEEB) e sostituisce l'oro con un verde lime (#C9F24D, chiaro #E4FF8E); il tema corallo usa un accento corallo con la stessa logica. La «chrome» scura (header, copertina, scheda di acquisizione, blocco codice, scheda promo, onboarding) resta scura in ogni tema. Non esiste una modalità scura automatica in base alle preferenze di sistema.
+
+### Da fare per completare il restyle
+
+Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi definitivi. Il manuale va aggiornato quando una di queste parti cambia.
