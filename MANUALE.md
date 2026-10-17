@@ -1825,3 +1825,23 @@ Scheda risultato con più presenza grafica, tracking a tappe riprogettato, temi 
 - Nessuna funzione esistente cambia; la lingua IT/EN resta nell'intestazione. Testi in italiano e inglese. Test: `dist/assets/__tests__/pinned-functions.test.js`.
 
 **Estetica.** Pannello più largo di prima (minimo 270 px), fondo nero come il resto del menu, righe alte almeno 44 px con la funzione a sinistra e il pulsante 📌 quadrato da 44 px a destra; 📌 spento: bordo sottile e icona attenuata; acceso: fondo oro pieno. Intestazione di sezione «VAI A» in maiuscolo piccolo e spaziato, colore grigio chiaro. La barra in basso è larga come l'app (massimo 520 px), fondo nero con bordo superiore sottile, pulsanti con angoli 12 px alti 48 px: icona grande sopra, nome in grassetto 11 px sotto, bordo sottile; rispetta l'area sicura dei telefoni; lo spazio in fondo alla pagina aumenta di 76 px così nulla resta coperto.
+
+## Flusso a step guidati (17 ottobre 2026)
+
+Modalità opzionale dell'app del turista, **spenta di default**: chi non la attiva vede il flusso di sempre.
+
+- **Come si accende:** aprendo l'app con `?passi=1` nell'indirizzo (resta salvata nel browser, chiave `tg_guided_flow`); `?passi=0` la spegne. Funzione `guidedFlowOn()` in `dist/assets/app.js`.
+- **Passi:** 1 Foto → 2 Ritiro e destinazione → 3 **Risultato** (solo scheda dell'oggetto; avvisi, merci vietate, dazi e assistente stanno in un riquadro «Da sapere» chiuso) → 4 **Prezzo e piano** (schermata `plan`: piano pieno o abbonato, promo, codice sconto; «Vai al riepilogo» compare solo dopo la scelta) → 5 **Riepilogo** (schermata `step-summary`) → scelta indirizzo e conclusione come prima.
+- **Riepilogo:** elenca oggetto, ritiro, destinazione, piano, codice sconto e totale stimato. «Modifica» su ritiro/destinazione apre `edit-dest` (NON rilancia la classificazione: peso e codice doganale restano; il prezzo si ricalcola e il piano va riconfermato); «Modifica» su piano/sconto riapre la scelta del piano e azzera il codice sconto. Dopo ogni modifica si torna al riepilogo (`state.returnToSummary`).
+- **Aspetto:** barra dei 5 passi in alto (segmenti oro, «Passo N di 5»), riquadro «Da sapere» e righe del riepilogo con angoli netti e etichette in mono come la scheda risultato, «Modifica» in oro, totale su fondo inchiostro. Stili in fondo a `dist/assets/style.css` (sezione «Step guidati»).
+- **Cosa non cambia:** calcolo dei prezzi (`appendPricing` è lo stesso codice del flusso classico, estratto da `ResultScreen`), consolidamento dei gruppi, pagamento Stripe in `ConcludeScreen`, percorso offline. Fino al riepilogo non viene salvato né pagato nulla.
+- **Test:** `dist/assets/__tests__/guided-steps.test.js` (8).
+
+## Layout mobile v2 (17 ottobre 2026)
+
+Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (colori e logica invariati). Tutto è in fondo a `dist/assets/style.css`, sezione «Layout mobile v2» (variabili `--gut` = 16px di margine laterale unico e `--r` = 16px di raggio angoli), più due piccole modifiche al DOM della Home in `app.js`.
+
+- **Home:** la foto è il blocco principale (altezza ~36% dello schermo, bottone «Tocca per aprire la fotocamera»); «Scegli dalla galleria» e «Spedisci i tuoi bagagli» stanno affiancati (`.home-quick`); il campo «descrivilo» ha la stessa larghezza; il suggerimento dell'assistente, le tre garanzie e l'avviso merci vietate sono raccolti nel riquadro «Come funziona e limiti» (`details.home-more`, chiuso); resta in vista solo il promemoria posizione. La Home passa da circa 1,6 a poco più di 1 schermata.
+- **Destinazione, indirizzo, conclusione:** margini e angoli uguali ovunque, campi su due righe (etichetta sopra, valore sotto, niente testo troncato), bersagli di tocco da almeno 52px, nessun doppio margine dentro `.section`.
+- **Risultato / Prezzo / Riepilogo:** stessi margini e angoli della Home.
+- Se in futuro si aggiunge una schermata, usare `.section` (margine 16px) e le classi esistenti: non reintrodurre margini fissi di 20px.
