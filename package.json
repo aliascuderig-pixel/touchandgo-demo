@@ -6,9 +6,9 @@
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
-    "@netlify/functions": "^6.0.0"
+    "@netlify/functions": "^6.0.2"
   },
   "devDependencies": {
-    "jsdom": "^30.0.1"
+    "jsdom": "^30.1.2"
   }
 }
