@@ -26,3 +26,12 @@ Un solo record nello store Netlify Blobs `router-state` (chiave `state`): failov
 - Variabili d'ambiente: `NETLIFY_BLOBS_SITE_ID`, `NETLIFY_BLOBS_TOKEN`, `ACTIVE_TARGET`, `ROUTER_ADMIN_PASSWORD` (solo nomi; i valori stanno su Netlify).
 - Dipendenza: `@netlify/blobs`.
 - Il controllo giornaliero del sistema (funzione pianificata nel sito principale) verifica anche questo router.
+
+## Aspetto estetico (17 ottobre 2026)
+
+Il router ha un aspetto proprio, minimale e chiaro, diverso dal tema scuro degli altri dispositivi.
+
+- **Palette**: inchiostro #0F0F0F, carta #FAF8F4, oro #C9A96E, grigio #777; esito positivo #2E7D32, errore #B3261E.
+- **Carattere**: del sistema operativo (senza font esterni), testo 13–15 px.
+- **Pagina di passaggio** (`index.html`): una colonna larga al massimo 360 px, centrata sia in orizzontale sia in verticale, sul fondo carta. Il marchio è un testo grassetto di 22 px («Touch» in inchiostro, «&Go» in oro, senza corsivo); sotto un messaggio grigio di 14 px, un indicatore circolare di 22 px (bordo grigio chiaro, parte in alto in oro, giro di 0,8 s) e, per chi resta bloccato, un collegamento sottolineato in oro.
+- **Pagina di amministrazione** (`admin.html`): stessa colonna da 360 px con marchio e sottotitolo grigio di 13 px; messaggio informativo a sinistra; un campo password (bordo #DDD5C4, fondo bianco, angoli 8 px, 15 px) e un pulsante a tutta larghezza con fondo inchiostro e testo carta (opaco al 60 % quando disabilitato); sotto l'esito, verde o rosso, in 13 px.
