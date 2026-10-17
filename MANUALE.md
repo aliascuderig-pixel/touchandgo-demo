@@ -1836,3 +1836,12 @@ Modalità opzionale dell'app del turista, **spenta di default**: chi non la atti
 - **Aspetto:** barra dei 5 passi in alto (segmenti oro, «Passo N di 5»), riquadro «Da sapere» e righe del riepilogo con angoli netti e etichette in mono come la scheda risultato, «Modifica» in oro, totale su fondo inchiostro. Stili in fondo a `dist/assets/style.css` (sezione «Step guidati»).
 - **Cosa non cambia:** calcolo dei prezzi (`appendPricing` è lo stesso codice del flusso classico, estratto da `ResultScreen`), consolidamento dei gruppi, pagamento Stripe in `ConcludeScreen`, percorso offline. Fino al riepilogo non viene salvato né pagato nulla.
 - **Test:** `dist/assets/__tests__/guided-steps.test.js` (8).
+
+## Layout mobile v2 (17 ottobre 2026)
+
+Rifacimento della **distribuzione degli spazi** dell'app turista per telefono (colori e logica invariati). Tutto è in fondo a `dist/assets/style.css`, sezione «Layout mobile v2» (variabili `--gut` = 16px di margine laterale unico e `--r` = 16px di raggio angoli), più due piccole modifiche al DOM della Home in `app.js`.
+
+- **Home:** la foto è il blocco principale (altezza ~36% dello schermo, bottone «Tocca per aprire la fotocamera»); «Scegli dalla galleria» e «Spedisci i tuoi bagagli» stanno affiancati (`.home-quick`); il campo «descrivilo» ha la stessa larghezza; il suggerimento dell'assistente, le tre garanzie e l'avviso merci vietate sono raccolti nel riquadro «Come funziona e limiti» (`details.home-more`, chiuso); resta in vista solo il promemoria posizione. La Home passa da circa 1,6 a poco più di 1 schermata.
+- **Destinazione, indirizzo, conclusione:** margini e angoli uguali ovunque, campi su due righe (etichetta sopra, valore sotto, niente testo troncato), bersagli di tocco da almeno 52px, nessun doppio margine dentro `.section`.
+- **Risultato / Prezzo / Riepilogo:** stessi margini e angoli della Home.
+- Se in futuro si aggiunge una schermata, usare `.section` (margine 16px) e le classi esistenti: non reintrodurre margini fissi di 20px.

@@ -4264,9 +4264,13 @@ function HomeScreen() {
   // finiscono DOPO, in `info`. Restano in cima solo gli avvisi che richiedono
   // un'azione: sincronizzazione in sospeso, oggetti da concludere, errori.
   const info = el("div", "home-info");
-  info.appendChild(AssistantAvatar("home"));
-  info.appendChild(TrustRow());
-  info.appendChild(ProhibitedGoodsBanner());
+  // Layout mobile v2: promemoria posizione (azione) in vista; suggerimento,
+  // garanzie e merci vietate raccolti in un solo riquadro «Come funziona e limiti».
+  const more = el("details", "home-more");
+  more.appendChild(el("summary", null, "Come funziona e limiti"));
+  more.appendChild(AssistantAvatar("home"));
+  more.appendChild(TrustRow());
+  more.appendChild(ProhibitedGoodsBanner());
 
   const reviewBanner = ReviewInviteBanner();
   if (reviewBanner) info.appendChild(reviewBanner);
@@ -4350,7 +4354,8 @@ function HomeScreen() {
   galleryInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
   galleryCard.appendChild(galleryInput);
   galleryCard.addEventListener("click", () => galleryInput.click());
-  section.appendChild(galleryCard);
+  const quick = el("div", "home-quick");
+  quick.appendChild(galleryCard);
 
   const luggageCard = el("button", "luggage-card");
   luggageCard.type = "button";
@@ -4360,7 +4365,8 @@ function HomeScreen() {
     state.screen = "luggage";
     render();
   });
-  section.appendChild(luggageCard);
+  quick.appendChild(luggageCard);
+  section.appendChild(quick);
 
   const describeBox = el("div", "describe-box");
   const describeLbl = el("div", "tg-lbl", t("home_describe_lbl"));
@@ -4420,6 +4426,7 @@ function HomeScreen() {
   }
 
   wrap.appendChild(section);
+  info.appendChild(more);
   wrap.appendChild(info);
 
   return wrap;
