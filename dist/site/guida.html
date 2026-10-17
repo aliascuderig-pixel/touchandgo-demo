@@ -676,7 +676,7 @@
       <li><div class="cl-box"></div><div class="cl-text"><b>Dettaglio errore, se presente</b><span>Se un dispositivo risulta irraggiungibile, il motivo esatto resta consultabile</span></div></li>
     </ul>
 
-    <p class="note">Il controllo non consuma mai credito AI reale e non modifica mai lo stato del sistema — nemmeno verso il CRM, dove si limita a verificare che risponda, senza mai eseguire un'azione vera. Se un giorno il controllo trova un problema, il report lo segnala ma non interviene da solo: resta una decisione dello staff cosa fare.</p>
+    <p class="note">Il controllo non consuma mai credito AI reale e non modifica mai lo stato del sistema — nemmeno verso il CRM, dove si limita a verificare che risponda, senza mai eseguire un'azione vera. Se un giorno il controllo trova un problema, il report lo segnala ma non interviene da solo: resta una decisione dello staff cosa fare. Per i controlli indipendenti sui manuali e sul traffico simulato vedi <a href="#s-qualita">«Come controlliamo la qualità»</a>.</p>
     <a class="back-to-hub" href="#top">↑ Torna alle otto schede</a>
   </section>
 
@@ -740,6 +740,31 @@
       <li><div class="cl-box"></div><div class="cl-text"><b>Privato o azienda</b><span>Se spedisce un privato per uso non commerciale la FDA di norma non interviene, ma non è un'esenzione scritta; per aziende e negozi la notifica è obbligatoria.</span></div></li>
       <li><div class="cl-box"></div><div class="cl-text"><b>Passa sempre dal CRM</b><span>Può partire dal sito pubblico oppure dal gestionale (tab Pratiche dei partner). Il cliente o il partner invia la pratica e riceve un riferimento; la pratica compare nella tab Pratiche del CRM (protetta da password), dove lo staff la prende in carico, presenta la notifica alla FDA e inserisce il numero di conferma, che il cliente o il partner rivede dalla pagina di stato o dal gestionale. Oggi non ci sono pagamenti né email automatiche. Non è consulenza legale o doganale.</span></div></li>
     </ul>
+    <a class="back-to-hub" href="#top">↑ Torna alle otto schede</a>
+  </section>
+
+  <section class="detail" id="s-qualita">
+    <div class="sec-num">04E</div>
+    <h2>Come controlliamo la qualità — collaudo indipendente e traffico simulato</h2>
+    <p class="sec-intro">Oltre al controllo automatico giornaliero, la suite viene messa alla prova da uno strumento separato, pensato per non dipendere da chi ha scritto il software: legge i manuali, prova i dispositivi come farebbe un tecnico esterno e simula molte richieste da paesi diversi.</p>
+
+    <div class="flow">
+      <div class="flow-step"><div class="flow-dot">1</div><div class="flow-title">Manuali letti da tre AI</div><div class="flow-desc">Ogni dispositivo ha un manuale: tre modelli di aziende diverse lo leggono e segnalano ciò che è ambiguo, contraddittorio o mancante</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">2</div><div class="flow-title">Prova dei dispositivi</div><div class="flow-desc">Un agente esplora i siti e confronta ciò che fanno con ciò che promette il manuale</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">3</div><div class="flow-title">Traffico simulato</div><div class="flow-desc">Richieste varie, giuste e sbagliate, come se arrivassero da molti paesi, solo su siti di prova</div></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">4</div><div class="flow-title">Rapporto e correzioni</div><div class="flow-desc">I risultati vengono confrontati tra le tre AI, che propongono cause e correzioni</div></div>
+    </div>
+
+    <ul class="checklist">
+      <li><div class="cl-box"></div><div class="cl-text"><b>Perché tre AI diverse</b><span>Se più modelli indipendenti trovano lo stesso problema, è molto probabile che sia reale; se ne trova uno solo, va verificato a mano</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Manuali come fonte unica</b><span>L'obiettivo è avere manuali precisi e collaudati, da cui poter ricostruire ogni dispositivo</span></div></li>
+      <li><div class="cl-box"></div><div class="cl-text"><b>Ogni nuovo dispositivo</b><span>Passa dal CRM e ha una simulazione periodica che ne verifica il funzionamento</span></div></li>
+    </ul>
+
+    <p class="note">Il traffico simulato parte da un solo ambiente: i paesi sono simulati (lingua, valuta, indirizzo), non reali. Lo strumento non sostituisce una verifica legale, fiscale o doganale. Si avvia a mano, mai sui siti in produzione.</p>
     <a class="back-to-hub" href="#top">↑ Torna alle otto schede</a>
   </section>
 
